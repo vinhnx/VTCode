@@ -404,6 +404,7 @@ fn create_chat_event_stream(
                                     "length" => provider::FinishReason::Length,
                                     "tool_calls" => provider::FinishReason::ToolCalls,
                                     "content_filter" => provider::FinishReason::ContentFilter,
+                                    "refusal" => provider::FinishReason::Refusal,
                                     _ => provider::FinishReason::Stop,
                                 });
                             }

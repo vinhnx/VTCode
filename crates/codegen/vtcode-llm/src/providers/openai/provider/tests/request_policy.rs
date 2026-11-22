@@ -23,6 +23,73 @@ fn openai_responses_native_emits_store_false_without_previous_response_id() {
 }
 
 #[test]
+fn native_responses_store_config_controls_server_side_storage() {
+    for (config_store, expected) in [(None, false), (Some(false), false), (Some(true), true)] {
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_owned()),
+            None,
+            Some(models::openai::GPT_5_6.to_string()),
+            None,
+            None,
+            None,
+            None,
+            Some(OpenAIConfig {
+                responses_store: config_store,
+                ..Default::default()
+            }),
+            None,
+        );
+        let payload = provider
+            .convert_to_openai_responses_format(&sample_request(models::openai::GPT_5_6))
+            .expect("native payload should build");
+        assert_eq!(payload.get("store").and_then(Value::as_bool), Some(expected), "responses_store = {config_store:?}");
+    }
+}
+
+#[test]
+fn native_openai_emits_structured_output_for_responses_and_chat() {
+    let provider = native_openai_provider(models::openai::GPT_5_6);
+    assert!(provider.supports_structured_output(models::openai::GPT_5_6));
+    let schema = json!({
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "additionalProperties": false
+    });
+    let mut request = sample_request(models::openai::GPT_5_6);
+    request.output_format = Some(json!({
+        "type": "json_schema",
+        "json_schema": {"name": "event", "schema": schema}
+    }));
+
+    let responses = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("responses payload should build");
+    assert_eq!(responses["text"]["format"]["type"], "json_schema");
+    assert_eq!(responses["text"]["format"]["name"], "event");
+    assert_eq!(responses["text"]["format"]["strict"], true);
+
+    let chat = provider.convert_to_openai_format(&request).expect("chat payload should build");
+    assert_eq!(chat["response_format"]["type"], "json_schema");
+    assert_eq!(chat["response_format"]["json_schema"]["name"], "event");
+    assert_eq!(chat["response_format"]["json_schema"]["strict"], true);
+}
+
+#[test]
+fn chatgpt_backend_rejects_structured_output_capability() {
+    let provider = chatgpt_backend_provider(models::openai::GPT_5_6);
+    assert!(!provider.supports_structured_output(models::openai::GPT_5_6));
+    let mut request = sample_request(models::openai::GPT_5_6);
+    request.output_format = Some(json!({"type": "json_object"}));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("chatgpt payload should build");
+    // ChatGPT routes reject `text.format` descriptors, so the wire guard drops
+    // them even if a caller ignores the capability flag.
+    assert!(payload.get("text").and_then(|text| text.get("format")).is_none());
+}
+
+#[test]
 fn chatgpt_responses_emits_store_false_without_previous_response_id() {
     let provider = chatgpt_backend_provider(models::openai::GPT_5_6);
     let mut request = sample_request(models::openai::GPT_5_6);

@@ -357,8 +357,14 @@ fn build_responses_request_from_history(
         has_format_options = true;
     }
 
-    // Add grammar constraint if tools include grammar definitions
-    if let Some(ref tools) = request.tools {
+    // Structured Outputs take precedence over a legacy grammar tool: both
+    // occupy `text.format` and sending two descriptors is rejected by OpenAI.
+    if ctx.include_structured_output
+        && let Some(format) = super::responses_text_format(request.output_format.as_ref())
+    {
+        text_format["format"] = format;
+        has_format_options = true;
+    } else if let Some(ref tools) = request.tools {
         let grammar_tools: Vec<&provider::ToolDefinition> =
             tools.iter().filter(|tool| tool.tool_type == "grammar").collect();
 

@@ -4,6 +4,8 @@ use crate::provider;
 use serde_json::{Value, json};
 use vtcode_config::constants::models;
 
+mod structured_output;
+
 fn base_context<'a>(default_responses_include: Option<&'a [String]>) -> ResponsesRequestContext<'a> {
     ResponsesRequestContext {
         supports_tools: false,
@@ -36,6 +38,7 @@ fn base_context<'a>(default_responses_include: Option<&'a [String]>) -> Response
         preserve_assistant_phase_on_replay: false,
         reasoning_context: None,
         safety_identifier: None,
+        include_structured_output: true,
     }
 }
 
@@ -75,6 +78,7 @@ fn chat_context() -> ChatRequestContext<'static> {
         supports_temperature: true,
         prompt_cache_key: None,
         default_service_tier: None,
+        include_structured_output: true,
     }
 }
 

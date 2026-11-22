@@ -2,6 +2,7 @@
 //!
 //! Model policy and Responses history shaping live in private child modules.
 
+use serde_json::{Value, json};
 use vtcode_config::core::OpenAIHostedShellConfig;
 use vtcode_config::types::ReasoningEffortLevel;
 
@@ -25,6 +26,7 @@ pub(crate) struct ChatRequestContext<'a> {
     pub supports_temperature: bool,
     pub prompt_cache_key: Option<&'a str>,
     pub default_service_tier: Option<&'a str>,
+    pub include_structured_output: bool,
 }
 
 pub(crate) struct ResponsesRequestContext<'a> {
@@ -69,10 +71,86 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub preserve_assistant_phase_on_replay: bool,
     pub reasoning_context: Option<&'a str>,
     pub safety_identifier: Option<&'a str>,
+    pub include_structured_output: bool,
 }
 
 pub(super) fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// Normalized JSON Schema descriptor extracted from VT Code's provider-agnostic
+/// `output_format`. Both OpenAI request shapes accept a name, schema, strictness,
+/// and optional description; only their nesting differs.
+struct JsonSchemaFormat<'a> {
+    name: &'a str,
+    schema: &'a Value,
+    strict: bool,
+    description: Option<&'a str>,
+}
+
+fn json_schema_format(output_format: &Value) -> Option<JsonSchemaFormat<'_>> {
+    if output_format.get("type").and_then(Value::as_str) != Some("json_schema") {
+        return None;
+    }
+    // Chat Completions style: `{type: "json_schema", json_schema: {...}}`.
+    if let Some(nested) = output_format.get("json_schema").and_then(Value::as_object) {
+        return Some(JsonSchemaFormat {
+            name: nested.get("name").and_then(Value::as_str).unwrap_or("response"),
+            schema: nested.get("schema")?,
+            strict: nested.get("strict").and_then(Value::as_bool).unwrap_or(true),
+            description: nested.get("description").and_then(Value::as_str),
+        });
+    }
+    // Responses style: `{type: "json_schema", name, schema, strict}`.
+    Some(JsonSchemaFormat {
+        name: output_format.get("name").and_then(Value::as_str).unwrap_or("response"),
+        schema: output_format.get("schema")?,
+        strict: output_format.get("strict").and_then(Value::as_bool).unwrap_or(true),
+        description: output_format.get("description").and_then(Value::as_str),
+    })
+}
+
+fn json_object_format(output_format: &Value) -> bool {
+    output_format.get("type").and_then(Value::as_str) == Some("json_object")
+}
+
+/// Translate `LLMRequest::output_format` into the Chat Completions
+/// `response_format` field. Unknown shapes are dropped rather than forwarded so
+/// a malformed descriptor cannot turn into an OpenAI 400.
+pub(super) fn chat_response_format(output_format: Option<&Value>) -> Option<Value> {
+    let format = output_format?;
+    if json_object_format(format) {
+        return Some(json!({"type": "json_object"}));
+    }
+    let schema = json_schema_format(format)?;
+    let mut nested = json!({
+        "name": schema.name,
+        "schema": schema.schema,
+        "strict": schema.strict,
+    });
+    if let Some(description) = schema.description {
+        nested["description"] = json!(description);
+    }
+    Some(json!({"type": "json_schema", "json_schema": nested}))
+}
+
+/// Translate `LLMRequest::output_format` into the Responses `text.format` field.
+pub(super) fn responses_text_format(output_format: Option<&Value>) -> Option<Value> {
+    let format = output_format?;
+    if json_object_format(format) {
+        return Some(json!({"type": "json_object"}));
+    }
+    let schema = json_schema_format(format)?;
+    let mut value = json!({
+        "type": "json_schema",
+        "name": schema.name,
+        "schema": schema.schema,
+        "strict": schema.strict,
+    });
+    if let Some(description) = schema.description {
+        value["description"] = json!(description);
+    }
+    Some(value)
 }
 
 fn resolved_service_tier<'a>(model: &str, explicit: Option<&'a str>, default: Option<&'a str>) -> Option<&'a str> {

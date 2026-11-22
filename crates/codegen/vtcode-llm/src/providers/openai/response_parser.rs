@@ -40,7 +40,18 @@ pub(crate) fn parse_chat_response(
             (!text.is_empty()).then_some(text)
         }
         _ => None,
-    };
+    }
+    // Structured Outputs refusals carry the explanation in `message.refusal`
+    // instead of `content`. Keep it so the harness can surface a real reason
+    // once the refusal finish reason is mapped below.
+    .filter(|text| !text.trim().is_empty())
+    .or_else(|| {
+        message
+            .get("refusal")
+            .and_then(Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+    });
 
     let tool_calls = message
         .get("tool_calls")
@@ -73,6 +84,7 @@ pub(crate) fn parse_chat_response(
             "length" => provider::FinishReason::Length,
             "tool_calls" => provider::FinishReason::ToolCalls,
             "content_filter" => provider::FinishReason::ContentFilter,
+            "refusal" => provider::FinishReason::Refusal,
             other => provider::FinishReason::Error(other.to_string()),
         })
         .unwrap_or(provider::FinishReason::Stop);
@@ -124,4 +136,43 @@ pub(crate) fn parse_chat_response(
         organization_id: None,
         compaction: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn refusal_finish_reason_and_message_are_preserved() {
+        let response = parse_chat_response(
+            json!({
+                "choices": [{
+                    "message": {"role": "assistant", "content": null, "refusal": "I cannot help with that"},
+                    "finish_reason": "refusal"
+                }]
+            }),
+            "gpt-6.2-astra".to_owned(),
+            false,
+        )
+        .expect("refusal response should parse");
+
+        assert_eq!(response.finish_reason, provider::FinishReason::Refusal);
+        assert_eq!(response.content.as_deref(), Some("I cannot help with that"));
+    }
+
+    #[test]
+    fn ordinary_stop_keeps_content_without_refusal_field() {
+        let response = parse_chat_response(
+            json!({
+                "choices": [{"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]
+            }),
+            "gpt-6.2-astra".to_owned(),
+            false,
+        )
+        .expect("response should parse");
+
+        assert_eq!(response.finish_reason, provider::FinishReason::Stop);
+        assert_eq!(response.content.as_deref(), Some("ok"));
+    }
 }

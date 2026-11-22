@@ -406,8 +406,13 @@ pub struct OpenAIConfig {
     #[serde(default)]
     pub websocket_mode: bool,
 
-    /// Optional Responses API `store` flag.
-    /// Set to `false` to avoid server-side storage when using Responses-compatible models.
+    /// Optional Responses API `store` flag. Omitted or `false` sends `store: false`,
+    /// avoiding server-side application-state retention on Responses-compatible models.
+    /// Set to `true` to opt into server-side storage on native and compatible OpenAI
+    /// HTTP Responses routes; ChatGPT subscription routes and `websocket_mode = true`
+    /// always send `store: false`.
+    /// Organizations with Zero Data Retention treat `true` as `false` server-side, so
+    /// this setting cannot override an org-level data-controls policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub responses_store: Option<bool>,
 

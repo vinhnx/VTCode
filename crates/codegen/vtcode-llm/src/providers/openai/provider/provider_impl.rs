@@ -42,6 +42,20 @@ impl provider::LLMProvider for OpenAIProvider {
         !self.is_chatgpt_backend() && !Self::requires_streaming_responses(requested)
     }
 
+    fn supports_structured_output(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+
+        // ChatGPT subscription routes reject Responses `text.format` descriptors,
+        // so callers must keep their prompt-level schema fallback there. Other
+        // OpenAI routes accept strict json_schema on Responses-backed models,
+        // including compatible endpoints reached through a base-URL override.
+        !self.is_chatgpt_backend() && models::openai::RESPONSES_API_MODELS.contains(&requested)
+    }
+
     fn effective_context_size(&self, model: &str) -> usize {
         if let Some(context_window) = self.context_window_override {
             return context_window;

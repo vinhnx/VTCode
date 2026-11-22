@@ -272,6 +272,11 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk
   follow-through, dependency-aware tool use, completeness checks, verification, and conditional grounding/citation
   rules.
+- **Structured Outputs:** auxiliary calls that request a JSON schema (persistent memory, tool-failure diagnosis) send
+  strict `text.format` on `/responses` or `response_format` on `/v1/chat/completions`; JSON mode is sent as
+  `{"type":"json_object"}`. This applies to API-key and compatible Responses routes — ChatGPT subscription routes omit
+  `text.format` and keep the prompt-level schema fallback. A `refusal` finish reason is surfaced as a typed refusal
+  (with `message.refusal` text) instead of being reported as a generic error.
 - Deprecated models (gpt-5, gpt-5-mini, gpt-5-nano, o3, o4-mini, gpt-5-codex, gpt-5.1-codex, gpt-5.1, gpt-5.3-codex,
   gpt-5.4-nano, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, etc.) are removed from the
   model picker but retained in routing constants for backward compatibility with existing configs.

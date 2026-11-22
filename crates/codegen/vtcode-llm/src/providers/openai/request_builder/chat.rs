@@ -175,6 +175,12 @@ pub(crate) fn build_chat_request(
         openai_request["prompt_cache_key"] = json!(prompt_cache_key);
     }
 
+    if ctx.include_structured_output
+        && let Some(response_format) = super::chat_response_format(request.output_format.as_ref())
+    {
+        openai_request["response_format"] = response_format;
+    }
+
     if ctx.supports_tools
         && let Some(tools) = &request.tools
         && let Some(serialized) = tool_serialization::serialize_tools(tools, ctx.model)

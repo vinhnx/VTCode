@@ -716,6 +716,7 @@ impl OpenAIProvider {
             supports_temperature: Self::supports_temperature_parameter(&request.model),
             prompt_cache_key,
             default_service_tier,
+            include_structured_output: !self.is_chatgpt_backend(),
         };
 
         request_builder::build_chat_request(request, &ctx)
@@ -737,6 +738,13 @@ impl OpenAIProvider {
         };
         let backend_defaults = self.backend_setup.responses_defaults();
         let requested_ttl = self.requested_prompt_cache_ttl(&request.model);
+        // The Responses API defaults to server-side storage (30 days of
+        // application state). Keep the ZDR-safe `store: false` default unless
+        // the user explicitly opts in with `responses_store = true`; the
+        // backend flag remains an absolute guard (ChatGPT subscription routes
+        // never accept server-side storage). ZDR organizations override an
+        // opt-in server-side, so this cannot bypass an org-level policy.
+        let force_response_store_false = backend_defaults.force_store_false || self.responses_store != Some(true);
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_allowed_tools: self.supports_responses_allowed_tools(&request.model),
@@ -749,7 +757,7 @@ impl OpenAIProvider {
             include_max_output_tokens: is_native_openai,
             include_output_types: !is_native_openai && backend_defaults.include_output_types,
             include_sampling_parameters: backend_defaults.include_sampling_parameters,
-            force_response_store_false: true,
+            force_response_store_false,
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
             include_prompt_cache_retention: self.prompt_cache_hints_enabled
@@ -770,6 +778,7 @@ impl OpenAIProvider {
             preserve_assistant_phase_on_replay: false,
             reasoning_context: None,
             safety_identifier: None,
+            include_structured_output: !self.is_chatgpt_backend(),
         };
 
         let mut payload = request_builder::build_responses_request(request, &ctx)?;
