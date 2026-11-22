@@ -395,7 +395,15 @@ fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
     output
 }
 
-/// Parse and determine the length of the ANSI escape sequence at the start of text
+/// Parse and determine the length of the ANSI escape sequence at the start of text.
+///
+/// This boundary parser is deliberately conservative: an invalid byte inside a
+/// CSI (including a C0 control other than ESC/CAN/SUB) aborts the sequence
+/// without consuming that byte. PTY echo suppression uses it to skip escape
+/// sequences without swallowing following command text on malformed input.
+/// [`strip_ansi`] follows `anstream`'s ECMA-48 state machine instead, where a
+/// C0 control inside CSI is executed and the sequence continues; the two
+/// parsers therefore disagree on that malformed input by design.
 pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
     let bytes = text.as_bytes();
     parse_ansi_sequence_bytes(bytes)
@@ -556,6 +564,17 @@ mod tests {
         // ('v') is therefore the final byte and is consumed with the sequence.
         let malformed = format!("a\x1b[12{}visible", char::from(0x10));
         assert_eq!(strip_ansi(&malformed), "aisible");
+    }
+
+    #[test]
+    fn boundary_parser_stays_conservative_on_malformed_csi() {
+        // Echo suppression relies on the boundary parser not swallowing text
+        // that follows a malformed CSI, so it intentionally disagrees with
+        // `strip_ansi` about where the sequence ends.
+        let malformed = format!("\x1b[12{}visible", char::from(0x10));
+        let len = super::parse_ansi_sequence(&malformed).expect("sequence length");
+        assert_eq!(malformed.split_at(len).0, "\x1b[12");
+        assert_eq!(strip_ansi(&malformed), "isible");
     }
 
     #[test]
