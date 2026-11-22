@@ -77,9 +77,9 @@ pub(in crate::desktop::view) fn zen_mode_toggle(zen_mode: bool, faded: gpui_kit:
         rust_i18n::t!("app.navigation.enter_zen").to_string()
     };
     let icon = if zen_mode {
-        Icon::new(IconName::Leaf).text_color(faded)
-    } else {
         Icon::new(IconName::Leaf)
+    } else {
+        Icon::new(IconName::Leaf).text_color(faded)
     };
     desktop_ghost_button(ZEN_MODE_TOGGLE_ELEMENT_ID)
         .icon(icon)

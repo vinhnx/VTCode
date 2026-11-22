@@ -706,7 +706,7 @@ const NON_TEXT_RATIO: f32 = 3.0;
 
 /// Faintest chrome-icon tone on `background` that still meets the 3:1
 /// non-text contrast floor (WCAG 2.1 SC 1.4.11) for meaningful icons.
-/// Quiet controls (the Zen exit) tint their icon with this instead of using
+/// Quiet controls (the Zen entry) tint their icon with this instead of using
 /// element opacity, so the keyboard focus ring keeps full strength.
 pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
     text_at_contrast(background, foreground, NON_TEXT_RATIO)
