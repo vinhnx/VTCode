@@ -1,4 +1,4 @@
-//! Emergency process termination that does not run `exit` handlers.
+//! Emergency process termination that skips libc `exit` cleanup on Unix.
 //!
 //! [`std::process::exit`] delegates to libc's `exit`, which runs `atexit`
 //! handlers and thread-local destructors and tears down process-wide state Rust
@@ -14,11 +14,12 @@
 //! `_exit` syscall to skip it entirely; other platforms keep
 //! [`std::process::exit`].
 
-/// Terminate the process immediately with `code`, skipping `exit` handlers.
+/// Terminate the process immediately with `code`.
 ///
-/// No Rust destructors, `atexit` handlers, or thread-local destructors run
-/// after this call. Callers must flush any buffered output they care about
-/// *before* calling it.
+/// On Unix this is a raw `_exit` syscall: no Rust destructors, `atexit`
+/// handlers, or thread-local destructors run after it. Other platforms fall
+/// back to [`std::process::exit`] and follow its cleanup semantics. Callers
+/// must flush any buffered output they care about *before* calling it.
 #[cfg_attr(
     unix,
     expect(unsafe_code, reason = "raw _exit syscall skips all exit handlers by design")
