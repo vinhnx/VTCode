@@ -6,7 +6,6 @@ use tracing::warn;
 
 use vtcode_config::VTCodeConfig;
 use vtcode_config::core::ProviderOverrideConfig;
-use vtcode_core::config::constants::defaults;
 use vtcode_core::config::models::{ModelId, Provider};
 
 #[derive(Clone)]
@@ -146,11 +145,10 @@ fn apply_persisted_api_key_env(
         return options;
     };
     let configured_env = cfg.agent.api_key_env.trim();
-    if configured_env.is_empty()
-        || configured_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
-        || configured_env.eq_ignore_ascii_case(provider.default_api_key_env())
-        || cfg.configured_api_key_env(&cfg.agent.provider).is_some()
-    {
+    // A stale concrete env from a previous provider (or a default/placeholder)
+    // resolves to a different effective name; do not project it onto options.
+    let effective_env = vtcode_config::api_keys::resolve_agent_api_key_env(&cfg.agent.provider, configured_env);
+    if effective_env != configured_env || cfg.configured_api_key_env(&cfg.agent.provider).is_some() {
         return options;
     }
 

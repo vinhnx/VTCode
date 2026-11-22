@@ -280,6 +280,30 @@ fn resolve_api_key_env_preserves_explicit_override() {
 }
 
 #[test]
+fn agent_api_key_env_discards_stale_foreign_default() {
+    // A switch away from Merge must not send MERGE_GATEWAY_API_KEY to OpenAI.
+    assert_eq!(resolve_agent_api_key_env("openai", "MERGE_GATEWAY_API_KEY"), "OPENAI_API_KEY");
+    assert_eq!(resolve_agent_api_key_env("openai", "GEMINI_API_KEY"), "OPENAI_API_KEY");
+}
+
+#[test]
+fn agent_api_key_env_keeps_active_custom_and_placeholder_names() {
+    assert_eq!(resolve_agent_api_key_env("openai", "OPENAI_API_KEY"), "OPENAI_API_KEY");
+    assert_eq!(resolve_agent_api_key_env("openai", "CORP_OPENAI_KEY"), "CORP_OPENAI_KEY");
+    assert_eq!(resolve_agent_api_key_env("openai", ""), "OPENAI_API_KEY");
+    assert_eq!(resolve_agent_api_key_env("openai", defaults::DEFAULT_API_KEY_ENV), "OPENAI_API_KEY");
+}
+
+#[test]
+fn agent_api_key_env_keeps_accepted_alternate_names() {
+    // These names are another provider's default but are documented alternates
+    // for the active provider, so they must survive a provider switch.
+    assert_eq!(resolve_agent_api_key_env("gemini", "GOOGLE_API_KEY"), "GOOGLE_API_KEY");
+    assert_eq!(resolve_agent_api_key_env("qwen", "DASHSCOPE_API_KEY"), "DASHSCOPE_API_KEY");
+    assert_eq!(resolve_agent_api_key_env("meta", "MODEL_API_KEY"), "MODEL_API_KEY");
+}
+
+#[test]
 fn credential_metadata_key_normalizes_provider_and_key() {
     assert_eq!(
         credential_metadata_key(" MyCorp ", "mycorp_billing_key").expect("metadata key"),

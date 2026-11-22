@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use crate::cli::args::Cli;
 pub use crate::config::api_keys::api_key_env_var;
-use crate::config::api_keys::resolve_api_key_env;
+use crate::config::api_keys::{resolve_agent_api_key_env, resolve_api_key_env};
 use crate::config::constants::defaults;
 use crate::config::loader::VTCodeConfig;
 use crate::config::models::Provider;
@@ -50,7 +50,9 @@ pub fn resolve_runtime_model_selection(args: &Cli, config: &VTCodeConfig) -> Run
     } else if let Some(configured_env) = config.configured_api_key_env(&provider) {
         resolve_api_key_env(&provider, &configured_env)
     } else if config.agent.provider.eq_ignore_ascii_case(&provider) {
-        resolve_api_key_env(&provider, &config.agent.api_key_env)
+        // Agent-wide fallback: a stale concrete env from a previous provider
+        // must not send that provider's key to the current one.
+        resolve_agent_api_key_env(&provider, &config.agent.api_key_env)
     } else {
         api_key_env_var(&provider)
     };
@@ -264,6 +266,41 @@ mod tests {
         let selection = resolve_runtime_model_selection(&Cli::parse_from(["vtcode"]), &config);
 
         assert_eq!(selection.api_key_env, "CORP_OPENAI_SECRET");
+    }
+
+    #[test]
+    fn runtime_selection_discards_stale_agent_env_after_provider_switch() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_owned();
+        config.agent.api_key_env = "MERGE_GATEWAY_API_KEY".to_owned();
+
+        let selection = resolve_runtime_model_selection(&Cli::parse_from(["vtcode"]), &config);
+
+        assert_eq!(selection.provider, "openai");
+        assert_eq!(selection.api_key_env, "OPENAI_API_KEY");
+    }
+
+    #[test]
+    fn runtime_selection_keeps_genuine_custom_agent_env() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_owned();
+        config.agent.api_key_env = "CORPORATE_OPENAI_KEY".to_owned();
+
+        let selection = resolve_runtime_model_selection(&Cli::parse_from(["vtcode"]), &config);
+
+        assert_eq!(selection.api_key_env, "CORPORATE_OPENAI_KEY");
+    }
+
+    #[test]
+    fn runtime_selection_keeps_explicit_cli_env_even_when_it_looks_foreign() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_owned();
+        config.agent.api_key_env = "MERGE_GATEWAY_API_KEY".to_owned();
+
+        let args = Cli::parse_from(["vtcode", "--api-key-env", "MERGE_GATEWAY_API_KEY"]);
+        let selection = resolve_runtime_model_selection(&args, &config);
+
+        assert_eq!(selection.api_key_env, "MERGE_GATEWAY_API_KEY", "explicit CLI intent still wins");
     }
 
     #[test]

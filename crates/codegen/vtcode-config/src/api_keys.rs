@@ -97,6 +97,47 @@ pub fn resolve_api_key_env(provider: &str, configured_env: &str) -> String {
     }
 }
 
+/// Whether `env_key` is a known default API-key variable belonging to another
+/// provider. `agent.api_key_env` is agent-wide, so a provider switch performed
+/// outside the model picker (manual config edit, another surface) can leave a
+/// concrete foreign default behind; using it presents provider A's key to B.
+fn is_foreign_provider_api_key_env(provider: &str, env_key: &str) -> bool {
+    let Some(canonical) = static_env_var(env_key) else {
+        return false;
+    };
+    if canonical.eq_ignore_ascii_case(&api_key_env_var(provider)) {
+        return false;
+    }
+    // Some providers accept an alternate name that is another provider's
+    // default (GOOGLE_API_KEY for Gemini, for example). Keep those.
+    if let Ok(active) = provider.parse::<Provider>()
+        && alternate_env_var(active).is_some_and(|alternate| alternate.eq_ignore_ascii_case(canonical))
+    {
+        return false;
+    }
+    true
+}
+
+/// Resolve the agent-wide API-key env fallback for a provider.
+///
+/// Unlike [`resolve_api_key_env`], a concrete value that is another known
+/// provider's default is treated as a stale provider-switch remnant and is
+/// replaced by the active provider's default. Genuinely custom names and the
+/// active provider's own accepted names still win. Explicit CLI and
+/// provider-scoped overrides must keep using [`resolve_api_key_env`] so their
+/// intent is never second-guessed.
+pub fn resolve_agent_api_key_env(provider: &str, configured_env: &str) -> String {
+    let trimmed = configured_env.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
+        || is_foreign_provider_api_key_env(provider, trimmed)
+    {
+        api_key_env_var(provider)
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 /// Build the normalized identity used by credential storage for a provider
 /// and an optional configured environment-variable name.
 pub fn credential_identity(provider: &str, key_name: &str) -> Result<Option<CredentialIdentity>> {

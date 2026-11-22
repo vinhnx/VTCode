@@ -1,6 +1,6 @@
 use super::AgentRunner;
 use crate::config::VTCodeConfig;
-use crate::config::api_keys::resolve_api_key_env;
+use crate::config::api_keys::resolve_agent_api_key_env;
 use crate::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use crate::core::agent::config::resolve_checkpointing_storage_dir;
 use crate::core::agent::task::ContextItem;
@@ -38,7 +38,7 @@ impl AgentRunner {
             model: self.model.clone(),
             api_key: self._api_key.clone(),
             provider: cfg.agent.provider.clone(),
-            api_key_env: resolve_api_key_env(&cfg.agent.provider, &cfg.agent.api_key_env),
+            api_key_env: resolve_agent_api_key_env(&cfg.agent.provider, &cfg.agent.api_key_env),
             workspace: self._workspace.clone(),
             verbose: false,
             quiet: self.quiet,
