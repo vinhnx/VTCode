@@ -215,7 +215,17 @@ pub fn strip_ansi(text: &str) -> String {
 /// where a sequence ends. The retained suffix is bounded.
 #[derive(Default)]
 pub struct AnsiStripStream {
+    /// Trailing, unterminated escape sequence held back for the next chunk.
+    /// Bounded by [`MAX_STRING_SEQUENCE_BYTES`].
     pending: String,
+    /// Parser state while discarding an overlong, unterminated sequence.
+    ///
+    /// The bound on `pending` means a hostile or buggy child could emit an
+    /// arbitrarily long OSC string. Once the cap is hit, the rest of that
+    /// sequence is dropped until the state machine returns to `Ground`, so
+    /// output stays independent of where the PTY read landed without letting
+    /// the retained buffer grow without limit.
+    discarding: Option<State>,
 }
 
 impl AnsiStripStream {
@@ -230,6 +240,10 @@ impl AnsiStripStream {
     /// A trailing escape sequence that is incomplete in `chunk` is retained
     /// and prepended to the next call instead of leaking raw control bytes.
     pub fn strip_chunk(&mut self, chunk: &str) -> String {
+        let chunk = self.discard_overlong(chunk);
+        if chunk.is_empty() {
+            return String::new();
+        }
         // The common case has no held-back suffix. Avoid copying the whole
         // chunk into `pending`'s buffer only to split it again; PTY output is
         // chunked at high frequency and this path is allocation-sensitive.
@@ -241,27 +255,67 @@ impl AnsiStripStream {
         self.strip_ready(&combined)
     }
 
+    /// Drop the continuation of an overlong sequence up to its terminator,
+    /// returning the first byte after the sequence (if the chunk contains it).
+    fn discard_overlong<'a>(&mut self, chunk: &'a str) -> &'a str {
+        let Some(mut state) = self.discarding else {
+            return chunk;
+        };
+        for (index, ch) in chunk.char_indices() {
+            if !ch.is_ascii() {
+                continue;
+            }
+            let (next, _) = state_change(state, ch as u8);
+            if next != State::Anywhere {
+                state = next;
+            }
+            if next == State::Ground {
+                self.discarding = None;
+                return chunk.split_at(index + ch.len_utf8()).1;
+            }
+        }
+        self.discarding = Some(state);
+        ""
+    }
+
     /// Strip `text`, holding back its trailing incomplete sequence for the next call.
     fn strip_ready(&mut self, text: &str) -> String {
+        let mut overlong = false;
         let split_at = if text.as_bytes().contains(&ESC) {
-            trailing_incomplete_sequence_start(text)
+            let tail = sequence_tail(text);
+            overlong = tail.overlong;
+            if overlong {
+                self.discarding = Some(tail.state);
+            }
+            tail.start
         } else {
             text.len()
         };
         let (ready, pending) = text.split_at(split_at);
-        self.pending.push_str(pending);
+        if !overlong {
+            self.pending.push_str(pending);
+        }
         strip_str(ready).to_string()
     }
 }
 
-/// Byte offset where the trailing, unterminated escape sequence begins.
+/// Where an unterminated escape sequence starts, and the parser state at EOF.
+struct SequenceTail {
+    /// Byte offset where the trailing incomplete sequence begins; `text.len()`
+    /// when the input ends in a complete sequence or was too long to retain.
+    start: usize,
+    /// Parser state after the whole input, used to resume in discard mode.
+    state: State,
+    /// Whether the trailing sequence exceeded the retention cap.
+    overlong: bool,
+}
+
+/// Locate the trailing, unterminated escape sequence.
 ///
 /// Uses the same `anstyle_parse` state machine as `anstream`. A second,
 /// hand-rolled grammar here would classify sequences differently (notably a
 /// C0 control inside CSI) and make output depend on where a PTY read landed.
-/// Returns `text.len()` when the input ends in a complete sequence or when
-/// the suffix is too long to retain.
-fn trailing_incomplete_sequence_start(text: &str) -> usize {
+fn sequence_tail(text: &str) -> SequenceTail {
     let mut state = State::Ground;
     let mut candidate = None;
     for (index, ch) in text.char_indices() {
@@ -279,11 +333,17 @@ fn trailing_incomplete_sequence_start(text: &str) -> usize {
     }
 
     if state == State::Ground {
-        return text.len();
+        return SequenceTail { start: text.len(), state, overlong: false };
     }
-    candidate
-        .filter(|&start| text.len() - start <= MAX_STRING_SEQUENCE_BYTES)
-        .unwrap_or(text.len())
+    // A non-Ground state without an ASCII ESC start can only come from 8-bit
+    // C1 bytes, which `anstream` treats as printable UTF-8 rather than controls.
+    let Some(start) = candidate else {
+        return SequenceTail { start: text.len(), state, overlong: false };
+    };
+    if text.len() - start > MAX_STRING_SEQUENCE_BYTES {
+        return SequenceTail { start: text.len(), state, overlong: true };
+    }
+    SequenceTail { start, state, overlong: false }
 }
 
 /// Strip ANSI escape codes from arbitrary bytes, preserving non-control bytes.
@@ -340,7 +400,8 @@ pub fn contains_unicode(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnsiStripStream, CAN, SUB, parse_ansi_sequence_bytes, push_visible_byte, strip_ansi, strip_ansi_ascii_only,
+        AnsiStripStream, CAN, MAX_STRING_SEQUENCE_BYTES, SUB, parse_ansi_sequence_bytes, push_visible_byte, strip_ansi,
+        strip_ansi_ascii_only,
     };
 
     #[test]
@@ -610,6 +671,35 @@ mod tests {
         let mut stream = AnsiStripStream::new();
         assert_eq!(stream.strip_chunk("plain text\n"), "plain text\n");
         assert_eq!(stream.strip_chunk("second\rline"), "second\rline");
+    }
+
+    /// The retained suffix is capped, but an overlong OSC string must still
+    /// not leak its continuation into the transcript when a PTY read splits it.
+    #[test]
+    fn strip_stream_handles_overlong_incomplete_sequence_at_chunk_boundary() {
+        for terminator in ["\x1b\\", "\x07"] {
+            let mut payload = String::from("PRE\x1b]8;;");
+            payload.push_str(&"x".repeat(MAX_STRING_SEQUENCE_BYTES + 16));
+            payload.push_str(terminator);
+            payload.push_str("POST");
+            let expected = strip_ansi(&payload);
+            assert_eq!(expected, "PREPOST", "terminator {terminator:?}");
+
+            for split in [
+                "PRE\x1b]8;;".len() + 8,
+                "PRE\x1b]8;;".len() + MAX_STRING_SEQUENCE_BYTES - 1,
+                "PRE\x1b]8;;".len() + MAX_STRING_SEQUENCE_BYTES + 8,
+                payload.len() - terminator.len(),
+            ] {
+                let (first, second) = payload.split_at(split);
+                let mut stream = AnsiStripStream::new();
+                let mut visible = stream.strip_chunk(first);
+                assert!(stream.pending.len() <= MAX_STRING_SEQUENCE_BYTES, "retention cap");
+                visible.push_str(&stream.strip_chunk(second));
+                assert!(stream.pending.is_empty(), "buffer released after terminator");
+                assert_eq!(visible, expected, "split at {split}, terminator {terminator:?}");
+            }
+        }
     }
 
     /// A PTY read can end at any byte boundary. Streaming output must match

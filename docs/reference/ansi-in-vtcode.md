@@ -23,6 +23,10 @@ Plain-text stripping is delegated to `anstream::adapter::strip_str`, an ANSI
 state machine that is already a workspace dependency. `AnsiStripStream` retains
 a trailing incomplete escape sequence and re-strips it with the next chunk,
 so a sequence split by a PTY read boundary never leaks raw control bytes.
+Retention is bounded: if an unterminated sequence exceeds 4096 bytes, the rest
+of it is discarded with the same `anstyle_parse` state machine until its
+terminator arrives, keeping memory bounded without making output depend on
+where the read landed.
 
 The hand-rolled ECMA-48 parser stays for the one thing `anstream` does not
 expose: byte boundaries and OSC payloads of individual sequences, used for
