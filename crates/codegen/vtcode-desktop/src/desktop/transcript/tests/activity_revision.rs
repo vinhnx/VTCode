@@ -26,3 +26,35 @@ fn activity_revision_ignores_output_text_deltas() {
     transcript.set_output("1", Some("output".into()));
     assert_eq!(transcript.activity_revision(), before + 1);
 }
+
+#[test]
+fn upsert_output_presence_bumps_activity_revision() {
+    // upsert's no-content-change branch attaches output to a row that had
+    // none. That crosses the same none→some `has_output` boundary as
+    // set_output, so the Activity projection cache must be invalidated too.
+    let mut transcript = Transcript::default();
+    let row = item(1, "tool", "running");
+    transcript.push(row);
+    let before = transcript.activity_revision();
+
+    let mut with_output = item(1, "tool", "running");
+    with_output.output = Some("captured".into());
+    transcript.upsert(with_output);
+    assert_eq!(
+        transcript.activity_revision(),
+        before + 1,
+        "upsert crossing none→some output must bump activity_revision",
+    );
+
+    // A later text delta on a row that already has output must NOT bump:
+    // the Activity projection reads presence, not the captured bytes.
+    let after_presence = transcript.activity_revision();
+    let mut grown = item(1, "tool", "running");
+    grown.output = Some("captured and more".into());
+    transcript.upsert(grown);
+    assert_eq!(
+        transcript.activity_revision(),
+        after_presence,
+        "output text growth must keep the Activity cache warm",
+    );
+}

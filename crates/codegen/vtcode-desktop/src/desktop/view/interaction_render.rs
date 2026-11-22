@@ -82,7 +82,7 @@ fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx:
         fenced.push_str("```sh\n");
         fenced.push_str(command);
         fenced.push_str("\n```");
-        let prepared = prepare_markdown(&gpui_kit::SharedString::from(fenced));
+        let prepared = prepared_markdown(&gpui_kit::SharedString::from(fenced));
         return wrapper
             .role(gpui_kit::Role::Label)
             .aria_label(format!("Command: {}", prepared.accessible_text))
@@ -95,7 +95,7 @@ fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx:
             .into_any_element();
     }
     if detail.contains('`') {
-        let prepared = prepare_markdown(&gpui_kit::SharedString::from(detail));
+        let prepared = prepared_markdown(&gpui_kit::SharedString::from(detail));
         return wrapper
             .role(gpui_kit::Role::Label)
             .aria_label(prepared.accessible_text.to_string())

@@ -295,11 +295,14 @@ impl Transcript {
                 end = end.max(index + 1);
             }
         }
-        if let Some(first) = first {
-            self.bump_revision();
-            self.layout_changes
-                .push(TranscriptLayoutChange::RemeasureItems(first.min(final_index)..end));
-        }
+        // The final row's file summary was rewritten above even when this turn
+        // has no other rows to group, so the mutation must always invalidate
+        // revision-keyed projections. `end` starts past the final row, so the
+        // remeasure range covers it even without a group head.
+        self.bump_revision();
+        let start = first.unwrap_or(final_index);
+        self.layout_changes
+            .push(TranscriptLayoutChange::RemeasureItems(start.min(final_index)..end));
     }
 
     pub(in crate::desktop) fn set_turn_group_expanded(&mut self, turn_id: &str, expanded: bool) {

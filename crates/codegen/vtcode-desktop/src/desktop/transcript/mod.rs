@@ -654,8 +654,16 @@ impl Transcript {
                     return;
                 };
                 if item.output.is_some() && existing.output != item.output {
+                    // Activity reads output *presence*, not its bytes. Mirroring
+                    // `set_output`, only the none→some boundary invalidates the
+                    // Activity projection; text deltas keep its cache warm.
+                    let activity_affecting = existing.output.is_none();
                     existing.output = item.output;
-                    self.bump_revision();
+                    if activity_affecting {
+                        self.bump_revision();
+                    } else {
+                        self.bump_output_revision();
+                    }
                 }
                 return;
             }

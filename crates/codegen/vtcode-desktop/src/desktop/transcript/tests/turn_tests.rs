@@ -41,6 +41,29 @@ fn item_turn_identity_survives_streamed_updates() {
 }
 
 #[test]
+fn complete_turn_group_invalidates_single_row_turn() {
+    // With no other rows in the turn there is no group head, but the final
+    // row's file summary is still rewritten. The revision and remeasure must
+    // reflect that mutation instead of being skipped.
+    let mut transcript = Transcript::default();
+    transcript.push(item(1, "assistant", "answer"));
+    transcript.set_item_turn("1", "turn-a");
+    let before = transcript.revision();
+    let _ = transcript.take_layout_changes();
+
+    transcript.complete_turn_group("turn-a", "1");
+
+    assert!(transcript.revision() > before, "single-row completion still mutates the final row",);
+    assert!(
+        transcript.take_layout_changes().iter().any(|change| matches!(
+            change,
+            super::super::TranscriptLayoutChange::RemeasureItems(range) if *range == (0..1)
+        )),
+        "the final row must be remeasured even without a group head",
+    );
+}
+
+#[test]
 fn turn_files_deduplicate_and_exclude_failed_or_other_turns() {
     use super::super::{DiffCard, DiffFile, DiffFileKind};
     let mut transcript = Transcript::default();
