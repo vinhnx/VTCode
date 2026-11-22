@@ -123,12 +123,15 @@ impl ExecPolicyManager {
         Ok(())
     }
 
-    /// Load rule files as precedence layers; `layers[0]` wins over later
-    /// entries when both define the same pattern. Missing files are skipped.
-    /// Returns the number of files actually loaded.
+    /// Load rule files as precedence layers, highest precedence first.
+    /// For a shared pattern the first layer wins; distinct patterns keep layer
+    /// order in the evaluation list, so a specific high-precedence rule outranks
+    /// a broad low-precedence one. Missing files are skipped. Returns the
+    /// number of files actually loaded.
     pub async fn load_policy_layers(&self, layers: &[PathBuf]) -> Result<usize> {
         let parser = super::parser::PolicyParser::new();
         let mut merged = Policy::empty();
+        let mut seen_patterns: HashSet<Vec<String>> = HashSet::new();
         let mut loaded = 0usize;
         for layer in layers {
             if !layer.is_file() {
@@ -138,7 +141,11 @@ impl ExecPolicyManager {
                 .load_file(layer)
                 .await
                 .with_context(|| format!("Failed to load policy layer {}", layer.display()))?;
-            merged.prepend_layer(layer_policy.rules().iter().cloned());
+            for rule in layer_policy.rules() {
+                if seen_patterns.insert(rule.pattern.clone()) {
+                    merged.add_prefix_rule(&rule.pattern, rule.decision)?;
+                }
+            }
             loaded += 1;
         }
         let mut policy = self.policy.write().await;
@@ -579,6 +586,35 @@ mod tests {
             .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(deduped_names, vec!["project.rules", "canonical.rules", "second.rules"]);
+    }
+
+    #[tokio::test]
+    async fn load_policy_layers_higher_precedence_layer_outranks_broader_rule() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::with_defaults(dir.path().to_path_buf());
+        let project = dir.path().join("project.rules");
+        let canonical = dir.path().join("canonical.rules");
+        let legacy = dir.path().join("legacy.rules");
+        std::fs::write(&project, "forbidden: git push\n").unwrap();
+        std::fs::write(&canonical, "prompt: git fetch\n").unwrap();
+        std::fs::write(&legacy, "allow: git\n").unwrap();
+
+        // Documented precedence: project > canonical > legacy.
+        let loaded = manager.load_policy_layers(&[project, canonical, legacy]).await.unwrap();
+        assert_eq!(loaded, 3);
+
+        // A lower-precedence broad `allow: git` must not shadow the project
+        // rule that forbids `git push`.
+        assert!(manager.check_approval(&["git".into(), "push".into()]).await.is_forbidden());
+        // A canonical prompt outranks the legacy broad allow for `git fetch`.
+        assert!(
+            manager
+                .check_approval(&["git".into(), "fetch".into()])
+                .await
+                .requires_approval()
+        );
+        // Patterns only in the lowest layer still apply.
+        assert!(manager.check_approval(&["git".into(), "status".into()]).await.can_proceed());
     }
 
     #[tokio::test]

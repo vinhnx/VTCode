@@ -937,10 +937,13 @@ impl Preferences {
         if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
             return Self::load_from(&path, None);
         }
-        let Some(canonical) = storage::canonical_preferences_path() else {
-            return Self::default();
-        };
         let legacy = storage::legacy_preferences_path();
+        let Some(canonical) = storage::canonical_preferences_path() else {
+            // Without a canonical root the best available settings are the
+            // legacy file; dropping to defaults would lose them on a transient
+            // path-resolution failure.
+            return storage::load_legacy(legacy.as_deref());
+        };
         Self::load_from(&canonical, legacy.as_deref())
     }
 

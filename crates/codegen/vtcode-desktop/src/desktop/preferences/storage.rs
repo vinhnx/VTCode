@@ -21,18 +21,50 @@ pub(super) fn legacy_preferences_path() -> Option<PathBuf> {
 
 /// Read `canonical`, falling back to `legacy` only when the canonical file is
 /// missing. A corrupt canonical file is quarantined and yields defaults; the
-/// legacy file is never renamed or overwritten here.
+/// legacy file is read-only here (migration owns it) but a bad legacy file is
+/// reported instead of silently degrading to defaults.
 pub(super) fn load<T>(canonical: &Path, legacy: Option<&Path>) -> T
 where
     T: DeserializeOwned + Default,
 {
-    if let Ok(content) = std::fs::read_to_string(canonical) {
-        return parse_or_quarantine(canonical, content);
+    match std::fs::read_to_string(canonical) {
+        Ok(content) => parse_or_quarantine(canonical, content),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => load_legacy(legacy),
+        Err(error) => {
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "could not read desktop preferences ({}): {error}",
+                canonical.display()
+            ));
+            T::default()
+        }
     }
-    legacy
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|content| serde_json::from_str(&content).ok())
-        .unwrap_or_default()
+}
+
+pub(super) fn load_legacy<T: DeserializeOwned + Default>(legacy: Option<&Path>) -> T {
+    let Some(path) = legacy else {
+        return T::default();
+    };
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return T::default(),
+        Err(error) => {
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "could not read legacy desktop preferences ({}): {error}",
+                path.display()
+            ));
+            return T::default();
+        }
+    };
+    match serde_json::from_str(&content) {
+        Ok(preferences) => preferences,
+        Err(error) => {
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "legacy desktop preferences corrupt ({error}): {}; using defaults",
+                path.display()
+            ));
+            T::default()
+        }
+    }
 }
 
 fn parse_or_quarantine<T: DeserializeOwned + Default>(path: &Path, content: String) -> T {

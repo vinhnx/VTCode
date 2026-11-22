@@ -903,6 +903,21 @@ fn corrupt_canonical_does_not_fall_back_to_legacy() {
 }
 
 #[test]
+fn corrupt_legacy_preferences_yield_defaults_without_quarantine() {
+    let dir = tempfile::tempdir().expect("isolated corrupt legacy probe");
+    let canonical = dir.path().join("canonical/preferences.json");
+    let legacy = dir.path().join("legacy/preferences.json");
+    std::fs::create_dir_all(legacy.parent().unwrap()).expect("create legacy dir");
+    std::fs::write(&legacy, r#"{"theme":"ciapre","contrast":oops"#).expect("seed corrupt legacy");
+
+    let loaded = Preferences::load_from(&canonical, Some(&legacy));
+
+    assert!(loaded.theme.is_none(), "corrupt legacy must not partially load");
+    assert!(legacy.exists(), "legacy file is read-only and survives a parse failure");
+    assert!(!legacy.with_extension("json.corrupt").exists(), "legacy file must not be quarantined");
+}
+
+#[test]
 fn zen_mode_defaults_to_zen_and_round_trips_both_choices() {
     let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
     assert!(legacy.zen_mode(), "missing values keep fresh installs in zen");
