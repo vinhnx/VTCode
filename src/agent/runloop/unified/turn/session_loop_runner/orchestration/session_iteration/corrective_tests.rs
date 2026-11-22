@@ -87,7 +87,9 @@ async fn active_goal_queues_continue_after_completed_turn() {
     let plan = PlanningWorkflowSessionState::default();
     let outcome = RunLoopTurnLoopResult::Completed { plan_approved_execution_pending: false };
     let ctrl_c = Arc::new(CtrlCState::new());
-    let (goal_dir, goal_tracker) = active_goal_tracker("Ship the release").await;
+    let objective = "Ship the release\nPreserve the literal \"GOAL ACHIEVED:\" in the examples.";
+    let (goal_dir, goal_tracker) = active_goal_tracker(objective).await;
+    let history_len = runtime.state.messages.len();
 
     let events_path = goal_dir.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(events_path.clone()).unwrap();
@@ -112,8 +114,9 @@ async fn active_goal_queues_continue_after_completed_turn() {
 
     assert!(matches!(flow, CorrectiveFlow::ContinueLoop));
     assert_eq!(goal_tracker.lock().await.auto_continue_turns(), 1);
+    assert_eq!(runtime.state.messages.len(), history_len, "queueing must not add a system message");
     let queued = runtime.run_until_idle().expect("goal follow-up must be queued");
-    assert!(queued.contains("Ship the release"), "follow-up must carry the objective: {queued}");
+    assert!(queued.contains(objective), "follow-up must carry the objective: {queued}");
     assert!(
         goal_dir.path().join("session-1").join("goal").join("goal.json").exists(),
         "turn boundary must persist the snapshot"

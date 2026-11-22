@@ -405,6 +405,8 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
     let idle = |exhausted: bool| CorrectiveFlow::Proceed {
         tracker_auto_continue_exhausted: incoming_exhausted || exhausted,
     };
+    // Desktop can mutate this same tracker during a turn. Keep the goal
+    // stable through accounting, status updates, and the queue attempt.
     let mut tracker = goal_tracker.lock().await;
     if tracker.has_goal() {
         tracker.account_elapsed();
@@ -413,17 +415,14 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
             tracing::warn!("goal snapshot persist failed: {err:#}");
         }
     }
-    let objective = if tracker.is_active() {
-        tracker.objective().unwrap_or_default().to_string()
-    } else {
+    if !tracker.is_active() {
         return Ok(idle(false));
-    };
+    }
     if let Some(emitter) = harness_emitter
         && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
     {
         tracing::warn!("goal event emit failed: {err:#}");
     }
-    drop(tracker);
     let max_turns =
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_cross_turn_turns(vt_cfg.as_ref());
     let turn_completed = matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. });
@@ -436,7 +435,6 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         && matches!(outcome_result, RunLoopTurnLoopResult::Completed { .. } | RunLoopTurnLoopResult::Blocked { .. })
         && !turn_refused;
     if completion_claimed {
-        let mut tracker = goal_tracker.lock().await;
         if tracker.complete() {
             if let Err(err) = tracker.persist() {
                 tracing::warn!("goal snapshot persist failed: {err:#}");
@@ -451,30 +449,23 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         }
         return Ok(idle(false));
     }
-    {
-        let mut tracker = goal_tracker.lock().await;
-        if tracker.enforce_budget() {
-            if let Err(err) = tracker.persist() {
-                tracing::warn!("goal snapshot persist failed: {err:#}");
-            }
-            if let Some(emitter) = harness_emitter
-                && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
-            {
-                tracing::warn!("goal event emit failed: {err:#}");
-            }
-            let _ = renderer.line(
-                MessageStyle::Info,
-                "[i] Goal hit its token budget and is now limited. Clear it or set a new goal to continue.",
-            );
-            return Ok(idle(false));
+    if tracker.enforce_budget() {
+        if let Err(err) = tracker.persist() {
+            tracing::warn!("goal snapshot persist failed: {err:#}");
         }
-    }
-    {
-        let tracker = goal_tracker.lock().await;
-        if let Some(line) = crate::agent::runloop::unified::turn::session::slash_commands::goal_indicator_line(&tracker)
+        if let Some(emitter) = harness_emitter
+            && let Err(err) = emitter.emit(tracker.to_goal_updated_event())
         {
-            let _ = renderer.line(MessageStyle::Info, &line);
+            tracing::warn!("goal event emit failed: {err:#}");
         }
+        let _ = renderer.line(
+            MessageStyle::Info,
+            "[i] Goal hit its token budget and is now limited. Clear it or set a new goal to continue.",
+        );
+        return Ok(idle(false));
+    }
+    if let Some(line) = crate::agent::runloop::unified::turn::session::slash_commands::goal_indicator_line(&tracker) {
+        let _ = renderer.line(MessageStyle::Info, &line);
     }
     let should_queue = auto_continue_kill_switch(outcome_result, ctrl_c_state, vt_cfg.as_ref(), session_stats)
         && !tool_registry.is_planning_active()
@@ -496,16 +487,7 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
     if !should_queue {
         return Ok(idle(false));
     }
-    match run_goal_auto_continue(GoalAutoContinue {
-        goal_tracker,
-        runtime,
-        renderer,
-        ctrl_c_state,
-        objective,
-        max_turns,
-    })
-    .await?
-    {
+    match run_goal_auto_continue(&mut tracker, runtime, renderer, ctrl_c_state, max_turns) {
         GoalContinueOutcome::Queued => {
             if matches!(session_end_reason, SessionEndReason::Exit) {
                 return Ok(CorrectiveFlow::BreakLoop);
@@ -514,16 +496,6 @@ async fn run_goal_gate_tail(tail: GoalGateTail<'_>) -> Result<CorrectiveFlow> {
         }
         GoalContinueOutcome::Idle { exhausted } => Ok(idle(exhausted)),
     }
-}
-
-/// Inputs for one goal auto-continue attempt.
-struct GoalAutoContinue<'a> {
-    goal_tracker: &'a SharedGoalTracker,
-    runtime: &'a mut AgentRuntime,
-    renderer: &'a mut AnsiRenderer,
-    ctrl_c_state: &'a Arc<CtrlCState>,
-    objective: String,
-    max_turns: u8,
 }
 
 /// Outcome of one goal auto-continue attempt.
@@ -535,39 +507,36 @@ enum GoalContinueOutcome {
 }
 
 /// Queue one goal-loop follow-up within budget, mirroring the tracker branch.
-async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContinueOutcome> {
-    let GoalAutoContinue {
-        goal_tracker,
-        runtime,
-        renderer,
-        ctrl_c_state,
-        objective,
-        max_turns,
-    } = gate;
+fn run_goal_auto_continue(
+    tracker: &mut vtcode_memory::GoalTracker,
+    runtime: &mut AgentRuntime,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    max_turns: u8,
+) -> GoalContinueOutcome {
+    if crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some() {
+        return GoalContinueOutcome::Idle { exhausted: false };
+    }
     // Reserve budget first: a failed queue consumes one turn rather than looping.
-    let Some(turn_no) = goal_tracker.lock().await.claim_auto_continue_turn(max_turns) else {
+    let Some(turn_no) = tracker.claim_auto_continue_turn(max_turns) else {
         let _ = renderer.line(
             MessageStyle::Info,
             "[i] Goal auto-continue budget exhausted; the goal stays active. Type `continue` to resume it.",
         );
-        return Ok(GoalContinueOutcome::Idle { exhausted: true });
+        return GoalContinueOutcome::Idle { exhausted: true };
     };
-    if crate::agent::runloop::unified::stop_requests::stop_outcome(ctrl_c_state).is_some() {
-        return Ok(GoalContinueOutcome::Idle { exhausted: false });
-    }
+    let objective = tracker.objective().unwrap_or_default();
     let follow_up = format!(
         "{}\"{objective}\". Build on prior turns in this thread; if blocked or needing input, say so instead of stopping silently. {}",
         crate::agent::runloop::unified::turn::session::slash_commands::GOAL_AUTO_CONTINUE_PREFIX,
         crate::agent::runloop::unified::turn::session::slash_commands::GOAL_COMPLETION_CONTRACT
     );
-    let directive = format!("Goal auto-continue (turn {turn_no} of {max_turns}): keep pursuing \"{objective}\".");
     match runtime.try_queue_synthetic_follow_up_input(follow_up) {
         Ok(()) => {
-            Arc::make_mut(&mut runtime.state.messages).push(vtcode_core::llm::provider::Message::system(directive));
             // Queued auto-continue stays quiet like tracker/plan: the next
             // turn starts immediately.
             tracing::debug!(goal_turn = turn_no, max_turns, "Queued goal auto-continue without TUI echo");
-            Ok(GoalContinueOutcome::Queued)
+            GoalContinueOutcome::Queued
         }
         Err(err) => {
             tracing::warn!(%err, "Goal auto-continue queue full; falling through to turn end");
@@ -575,7 +544,7 @@ async fn run_goal_auto_continue(gate: GoalAutoContinue<'_>) -> Result<GoalContin
                 MessageStyle::Warning,
                 "[i] Goal auto-continue could not resume automatically; the goal stays active. Type `continue` to resume it.",
             );
-            Ok(GoalContinueOutcome::Idle { exhausted: true })
+            GoalContinueOutcome::Idle { exhausted: true }
         }
     }
 }
