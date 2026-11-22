@@ -3,10 +3,10 @@
 //! This module provides formatting utilities for spool notifications.
 //! The actual spooling logic lives in `streams_helpers::spool_output_if_needed`.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Format a spool notification string for use in follow-up hints.
-pub fn format_spool_hint(log_path: &PathBuf) -> String {
+pub fn format_spool_hint(log_path: &Path) -> String {
     format!(
         "Large output was spooled to \"{}\". Use exec_command with shell tools such as cat, sed, or rg to inspect details.",
         log_path.display()
@@ -14,7 +14,7 @@ pub fn format_spool_hint(log_path: &PathBuf) -> String {
 }
 
 /// Format a spool notification message for display.
-pub fn format_spool_notification(content: &str, log_path: &PathBuf, title: Option<&str>) -> String {
+pub fn format_spool_notification(content: &str, log_path: &Path, title: Option<&str>) -> String {
     let bytes = content.len();
     let lines = content.lines().count();
 

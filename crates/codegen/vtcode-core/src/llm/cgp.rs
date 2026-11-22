@@ -247,8 +247,11 @@ impl ProviderBuildProvider<CopilotProviderConfig> for CopilotProviderBuild {
     }
 }
 
-macro_rules! impl_standard_provider_constructor {
-    ($($provider:ty),+ $(,)?) => {
+/// Group the standard-provider constructor and CGP wiring in one entry per
+/// provider. The `Provider => Config` pair keeps both halves together so
+/// adding a provider cannot leave its components unwired.
+macro_rules! impl_standard_provider_wiring {
+    ($($provider:ty => $config:ty),+ $(,)?) => {
         $(
             impl StandardProviderConstructor for $provider {
                 fn from_standard_config(
@@ -271,40 +274,49 @@ macro_rules! impl_standard_provider_constructor {
                     )
                 }
             }
+
+            crate::delegate_components!($config {
+                ProviderMetadataComponent => $config,
+                ProviderBuildComponent => StandardProviderBuild<$provider>,
+            });
+
+            // v0.8.0-style check: reject a mis-wiring at the table, not deep in
+            // the consumer bound that later reads provider metadata or builds one.
+            crate::check_components!($config {
+                ProviderMetadataComponent => ProviderMetadataProvider<$config>,
+                ProviderBuildComponent => ProviderBuildProvider<$config>,
+            });
         )+
     };
 }
 
-impl_standard_provider_constructor!(
-    GeminiProvider,
-    HuggingFaceProvider,
-    MiMoProvider,
-    MinimaxProvider,
-    DeepSeekProvider,
-    MetaProvider,
-    MistralProvider,
-    OpenResponsesProvider,
-    MoonshotProvider,
-    OllamaProvider,
-    LlamaCppProvider,
-    LmStudioProvider,
-    ZAIProvider,
-    OpenCodeZenProvider,
-    OpenCodeGoProvider,
-    QwenProvider,
-    StepFunProvider,
-    EvolinkProvider,
-    PoolsideProvider,
-    XAIProvider,
-    NvidiaProvider,
-    MergeGatewayProvider,
-    VercelProvider,
+impl_standard_provider_wiring!(
+    GeminiProvider => GeminiProviderConfig,
+    HuggingFaceProvider => HuggingFaceProviderConfig,
+    MiMoProvider => MiMoProviderConfig,
+    MinimaxProvider => MinimaxProviderConfig,
+    DeepSeekProvider => DeepSeekProviderConfig,
+    MetaProvider => MetaProviderConfig,
+    MistralProvider => MistralProviderConfig,
+    OpenResponsesProvider => OpenResponsesProviderConfig,
+    MoonshotProvider => MoonshotProviderConfig,
+    OllamaProvider => OllamaProviderConfig,
+    LlamaCppProvider => LlamaCppProviderConfig,
+    LmStudioProvider => LmStudioProviderConfig,
+    ZAIProvider => ZAIProviderConfig,
+    OpenCodeZenProvider => OpenCodeZenProviderConfig,
+    OpenCodeGoProvider => OpenCodeGoProviderConfig,
+    QwenProvider => QwenProviderConfig,
+    StepFunProvider => StepFunProviderConfig,
+    EvolinkProvider => EvolinkProviderConfig,
+    PoolsideProvider => PoolsideProviderConfig,
+    XAIProvider => XAIProviderConfig,
+    NvidiaProvider => NvidiaProviderConfig,
+    MergeGatewayProvider => MergeGatewayProviderConfig,
+    VercelProvider => VercelProviderConfig,
 );
 
-crate::delegate_components!(GeminiProviderConfig {
-    ProviderMetadataComponent => GeminiProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<GeminiProvider>,
-});
+// Providers with bespoke construction keep explicit component wiring.
 crate::delegate_components!(AnthropicProviderConfig {
     ProviderMetadataComponent => AnthropicProviderConfig,
     ProviderBuildComponent => AnthropicProviderBuild,
@@ -317,102 +329,35 @@ crate::delegate_components!(OpenAIProviderConfig {
     ProviderMetadataComponent => OpenAIProviderConfig,
     ProviderBuildComponent => OpenAIProviderBuild,
 });
-crate::delegate_components!(HuggingFaceProviderConfig {
-    ProviderMetadataComponent => HuggingFaceProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<HuggingFaceProvider>,
-});
-crate::delegate_components!(DeepSeekProviderConfig {
-    ProviderMetadataComponent => DeepSeekProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<DeepSeekProvider>,
-});
-crate::delegate_components!(MetaProviderConfig {
-    ProviderMetadataComponent => MetaProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MetaProvider>,
-});
-crate::delegate_components!(MiMoProviderConfig {
-    ProviderMetadataComponent => MiMoProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MiMoProvider>,
-});
-crate::delegate_components!(MinimaxProviderConfig {
-    ProviderMetadataComponent => MinimaxProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MinimaxProvider>,
-});
 crate::delegate_components!(OpenRouterProviderConfig {
     ProviderMetadataComponent => OpenRouterProviderConfig,
     ProviderBuildComponent => OpenRouterProviderBuild,
-});
-crate::delegate_components!(OpenResponsesProviderConfig {
-    ProviderMetadataComponent => OpenResponsesProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<OpenResponsesProvider>,
-});
-crate::delegate_components!(MoonshotProviderConfig {
-    ProviderMetadataComponent => MoonshotProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MoonshotProvider>,
-});
-crate::delegate_components!(OllamaProviderConfig {
-    ProviderMetadataComponent => OllamaProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<OllamaProvider>,
 });
 crate::delegate_components!(OllamaCloudProviderConfig {
     ProviderMetadataComponent => OllamaCloudProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<OllamaProvider>,
 });
-crate::delegate_components!(LmStudioProviderConfig {
-    ProviderMetadataComponent => LmStudioProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<LmStudioProvider>,
-});
-crate::delegate_components!(LlamaCppProviderConfig {
-    ProviderMetadataComponent => LlamaCppProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<LlamaCppProvider>,
-});
-crate::delegate_components!(ZAIProviderConfig {
-    ProviderMetadataComponent => ZAIProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<ZAIProvider>,
-});
-crate::delegate_components!(MistralProviderConfig {
-    ProviderMetadataComponent => MistralProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MistralProvider>,
-});
-crate::delegate_components!(OpenCodeZenProviderConfig {
-    ProviderMetadataComponent => OpenCodeZenProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<OpenCodeZenProvider>,
-});
-crate::delegate_components!(OpenCodeGoProviderConfig {
-    ProviderMetadataComponent => OpenCodeGoProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<OpenCodeGoProvider>,
-});
-crate::delegate_components!(QwenProviderConfig {
-    ProviderMetadataComponent => QwenProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<QwenProvider>,
-});
-crate::delegate_components!(StepFunProviderConfig {
-    ProviderMetadataComponent => StepFunProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<StepFunProvider>,
-});
-crate::delegate_components!(EvolinkProviderConfig {
-    ProviderMetadataComponent => EvolinkProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<EvolinkProvider>,
-});
-crate::delegate_components!(PoolsideProviderConfig {
-    ProviderMetadataComponent => PoolsideProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<PoolsideProvider>,
-});
-crate::delegate_components!(XAIProviderConfig {
-    ProviderMetadataComponent => XAIProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<XAIProvider>,
-});
-crate::delegate_components!(NvidiaProviderConfig {
-    ProviderMetadataComponent => NvidiaProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<NvidiaProvider>,
-});
-crate::delegate_components!(MergeGatewayProviderConfig {
-    ProviderMetadataComponent => MergeGatewayProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<MergeGatewayProvider>,
-});
-crate::delegate_components!(VercelProviderConfig {
-    ProviderMetadataComponent => VercelProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<VercelProvider>,
-});
+
+// The bespoke providers share the same two capabilities, so verify them as a
+// group as well.
+macro_rules! check_provider_wiring {
+    ($($config:ty),+ $(,)?) => {
+        $(
+            crate::check_components!($config {
+                ProviderMetadataComponent => ProviderMetadataProvider<$config>,
+                ProviderBuildComponent => ProviderBuildProvider<$config>,
+            });
+        )+
+    };
+}
+
+check_provider_wiring!(
+    AnthropicProviderConfig,
+    CopilotProviderConfig,
+    OpenAIProviderConfig,
+    OpenRouterProviderConfig,
+    OllamaCloudProviderConfig,
+);
 
 /// Register all built-in provider contexts into the runtime factory.
 pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {

@@ -67,7 +67,7 @@ pub(crate) fn render_tree_detail(renderer: &mut AnsiRenderer, detail: &str) -> R
 /// across both detail lines and command-line renderings.
 pub(crate) fn push_tree_prefix(styled: &mut String, palette: &ColorPalette) {
     styled.push_str("  ");
-    styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
+    styled.push_str(&render_styled("└", palette.muted, Some("dim")));
     styled.push(' ');
 }
 

@@ -313,7 +313,7 @@ fn styled_prompt_message(message: &str, tone: PromptTone) -> String {
 
     let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(rgb.0, rgb.1, rgb.2, is_light_theme)));
     if is_heading {
-        render_styled(message, color, Some("bold".to_string()))
+        render_styled(message, color, Some("bold"))
     } else {
         render_styled(message, color, None)
     }

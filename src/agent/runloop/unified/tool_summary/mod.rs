@@ -381,11 +381,11 @@ fn render_bullet_line(
         let first_segment = wrapped.first().cloned().unwrap_or_else(|| "command".to_string());
         let is_multiline = wrapped.len() > 1;
         wrapped_run_segments = Some(wrapped);
-        line.push_str(&render_styled("Ran", main_color, Some("bold".to_string())));
+        line.push_str(&render_styled("Ran", main_color, Some("bold")));
         line.push(' ');
         line.push_str(&render_command_segment(&first_segment, main_color, palette.muted, true));
         if is_multiline {
-            line.push_str(&render_styled(" \\", palette.muted, Some("dim".to_string())));
+            line.push_str(&render_styled(" \\", palette.muted, Some("dim")));
         }
     } else {
         line.push_str(&render_summary_with_highlights(
@@ -415,14 +415,14 @@ fn render_continuation_lines(
         for (idx, segment) in wrapped.iter().skip(1).enumerate() {
             let mut continuation = String::with_capacity(segment.len() + 32);
             continuation.push_str("  ");
-            continuation.push_str(&render_styled("│", palette.muted, Some("dim".to_string())));
+            continuation.push_str(&render_styled("│", palette.muted, Some("dim")));
             continuation.push(' ');
             continuation.push_str(&render_command_segment(segment, main_color, palette.muted, false));
             // All wrapped lines except the final one end with an explicit
             // shell continuation so the multi-line header reads as one command.
             let is_last = idx + 1 >= total - 1;
             if !is_last {
-                continuation.push_str(&render_styled(" \\", palette.muted, Some("dim".to_string())));
+                continuation.push_str(&render_styled(" \\", palette.muted, Some("dim")));
             }
             renderer.line(MessageStyle::Info, &continuation)?;
         }
@@ -485,7 +485,7 @@ fn render_summary_with_highlights(
         if cursor < start {
             rendered.push_str(&render_styled(&summary[cursor..start], muted_color, None));
         }
-        rendered.push_str(&render_styled(&summary[start..end], accent_color, Some("bold".to_string())));
+        rendered.push_str(&render_styled(&summary[start..end], accent_color, Some("bold")));
         cursor = end;
     }
     if cursor < summary.len() {

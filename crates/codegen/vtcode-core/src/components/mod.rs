@@ -7,7 +7,7 @@
 //! explicit `Context` parameter. A lightweight wiring step maps named
 //! **components** to concrete **providers** per context type.
 //!
-//! # Key ideas (from the RustLab 2025 CGP talk)
+//! # Key ideas
 //!
 //! 1. **Provider traits** move `Self` to an explicit generic parameter,
 //!    bypassing Rust's coherence/orphan restrictions.
@@ -18,6 +18,11 @@
 //! 4. Consumer code depends only on the component name, not the concrete
 //!    provider, enabling the same tool/request to run under different
 //!    policies by simply switching the context.
+//! 5. **`check_components!` / `delegate_and_check_components!`** (CGP v0.8.0
+//!    style) prove at the wiring entry that a selected provider implements the
+//!    capability trait, so a bad choice fails there instead of deep inside a
+//!    consumer bound. Grouped macros emit one entry per family of contexts
+//!    rather than repeating a wiring table for each one.
 //!
 //! ## Dictionary-passing interpretation
 //!
@@ -80,7 +85,7 @@ const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 // ============================================================================
 
 pub use vtcode_commons::cgp::{ComponentProvider, HasComponent};
-pub use vtcode_commons::delegate_components;
+pub use vtcode_commons::{check_components, delegate_and_check_components, delegate_components};
 
 // ============================================================================
 // Component name markers

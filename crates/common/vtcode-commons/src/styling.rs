@@ -29,7 +29,7 @@ impl Default for ColorPalette {
 }
 
 /// Render text with a single color and optional effects
-pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> String {
+pub fn render_styled(text: &str, color: Color, effects: Option<&str>) -> String {
     let mut style = Style::new();
     if color_policy::color_output_enabled() {
         style = style.fg_color(Some(color));

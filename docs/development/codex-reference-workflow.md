@@ -66,6 +66,14 @@ applicable pattern with current VT Code code:
 | What can transfer safely? | Verified upstream behavior and explicit VT Code invariants |
 | How will improvement be verified? | Focused regression or reproducible before/after measurement |
 
+Before applying a claim, confirm the version the resource describes matches the
+version this repository actually pins. Read the dependency from `Cargo.toml` or
+`Cargo.lock` (and `rust-toolchain.toml` for toolchains), compare it with the
+resource's stated release, and re-verify against pinned source or tests when
+they differ. The same rule governs local skills that describe a pinned crate:
+the pinned crate wins over the skill's prose when they disagree, as
+`.agents/skills/gpui-kit/SKILL.md` records for `gpui-kit`.
+
 Rank confirmed issues as critical, high, medium, or low using their reachable
 impact. Mark unverified suggestions, already-covered behavior, and out-of-scope
 ideas separately; do not manufacture findings or port an upstream pattern merely

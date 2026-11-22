@@ -176,7 +176,7 @@ pub mod error; // Structured error handling
 pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
 /// Backward-compatible alias: command-level validation now lives in `exec_policy::command_validation`.
-pub use components::delegate_components;
+pub use components::{check_components, delegate_and_check_components, delegate_components};
 pub use exec_policy::command_validation as execpolicy;
 pub mod gemini; // Compatibility facade; canonical internal import path is llm/providers/gemini::wire
 pub mod git; // Git worktree management for loop isolation
