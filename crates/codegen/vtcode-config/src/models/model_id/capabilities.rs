@@ -87,38 +87,6 @@ fn catalog_provider_key(provider: &str) -> &str {
     }
 }
 
-fn capability_provider_key(provider: Provider) -> &'static str {
-    match provider {
-        Provider::Gemini => "gemini",
-        Provider::OpenAI => "openai",
-        Provider::Anthropic => "anthropic",
-        Provider::Copilot => "copilot",
-        Provider::DeepSeek => "deepseek",
-        Provider::Meta => "meta",
-        Provider::OpenRouter => "openrouter",
-        Provider::Ollama => "ollama",
-        Provider::OllamaCloud => "ollama-cloud",
-        Provider::LmStudio => "lmstudio",
-        Provider::LlamaCpp => "llamacpp",
-        Provider::Moonshot => "moonshot",
-        Provider::ZAI => "zai",
-        Provider::Minimax => "minimax",
-        Provider::MiMo => "mimo",
-        Provider::Mistral => "mistral",
-        Provider::HuggingFace => "huggingface",
-        Provider::OpenCodeZen => "opencode-zen",
-        Provider::OpenCodeGo => "opencode-go",
-        Provider::Qwen => "qwen",
-        Provider::StepFun => "stepfun",
-        Provider::Evolink => "evolink",
-        Provider::Poolside => "poolside",
-        Provider::XAI => "xai",
-        Provider::NVIDIA => "nvidia",
-        Provider::MergeGateway => "merge-gateway",
-        Provider::Vercel => "vercel",
-    }
-}
-
 fn catalog_lookup_id<'a>(provider: &str, id: &'a str) -> &'a str {
     let provider_key = catalog_provider_key(provider);
     if provider_key == "evolink"
@@ -212,7 +180,10 @@ fn generation_components(generation: &str) -> Vec<u64> {
 
 impl ModelId {
     fn generated_capabilities(&self) -> Option<ModelCatalogEntry> {
-        generated_catalog_entry(capability_provider_key(self.provider()), &self.as_str())
+        // Custom routes keep their declared key: an arbitrary custom provider
+        // must not inherit another provider's catalog entry just because the
+        // model slug happens to match one there.
+        generated_catalog_entry(self.provider_key(), &self.as_str())
     }
 
     /// Preferred built-in lightweight sibling or lower-tier fallback for this model.

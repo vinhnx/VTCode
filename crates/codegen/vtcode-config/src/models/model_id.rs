@@ -12,6 +12,8 @@ mod from_config_tests;
 mod openrouter;
 mod parse;
 mod provider;
+#[cfg(test)]
+mod provider_tests;
 mod table;
 
 pub use capabilities::{
