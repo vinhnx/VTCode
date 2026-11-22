@@ -55,6 +55,9 @@ jobs:
     permissions:
       contents: read
     env:
+      # Bind the workflow input once; run: steps consume $TAG so an input can
+      # never be expanded into shell source (zizmor template-injection).
+      TAG: ${{ inputs.tag }}
       CARGO_INCREMENTAL: 0
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "2G"
@@ -74,14 +77,14 @@ jobs:
         # actions/checkout because the action file is not in the workspace yet.
         run: |
           for i in $(seq 1 12); do
-            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "${{ inputs.tag }}"; then
-              echo "Tag ${{ inputs.tag }} found"
+            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "$TAG"; then
+              echo "Tag $TAG found"
               exit 0
             fi
-            echo "Tag ${{ inputs.tag }} not found yet, waiting 10s..."
+            echo "Tag $TAG not found yet, waiting 10s..."
             sleep 10
           done
-          echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
+          echo "::error::Tag $TAG does not exist after 120s" >&2
           exit 1
 
       - uses: actions/checkout@v7.0.1
@@ -209,11 +212,11 @@ jobs:
           mkdir -p stage
           cp "target/${{ matrix.target }}/release-fast/vtcode" stage/
           cp -R man stage/
-          tar -C stage -czf "vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz" .
+          tar -C stage -czf "vtcode-$TAG-${{ matrix.target }}.tar.gz" .
           if command -v sha256sum &> /dev/null; then
-            sha256sum vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
+            sha256sum "vtcode-$TAG-${{ matrix.target }}.tar.gz" > "vtcode-$TAG-${{ matrix.target }}.sha256"
           elif command -v shasum &> /dev/null; then
-            shasum -a 256 vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
+            shasum -a 256 "vtcode-$TAG-${{ matrix.target }}.tar.gz" > "vtcode-$TAG-${{ matrix.target }}.sha256"
           fi
 
       - name: Upload Artifacts
@@ -241,6 +244,7 @@ jobs:
       # `actions` scope; specifying `permissions` zeroes all unnamed scopes.
       actions: read
     env:
+      TAG: ${{ inputs.tag }}
       CARGO_TERM_VERBOSE: false
       CARGO_TERM_COLOR: always
     strategy:
@@ -257,14 +261,14 @@ jobs:
         # actions/checkout because the action file is not in the workspace yet.
         run: |
           for i in $(seq 1 12); do
-            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "${{ inputs.tag }}"; then
-              echo "Tag ${{ inputs.tag }} found"
+            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "$TAG"; then
+              echo "Tag $TAG found"
               exit 0
             fi
-            echo "Tag ${{ inputs.tag }} not found yet, waiting 10s..."
+            echo "Tag $TAG not found yet, waiting 10s..."
             sleep 10
           done
-          echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
+          echo "::error::Tag $TAG does not exist after 120s" >&2
           exit 1
 
       - uses: actions/checkout@v7.0.1
@@ -374,11 +378,11 @@ jobs:
           mkdir -p stage
           cp "target/${{ matrix.target }}/release-fast/vtcode" stage/
           cp -R man stage/
-          tar -C stage -czf "vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz" .
+          tar -C stage -czf "vtcode-$TAG-${{ matrix.target }}.tar.gz" .
           if command -v sha256sum &> /dev/null; then
-            sha256sum vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
+            sha256sum "vtcode-$TAG-${{ matrix.target }}.tar.gz" > "vtcode-$TAG-${{ matrix.target }}.sha256"
           elif command -v shasum &> /dev/null; then
-            shasum -a 256 vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
+            shasum -a 256 "vtcode-$TAG-${{ matrix.target }}.tar.gz" > "vtcode-$TAG-${{ matrix.target }}.sha256"
           fi
 
       - name: Upload Artifacts
@@ -403,6 +407,7 @@ jobs:
       CARGO_INCREMENTAL: 0
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "2G"
+      TAG: ${{ inputs.tag }}
       RUSTC_WRAPPER: ${{ inputs.compiler_cache_pilot && 'sccache' || '' }}
       CARGO_TERM_VERBOSE: false
       CARGO_TERM_COLOR: always
@@ -414,14 +419,14 @@ jobs:
         # actions/checkout because the action file is not in the workspace yet.
         run: |
           for i in $(seq 1 12); do
-            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "${{ inputs.tag }}"; then
-              echo "Tag ${{ inputs.tag }} found"
+            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "$TAG"; then
+              echo "Tag $TAG found"
               exit 0
             fi
-            echo "Tag ${{ inputs.tag }} not found yet, waiting 10s..."
+            echo "Tag $TAG not found yet, waiting 10s..."
             sleep 10
           done
-          echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
+          echo "::error::Tag $TAG does not exist after 120s" >&2
           exit 1
 
       - uses: actions/checkout@v7.0.1
@@ -482,10 +487,10 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $archive = "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip"
+          $archive = "vtcode-${env:TAG}-x86_64-pc-windows-msvc.zip"
           Compress-Archive -Path "target/x86_64-pc-windows-msvc/release-fast-windows/vtcode.exe" -DestinationPath $archive -Force
           $hash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLower()
-          Set-Content -Path "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256" -Value $hash -NoNewline
+          Set-Content -Path "vtcode-${env:TAG}-x86_64-pc-windows-msvc.sha256" -Value $hash -NoNewline
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7.0.2

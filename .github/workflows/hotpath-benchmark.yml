@@ -1,5 +1,9 @@
 name: Benchmark
 
+# Fail closed: both jobs below declare the exact scopes they need, so a future
+# job that forgets `permissions:` inherits nothing instead of the repo default.
+permissions: {}
+
 # Selection narrows PR feedback: instruction counts of the tui_hotpath example
 # can only move when vtcode-ui, its workspace dependency surface
 # (vtcode-commons, vtcode-config, vtcode-diff — hence crates/common/**), the

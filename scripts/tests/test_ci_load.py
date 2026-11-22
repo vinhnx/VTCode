@@ -3,6 +3,7 @@
 
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -316,11 +317,14 @@ printf "%s\n" "$*" >> "$GH_STUB_DIR/sleep-count"
                     .replace("${{ matrix.target }}", target)
                     .replace("${{ inputs.tag }}", "1.2.3")
                 )
+                # Package consumes the tag through the job-level `TAG` env var
+                # (template-injection hardening), not a template expansion.
                 subprocess.run(
                     ["bash", "-eu", "-c", script],
                     cwd=root,
                     check=True,
                     capture_output=True,
+                    env={**os.environ, "TAG": "1.2.3"},
                 )
                 archive = root / f"vtcode-1.2.3-{target}.tar.gz"
                 with tarfile.open(archive) as contents:
@@ -341,6 +345,75 @@ printf "%s\n" "$*" >> "$GH_STUB_DIR/sleep-count"
             RELEASE.count("https://github.com/${GITHUB_REPOSITORY}.git"), 3
         )
         self.assertNotIn("vinhnx/VTCode.git", RELEASE)
+
+
+class ZizmorGateTests(unittest.TestCase):
+    """Guards the CI/local parity of the workflow static-analysis gate."""
+
+    def setUp(self):
+        self.verify = (ROOT / ".github/workflows/verify-lockfile.yml").read_text()
+        self.local_gate = (ROOT / "scripts/check_zizmor.sh").read_text()
+        self.check_sh = (ROOT / "scripts/check.sh").read_text()
+
+    def test_pin_is_present_and_well_formed(self):
+        version = re.search(r"^\s+ZIZMOR_VERSION:\s*(.+)$", self.verify, re.M)
+        checksum = re.search(r"^\s+ZIZMOR_SHA256:\s*(.+)$", self.verify, re.M)
+        self.assertIsNotNone(version, "zizmor version must be pinned in CI")
+        self.assertIsNotNone(checksum, "zizmor download must be checksum-pinned")
+        self.assertRegex(version.group(1).strip(), r"^\d+\.\d+\.\d+$")
+        self.assertRegex(checksum.group(1).strip(), r"^[0-9a-f]{64}$")
+
+    def test_local_gate_reads_version_from_ci_without_hardcoding_it(self):
+        self.assertIn("ZIZMOR_VERSION", self.local_gate)
+        self.assertIn("verify-lockfile.yml", self.local_gate)
+        # A literal version here would silently drift from the CI pin.
+        self.assertNotRegex(self.local_gate, r"zizmor@\d+\.\d+\.\d+")
+        self.assertIn("--offline --no-progress --persona=regular .", self.local_gate)
+        self.assertIn('"workflow-audit")', self.check_sh)
+
+    def test_local_gate_skips_with_distinct_code_when_tool_missing(self):
+        """Contributors without uv get a skip, not a failing full gate."""
+        with tempfile.TemporaryDirectory() as temp:
+            bin_dir = Path(temp) / "bin"
+            bin_dir.mkdir()
+            for tool in ("bash", "sed", "tr", "head", "dirname"):
+                resolved = shutil.which(tool)
+                if resolved:
+                    (bin_dir / tool).symlink_to(resolved)
+            result = subprocess.run(
+                [str(bin_dir / "bash"), str(ROOT / "scripts/check_zizmor.sh")],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                env={"PATH": str(bin_dir), "HOME": temp},
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("unavailable", result.stderr)
+
+    def test_release_run_blocks_bind_tag_through_env(self):
+        """The template-injection fix must survive release-workflow edits."""
+        self.assertEqual(RELEASE.count("TAG: ${{ inputs.tag }}"), 3)
+        bodies = []
+        lines = RELEASE.splitlines()
+        i = 0
+        while i < len(lines):
+            match = re.match(r"^(\s*)run: \|\s*$", lines[i])
+            if not match:
+                i += 1
+                continue
+            indent = len(match.group(1))
+            i += 1
+            body = []
+            while i < len(lines):
+                line = lines[i]
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    break
+                body.append(line)
+                i += 1
+            bodies.append("\n".join(body))
+        self.assertGreaterEqual(len(bodies), 6)
+        for body in bodies:
+            self.assertNotIn("${{ inputs.tag }}", body)
 
 
 if __name__ == "__main__":

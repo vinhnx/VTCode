@@ -1,5 +1,8 @@
-# Fails when .github/workflows/actions.lock is out of sync with the
-# workflows or a locked pin no longer verifies upstream.
+# Workflow security gates: (1) fail when .github/workflows/actions.lock is out
+# of sync with the workflows or a locked pin no longer verifies upstream, and
+# (2) static-analyse every workflow/action/Dependabot definition with zizmor
+# so template injection, trigger, permission and cooldown regressions are
+# caught in the same place the pin policy is enforced.
 
 name: Verify Actions Lockfile
 
@@ -9,10 +12,12 @@ on:
   pull_request:
     paths:
       - ".github/workflows/**"
+      - ".github/dependabot.yml"
   push:
     branches: [main]
     paths:
       - ".github/workflows/**"
+      - ".github/dependabot.yml"
   workflow_dispatch:
 
 concurrency:
@@ -42,3 +47,35 @@ jobs:
       # is stale, incomplete, or no longer verifies upstream.
       - name: Verify lockfile
         run: gh actions-lock --verify
+
+  zizmor:
+    name: Workflow static analysis (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Pinned release + checksum instead of a new action ref: this keeps the
+      # gate independent of actions.lock and the audit deterministic. Bumping
+      # the version means updating the checksum in the same commit.
+      - name: Install zizmor
+        env:
+          ZIZMOR_VERSION: 1.32.0
+          ZIZMOR_SHA256: bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b
+        run: |
+          curl --fail --silent --show-error --location \
+            --output /tmp/zizmor.tar.gz \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ZIZMOR_SHA256}  /tmp/zizmor.tar.gz" | sha256sum --check -
+          sudo tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
+          zizmor --version
+
+      # Offline mode is deterministic and needs no GitHub token. VT Code's
+      # actions.lock suppresses unpinned-uses findings, and the one reviewed
+      # workflow_run exception carries an inline `# zizmor: ignore[...]` note.
+      - name: Audit workflow and Dependabot definitions
+        run: zizmor --offline --no-progress --persona=regular .

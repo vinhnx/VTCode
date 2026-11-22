@@ -204,6 +204,29 @@ run_workflow_security_lint() {
 	fi
 }
 
+# Static analysis of CI/CD definitions. Mirrors the pinned zizmor job in
+# .github/workflows/verify-lockfile.yml; the version is read from that file by
+# scripts/check_zizmor.sh so the two cannot drift.
+run_zizmor_lint() {
+	print_status "Running zizmor workflow static analysis..."
+	local rc=0
+	./scripts/check_zizmor.sh || rc=$?
+	case $rc in
+	0)
+		print_success "zizmor workflow static analysis passed!"
+		return 0
+		;;
+	3)
+		print_warning "zizmor is not available. Skipping; CI enforces the same audit via .github/workflows/verify-lockfile.yml. Install uv (uvx) to run it locally."
+		return 0
+		;;
+	*)
+		print_error "zizmor found workflow security issues. Run ./scripts/check_zizmor.sh for details."
+		return 1
+		;;
+	esac
+}
+
 # Release-artifact contract tests. These were only run by the
 # (now removed) ci.yml workflow, so keep them reachable from the local gate.
 run_release_contract_tests() {
@@ -436,6 +459,7 @@ main() {
 	run_rustfmt || ((failed_checks++))
 	run_shell_scripts_lint || ((failed_checks++))
 	run_workflow_security_lint || ((failed_checks++))
+	run_zizmor_lint || ((failed_checks++))
 	run_release_contract_tests || ((failed_checks++))
 	run_structured_logging_lint || ((failed_checks++))
 	run_zen_governance || ((failed_checks++))
@@ -518,6 +542,7 @@ case "${1:-}" in
 	echo "  legibility - Run agent legibility hotspot checks"
 	echo "  build-script-cfg - Gate host-target cfg checks in build.rs (enforce)"
 	echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
+	echo "  workflow-audit  - Run zizmor static analysis on CI/CD definitions (needs uv or zizmor)"
 	echo "  contracts - Run release-artifact contract tests"
 	echo "  zen     - Run Zen governance checks (unwrap + panic-in-Result enforced, hygiene warn)"
 	echo "  file-length - Gate tracked text files over 1000 lines (enforce)"
@@ -555,6 +580,9 @@ case "${1:-}" in
 	;;
 "workflow-security")
 	run_workflow_security_lint
+	;;
+"workflow-audit")
+	run_zizmor_lint
 	;;
 "contracts")
 	run_release_contract_tests

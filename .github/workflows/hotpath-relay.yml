@@ -1,12 +1,19 @@
 name: Benchmark relay
 
+# The reusable job below declares its own scopes; deny everything by default
+# so a future job cannot inherit broad repository/org token permissions.
+permissions: {}
+
 # Uploads the report a pull request's `report` job stored as an artifact. It
 # never checks out or runs pull request code. `workflow_run` always runs this
 # file from the default branch and matches the benchmark workflow by `name:`.
 # Docs: https://hotpath.rs/ci_integration
 
 on:
-  workflow_run:
+  # Reviewed exception: runs the pinned reusable workflow from the default
+  # branch and never checks out PR code. Mirrors the gate's allowlist entry in
+  # scripts/workflow_security_allowlist.txt.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["Benchmark"] # the `name:` of hotpath-benchmark.yml
     types: [completed]
 

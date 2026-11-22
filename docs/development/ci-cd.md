@@ -42,6 +42,43 @@ for actions with moving major tags; see the
 [install-action security guidance](https://github.com/taiki-e/install-action#security). Dependabot
 updates refs and the lockfile together with a 7-day `cooldown` so fresh releases settle first.
 
+### Workflow static analysis (zizmor)
+
+`verify-lockfile.yml` also runs [zizmor](https://docs.zizmor.sh/), a static analyzer for CI/CD
+definitions, against every workflow, action, and `dependabot.yml`. It is pinned by release tag **and**
+SHA-256 in the workflow (no new action ref, so `actions.lock` is unchanged), and runs with
+`--offline --persona=regular`, which keeps the gate deterministic and token-free. `dependabot.yml`
+is in the workflow's path filter, so cooldown regressions are caught too.
+
+To run the exact gate locally (the version is read from the CI workflow, so it cannot drift):
+
+```bash
+./scripts/check.sh workflow-audit   # or ./scripts/check_zizmor.sh directly
+```
+
+The local gate needs `uv` for `uvx`, or a matching `zizmor` binary on `PATH`; if neither is present it
+warns and skips, while CI always enforces the audit.
+
+The audit complements `./scripts/check.sh workflow-security`: that script enforces the local trigger
+policy and lockfile pinning, while zizmor covers template injection, permission scope, credential
+persistence, Dependabot cooldown, and other audit rules that a regex gate cannot express. VT Code's
+`actions.lock` is recognized by zizmor, so already-pinned `uses:` refs are suppressed rather than
+reported.
+
+Two conventions keep the gate meaningful:
+
+- **Fix, don't blanket-disable.** Workflow inputs bound into `run:` bodies are consumed through a
+  job-level `env` (e.g. `TAG: ${{ inputs.tag }}` then `$TAG`) instead of a `${{ ... }}` expansion in
+  shell source. This is the only remediation for `template-injection` that survives a future caller
+  passing an unexpected value.
+- **Exceptions must be reviewed and narrow.** The single `dangerous-triggers` exception in
+  `hotpath-relay.yml` is marked inline with `# zizmor: ignore[dangerous-triggers]` and points to the
+  matching entry in `scripts/workflow_security_allowlist.txt`. Never disable an audit globally in a
+  `zizmor.yml` to silence a finding; prefer a targeted ignore with a written rationale.
+
+Bumping zizmor means updating both `ZIZMOR_VERSION` and `ZIZMOR_SHA256` in `verify-lockfile.yml` in
+the same commit, and re-running `./scripts/check.sh workflow-audit` to confirm a clean audit.
+
 ### 1. Build Linux & Windows (`build-linux-windows.yml`)
 
 **Triggers:**
