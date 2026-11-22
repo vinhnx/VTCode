@@ -115,3 +115,11 @@ re-tune profiles without re-measuring; this audit targets the dependency graph i
 - Manifest edits go through `crate-ops`: isolated `cargo check --locked -p <crate>` per touched
   crate — workspace-wide builds mask missing features via unification (observed twice in this
   audit: `tokio::join!` needed an explicit `macros` edge; vtcode-safety needed `process`).
+- Supply-chain policy (grounded in Kerkour, ["Securing Rust's supply chain with an extended
+  standard library"](https://kerkour.com/rust-supply-chain-security-stdx), 2026-11-11): minimize
+  direct dependencies and prefer std where it is equivalent (e.g. root `main.rs` already uses
+  `std::thread::available_parallelism()`); verify a crate's exact name/source against typosquatting
+  before adding it. Git sources are fail-closed in `deny.toml` (`unknown-git = "deny"`) so an
+  unreviewed URL cannot enter the graph silently. The registry's published bytes can diverge from
+  the source repo, so `cargo-vet` provenance + committed `Cargo.lock` + `--locked` are the integrity
+  boundary; the shipped agent carries the same rule in `RUNTIME_GUIDANCE_SECTION`.

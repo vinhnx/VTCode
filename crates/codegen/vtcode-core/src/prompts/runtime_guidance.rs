@@ -35,6 +35,7 @@ pub(crate) const RUNTIME_GUIDANCE_SECTION: &str = r#"## Rules
 - Treat attachments as context, not disk evidence; retain workspace paths.
 - Call `apply_patch` directly, never through a shell; use complete context lines, and never resend an unchanged failed patch.
 - Diagnose failures and change approach. Treat empty searches as evidence, and check an optional tool once.
+- Prefer fewer dependencies; verify exact names and sources to avoid typosquatting.
 - Reuse evidence; read only what changed, and name the missing fact before more inspection.
 - After announcing an edit, make that edit next or state the concrete blocker; further inspection must name missing evidence.
 - User cancellation ends the task: do not retry, recover, or auto-continue it. Resume only on fresh input.
@@ -157,7 +158,11 @@ mod tests {
     fn runtime_guidance_is_deterministic_and_bounded() {
         assert!(!RUNTIME_GUIDANCE_SECTION.is_empty());
         assert_eq!(RUNTIME_GUIDANCE_SECTION.matches("## Rules").count(), 1);
-        assert!(vtcode_commons::estimate_tokens(RUNTIME_GUIDANCE_SECTION) <= RUNTIME_GUIDANCE_MAX_ESTIMATED_TOKENS);
+        let estimated_tokens = vtcode_commons::estimate_tokens(RUNTIME_GUIDANCE_SECTION);
+        assert!(
+            estimated_tokens <= RUNTIME_GUIDANCE_MAX_ESTIMATED_TOKENS,
+            "runtime guidance estimated at {estimated_tokens} tokens, cap is {RUNTIME_GUIDANCE_MAX_ESTIMATED_TOKENS}"
+        );
 
         // Safety boundaries.
         assert!(RUNTIME_GUIDANCE_SECTION.contains("`additional_permissions` stay sandboxed"));
@@ -175,6 +180,7 @@ mod tests {
 
         // Task mechanics.
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Finish the whole task; state plainly what is missing when blocked"));
+        assert!(RUNTIME_GUIDANCE_SECTION.contains("verify exact names and sources to avoid typosquatting"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Treat empty searches as evidence"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("User cancellation ends the task"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Resume only on fresh input"));

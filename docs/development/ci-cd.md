@@ -366,7 +366,9 @@ via `./scripts/check.sh deny` and opt-in via `./scripts/check-dev.sh --deny`.
 - **Licenses**: the allow list mirrors `about.toml` (`accepted`) so cargo-deny and THIRD-PARTY-NOTICES
   generation share one policy; adding a license means updating both files.
 - **Bans**: duplicate crate versions warn (visible drift, non-blocking).
-- **Sources**: crates.io only; git dependencies must be explicitly allowed.
+- **Sources**: crates.io only; git sources are fail-closed (`unknown-git = "deny"`) because a git
+  URL has no registry checksum database — provenance (pinned rev, owner, signed commits) must be
+  reviewed and the URL added to `allow-git` before it enters the graph.
 - **Targets**: `[graph] targets` lists every shipped target triple (the release build matrix plus
   macOS), so target-gated dependencies such as the notify-rust/clipboard stacks are always audited.
 

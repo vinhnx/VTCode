@@ -96,8 +96,12 @@ multiple-versions = "warn"
 
 [sources]
 # Only crates.io is allowed as a registry source; any git dependency must be
-# explicitly added to allow-git below.
+# explicitly added to allow-git below. Git sources are fail-closed because a
+# git URL has no registry checksum database: provenance (pinned rev, owner,
+# signed commits) must be reviewed before it enters the dependency graph.
+# See "Securing Rust's supply chain with an extended standard library"
+# (2026-11-11): a source is only as trustworthy as the identity behind it.
 unknown-registry = "warn"
-unknown-git = "warn"
+unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
