@@ -38,10 +38,13 @@ generated event chains from its response ID. Streaming startup reads lifecycle e
 deliverable text, reasoning, tool-call event, or validated completion. Ping frames receive pong replies;
 control frames never become model events.
 
-Only `response.completed` permits successful final assembly and socket restoration. The shared processor
-preserves text, refusal, reasoning classification, provider tool-call IDs and arguments, usage, and recovery
-from empty final output when usable deltas arrived. Failure, incomplete response, malformed events, close,
-EOF, deadline expiry, cancellation, or early stream drop invalidate the socket and its continuation cache.
+Native OpenAI and ChatGPT HTTP streams and Responses WebSocket streams require `response.completed` for
+successful final assembly. On native OpenAI and ChatGPT routes, a nonempty final answer supplies the
+completed text. Compatible endpoints can supplement partial final snapshots with streamed text.
+The shared processor preserves text, refusal, reasoning classification, provider tool-call IDs and
+arguments, and usage. It can recover from empty final output when usable deltas arrived. Socket restoration
+requires successful final assembly. Failure, incomplete response, malformed events, close, EOF, deadline
+expiry, cancellation, or early stream drop invalidate the socket and its continuation cache.
 The lease stays active through final usage delivery until `Done` is delivered; dropping between those events
 invalidates the connection even when the server has already completed.
 Dropping a future while it waits for the lane leaves the active response alone.

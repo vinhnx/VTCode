@@ -18,7 +18,7 @@ pub(crate) use native_resume::{
 pub(crate) use prompt_cache::{session_lineage_from_prompt_cache_key, split_dynamic_prompt_suffix};
 pub(crate) use responses_adapter::{ResponsesStreamAdapter, ResponsesStreamEvent, reject_unbound_computer_item};
 pub(crate) use responses_stream::{
-    RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, ResponsesStreamEventPolicy,
+    RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, ResponsesStreamEventPolicy, merge_responses_text,
     response_stream_event_policy,
 };
 pub(crate) use responses_stream::{

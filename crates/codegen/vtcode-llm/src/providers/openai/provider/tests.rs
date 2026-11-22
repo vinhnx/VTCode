@@ -29,6 +29,7 @@ mod cache_ttl;
 mod cache_usage;
 mod caching;
 mod compaction;
+mod completion;
 mod files;
 mod history;
 mod hosted_shell;

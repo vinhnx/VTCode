@@ -171,7 +171,12 @@ impl OpenAIProvider {
             let StreamingHttpFailure { status, headers, error_text, client_request_id } =
                 match self.send_http_streaming_request(&request, &openai_request, true).await? {
                     StreamingHttpResponse::Success(response) => {
-                        return Ok(stream_decoder::create_responses_stream(response, model, true, None, None));
+                        return Ok(stream_decoder::create_responses_stream(
+                            response,
+                            model,
+                            true,
+                            self.prefers_completed_responses_text(),
+                        ));
                     }
                     StreamingHttpResponse::Failure(failure) => failure,
                 };
@@ -238,8 +243,22 @@ impl OpenAIProvider {
         }))
     }
 
+    pub(super) fn prefers_completed_responses_text(&self) -> bool {
+        let expected_host = if self.is_chatgpt_backend() {
+            "chatgpt.com"
+        } else if self.is_native_openai_api() {
+            "api.openai.com"
+        } else {
+            return false;
+        };
+        url::Url::parse(self.backend_setup.base_url()).is_ok_and(|url| {
+            url.scheme() == "https" && url.host_str() == Some(expected_host) && url.port_or_known_default() == Some(443)
+        })
+    }
+
     fn responses_normalized_stream(&self, response: reqwest::Response, model: String) -> LLMNormalizedStream {
         let parse_model = model.clone();
+        let authoritative_completion = self.prefers_completed_responses_text();
         create_responses_normalized_stream(
             response,
             ResponsesNormalizedStreamOptions {
@@ -247,6 +266,8 @@ impl OpenAIProvider {
                 emit_reasoning: Self::model_supports_reasoning_summaries(&model),
                 model,
                 include_cached_prompt_metrics: true,
+                require_completion_event: authoritative_completion,
+                prefer_completed_text: authoritative_completion,
             },
             move |value| {
                 let response = parse_responses_completion(value, parse_model.clone(), true)?;

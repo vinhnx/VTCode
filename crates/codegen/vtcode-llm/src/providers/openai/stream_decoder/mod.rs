@@ -22,7 +22,6 @@ use async_stream::try_stream;
 use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
 use serde_json::{Value, json};
-use std::time::Instant;
 use vtcode_commons::model_family::find_family_for_model;
 
 use super::responses_api::parse_responses_completion;
@@ -498,8 +497,7 @@ pub(crate) fn create_responses_stream(
     response: reqwest::Response,
     model: String,
     include_metrics: bool,
-    _debug_model: Option<String>,
-    _request_timer: Option<Instant>,
+    prefer_completed_text: bool,
 ) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
@@ -526,7 +524,8 @@ pub(crate) fn create_responses_stream(
             buf.extend_from_slice(&chunk);
 
             while let Some(event) =
-                crate::providers::shared::next_sse_event(&buf, &mut offset).expect("valid utf-8 stream data")
+                crate::providers::shared::next_sse_event(&buf, &mut offset)
+                    .map_err(|err| StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error("OpenAI"))?
             {
                 #[cfg(debug_assertions)]
                 {
@@ -738,33 +737,31 @@ pub(crate) fn create_responses_stream(
         };
 
         let final_aggregator_response = aggregator.finalize();
-        let mut response = match parse_responses_completion(response_value.clone(), model.clone(), include_metrics) {
-            Ok(response) => response,
+        let response = match parse_responses_completion(response_value.clone(), model.clone(), include_metrics) {
+            Ok(mut response) => {
+                crate::providers::shared::merge_responses_text(
+                    &mut response.content,
+                    final_aggregator_response.content,
+                    prefer_completed_text,
+                );
+                if response.reasoning.is_none() {
+                    response.reasoning = final_aggregator_response.reasoning;
+                }
+                if response.tool_calls.is_none() {
+                    response.tool_calls = final_aggregator_response.tool_calls;
+                }
+                response
+            }
             Err(_)
                 if final_response_output_is_empty(&response_value)
                     && streamed_response_is_usable(&final_aggregator_response) =>
             {
-                let mut response = final_aggregator_response.clone();
+                let mut response = final_aggregator_response;
                 merge_final_response_metadata(&mut response, &response_value, include_metrics);
                 response
             }
             Err(err) => Err(err)?,
         };
-
-        if response.content.is_none() {
-            response.content = final_aggregator_response.content;
-        } else if let (Some(c), Some(agg_c)) = (&mut response.content, final_aggregator_response.content)
-            && !c.contains(&agg_c) {
-                c.push_str(&agg_c);
-            }
-
-        if response.reasoning.is_none() {
-            response.reasoning = final_aggregator_response.reasoning;
-        }
-
-        if response.tool_calls.is_none() {
-            response.tool_calls = final_aggregator_response.tool_calls;
-        }
 
         let response = strip_reasoning_for_model(&model, response);
         yield provider::LLMStreamEvent::Completed { response: Box::new(response) };

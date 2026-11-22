@@ -287,6 +287,8 @@ impl LLMProvider for OpenResponsesProvider {
                 model: model.clone(),
                 emit_reasoning,
                 include_cached_prompt_metrics: false,
+                require_completion_event: false,
+                prefer_completed_text: false,
             },
             move |value| Self::parse_native_response_payload(value, model.clone()),
         ))

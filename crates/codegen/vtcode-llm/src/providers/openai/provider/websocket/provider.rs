@@ -90,6 +90,8 @@ impl OpenAIProvider {
                 model,
                 emit_reasoning: Self::model_supports_reasoning_summaries(&request.model),
                 include_cached_prompt_metrics: true,
+                require_completion_event: true,
+                prefer_completed_text: self.prefers_completed_responses_text(),
             },
             move |value| {
                 let response = parse_responses_completion(value, parse_model.clone(), true)?;

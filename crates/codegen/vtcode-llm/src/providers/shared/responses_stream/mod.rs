@@ -5,7 +5,9 @@ use crate::providers::shared::responses_adapter::{ResponsesStreamAdapter, Respon
 pub(crate) const RESPONSES_PROMPT_TOKEN_KEYS: &[&str] = &["input_tokens", "prompt_tokens"];
 pub(crate) const RESPONSES_COMPLETION_TOKEN_KEYS: &[&str] = &["output_tokens", "completion_tokens"];
 
-use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes, usage_u32_from_keys};
+use crate::providers::shared::{
+    Utf8StreamDecoder, drain_and_bound_sse_tail, extract_data_payload, find_sse_boundary_bytes, usage_u32_from_keys,
+};
 use async_stream::try_stream;
 use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
@@ -28,6 +30,8 @@ pub struct ResponsesNormalizedStreamOptions {
     pub(crate) model: String,
     pub(crate) emit_reasoning: bool,
     pub(crate) include_cached_prompt_metrics: bool,
+    pub(crate) require_completion_event: bool,
+    pub(crate) prefer_completed_text: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -295,12 +299,18 @@ where
     }
 
     pub(crate) fn finish(self) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
+        if self.final_response.is_none() && self.options.require_completion_event {
+            return Err(provider_error(self.options.provider_name, "stream ended without a completed response"));
+        }
         let streamed = self.aggregator.finalize();
-        let mut response = if let Some(final_response) = self.final_response {
+        let response = if let Some(final_response) = self.final_response {
             match (self.parse_final_response)(final_response.clone()) {
-                Ok(response) => response,
+                Ok(mut response) => {
+                    merge_streamed_response(&mut response, streamed, self.options.prefer_completed_text);
+                    response
+                }
                 Err(_) if final_response_output_is_empty(&final_response) && streamed_response_is_usable(&streamed) => {
-                    let mut response = streamed.clone();
+                    let mut response = streamed;
                     merge_final_response_metadata(
                         &mut response,
                         &final_response,
@@ -311,10 +321,8 @@ where
                 Err(err) => return Err(err),
             }
         } else {
-            streamed.clone()
+            streamed
         };
-
-        merge_streamed_response(&mut response, streamed);
 
         let mut events = Vec::new();
         if let Some(usage) = response.usage.clone() {
@@ -359,13 +367,14 @@ where
 {
     let stream = try_stream! {
         let provider_name = options.provider_name;
+        let require_completion_event = options.require_completion_event;
         let mut processor = ResponsesNormalizedStreamProcessor::new(options, parse_final_response);
         let mut body_stream = response.bytes_stream();
         let mut buf: Vec<u8> = Vec::new();
         let mut offset = 0usize;
         let mut decoder = Utf8StreamDecoder::new();
 
-        while let Some(chunk_result) = body_stream.next().await {
+        'body: while let Some(chunk_result) = body_stream.next().await {
             let chunk = chunk_result.map_err(|err| provider_error(
                 provider_name,
                 format!("streaming error: {err}"),
@@ -378,6 +387,9 @@ where
 
                 if let Some(data_payload) = extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
+                    if trimmed_payload == "[DONE]" && require_completion_event {
+                        break 'body;
+                    }
                     if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
                         continue;
                     }
@@ -392,16 +404,10 @@ where
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            if offset > 0 {
-                buf.drain(..offset);
-                offset = 0;
-            }
-
             if processor.is_done() {
                 break;
             }
+            drain_and_bound_sse_tail(&mut buf, &mut offset).map_err(|error| provider_error(provider_name, error.to_string()))?;
         }
 
         for event in processor.finish()? {
@@ -426,15 +432,21 @@ fn final_response_output_is_empty(final_response: &Value) -> bool {
         .is_some_and(Vec::is_empty)
 }
 
-fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
-    if response.content.as_deref().unwrap_or_default().is_empty() {
-        response.content = streamed.content;
-    } else if let (Some(content), Some(streamed_content)) = (&mut response.content, streamed.content)
-        && !streamed_content.is_empty()
-        && !content.contains(&streamed_content)
+pub(crate) fn merge_responses_text(content: &mut Option<String>, streamed: Option<String>, prefer_completed: bool) {
+    if content.as_deref().unwrap_or_default().is_empty() {
+        *content = streamed;
+    } else if !prefer_completed
+        && let (Some(content), Some(streamed)) = (content, streamed)
+        && !streamed.is_empty()
+        && !content.contains(&streamed)
     {
-        content.push_str(&streamed_content);
+        // Compatibility endpoints can stream content omitted from their final snapshot.
+        content.push_str(&streamed);
     }
+}
+
+fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse, prefer_completed_text: bool) {
+    merge_responses_text(&mut response.content, streamed.content, prefer_completed_text);
 
     if response.tool_calls.is_none() {
         response.tool_calls = streamed.tool_calls;

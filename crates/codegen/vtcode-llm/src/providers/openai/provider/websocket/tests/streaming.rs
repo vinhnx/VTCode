@@ -1,6 +1,29 @@
 use super::*;
 
 #[tokio::test]
+async fn websocket_stream_completion_uses_final_text() {
+    let (base, _, handle) = spawn_scripted_websocket_server(vec![vec![
+        ScriptedReply::Events(vec![completion("warm", json!([]))]),
+        ScriptedReply::Events(vec![text_delta("Draft"), completion("final", text_output("Final answer"))]),
+    ]])
+    .await
+    .expect("local WebSocket server");
+    let mut provider = websocket_test_provider(base);
+    provider.backend_setup = crate::providers::openai::backend_setup::OpenAIBackendSetup::api_key(
+        vtcode_config::constants::urls::OPENAI_API_BASE.to_string(),
+    );
+    let mut stream = provider.stream_normalized_request(websocket_test_request()).await.unwrap();
+    assert!(matches!(
+        stream.next().await.unwrap().unwrap(),
+        crate::provider::NormalizedStreamEvent::TextDelta { delta } if delta == "Draft"
+    ));
+    let response = final_normalized(stream).await;
+    assert_eq!(response.content.as_deref(), Some("Final answer"));
+    assert_eq!(response.request_id.as_deref(), Some("final"));
+    handle.await.unwrap();
+}
+
+#[tokio::test]
 async fn websocket_stream_deltas_precede_completion_and_legacy_preserves_empty_output() {
     use crate::provider::{LLMStreamEvent, NormalizedStreamEvent};
     for legacy in [false, true] {

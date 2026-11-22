@@ -8,6 +8,8 @@ fn options() -> ResponsesNormalizedStreamOptions {
         model: "gpt-5".to_string(),
         emit_reasoning: true,
         include_cached_prompt_metrics: false,
+        require_completion_event: false,
+        prefer_completed_text: false,
     }
 }
 
@@ -184,6 +186,23 @@ fn text_delta_and_completed_yield_text_then_done() {
         [NormalizedStreamEvent::Done { response }]
             if response.content.as_deref() == Some("hello")
     ));
+}
+
+#[test]
+fn compatible_completion_retains_text_missing_from_final_snapshot() {
+    let mut processor = ResponsesNormalizedStreamProcessor::new(options(), parse_response);
+    processor
+        .handle_payload(text_delta_fixture("streamed detail"))
+        .expect("text delta");
+    processor
+        .handle_payload(json!({
+            "type": "response.completed",
+            "response": {"id": "resp_compat", "output": [{"content": [{"text": "Final excerpt. "}]}]}
+        }))
+        .expect("completion");
+    let finished = processor.finish().expect("finish");
+    assert!(matches!(finished.as_slice(), [NormalizedStreamEvent::Done { response }]
+        if response.content.as_deref() == Some("Final excerpt. streamed detail")));
 }
 
 #[test]
