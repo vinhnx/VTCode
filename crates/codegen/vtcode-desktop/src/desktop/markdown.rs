@@ -32,20 +32,28 @@ struct SourceEdit {
     replacement: String,
 }
 
-/// Apply collected edits back to front so earlier offsets stay valid.
-/// `None` when an offset falls outside the source (never for parser
-/// ranges); callers fail closed to [`invalid_markdown`].
+/// Apply collected edits in one forward pass. `None` when a range falls
+/// outside the source or overlaps another range (never for parser ranges);
+/// callers fail closed to [`invalid_markdown`].
+///
+/// Parser offsets refer to the immutable source, so walking them in ascending
+/// order keeps the next offset valid. The previous back-to-front `format!`
+/// loop re-copied the whole buffer once per edit — quadratic for a body with
+/// many raw-HTML spans. A single pass is O(source + edits) and matches the
+/// content-keyed cache's goal of keeping render-time work cheap.
 fn apply_source_edits(source: &str, edits: &mut [SourceEdit]) -> Option<String> {
-    // Stable descending sort: parser ranges never overlap, so ties are
-    // impossible; stability keeps the order deterministic regardless.
-    edits.sort_by_key(|edit| std::cmp::Reverse(edit.start));
-    let mut out = source.to_string();
+    edits.sort_by_key(|edit| edit.start);
+    let mut out = String::with_capacity(source.len());
+    let mut cursor = 0;
     for edit in edits {
-        let (Some(before), Some(after)) = (out.get(..edit.start), out.get(edit.end..)) else {
+        if edit.start < cursor || edit.end < edit.start || edit.end > source.len() {
             return None;
-        };
-        out = format!("{before}{}{after}", edit.replacement);
+        }
+        out.push_str(source.get(cursor..edit.start)?);
+        out.push_str(&edit.replacement);
+        cursor = edit.end;
     }
+    out.push_str(source.get(cursor..)?);
     Some(out)
 }
 

@@ -242,6 +242,52 @@ fn preserves_markdown_structure_and_code_but_removes_raw_html() {
 }
 
 #[test]
+fn source_edits_apply_in_one_pass_across_many_spans() {
+    let source: String = (0..64).map(|i| format!("trước {i} <b>bold {i}</b> sau ")).collect();
+    let mut edits: Vec<super::SourceEdit> = ["<b>", "</b>"]
+        .into_iter()
+        .flat_map(|needle| {
+            source.match_indices(needle).map(move |(start, _)| super::SourceEdit {
+                start,
+                end: start + needle.len(),
+                replacement: String::new(),
+            })
+        })
+        .collect();
+    let out = super::apply_source_edits(&source, &mut edits).expect("parser offsets are valid");
+    assert!(!out.contains("<b>"), "opening tags removed: {out}");
+    assert!(!out.contains("</b>"), "closing tags removed: {out}");
+    assert!(out.contains("trước 0"), "leading text and unicode preserved");
+    assert!(out.contains("bold 63"), "trailing text preserved");
+}
+
+#[test]
+fn source_edits_fail_closed_on_bad_ranges() {
+    let mut overlapping = [
+        super::SourceEdit { start: 1, end: 4, replacement: String::new() },
+        super::SourceEdit { start: 3, end: 5, replacement: String::new() },
+    ];
+    assert!(super::apply_source_edits("abcdef", &mut overlapping).is_none());
+
+    let mut outside = [super::SourceEdit { start: 2, end: 9, replacement: String::new() }];
+    assert!(super::apply_source_edits("abcdef", &mut outside).is_none());
+
+    // Byte offset inside a multi-byte character is not a char boundary.
+    let mut mid_char = [super::SourceEdit { start: 2, end: 3, replacement: String::new() }];
+    assert!(super::apply_source_edits("a界b", &mut mid_char).is_none());
+}
+
+#[test]
+fn source_edits_apply_replacements_and_keep_surrounding_text() {
+    let source = "start [x] middle [y] end";
+    let mut edits = [
+        super::SourceEdit { start: 6, end: 9, replacement: "[X]".into() },
+        super::SourceEdit { start: 17, end: 20, replacement: String::new() },
+    ];
+    assert_eq!(super::apply_source_edits(source, &mut edits).as_deref(), Some("start [X] middle  end"),);
+}
+
+#[test]
 fn external_links_require_valid_credential_free_web_urls() {
     for url in [
         "https://example.test/a",
