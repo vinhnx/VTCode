@@ -5,7 +5,7 @@
 
 ## Modules
 
-- `loader/` ConfigManager, ConfigBuilder, layers (`manager/` loading/security/repair, `manager/persistence.rs` saves, `config.rs`, `bootstrap.rs`) | `core/` AgentConfig and nested configs (`agent/`, `provider_override.rs`, `anthropic_speed.rs`).
+- `loader/` ConfigManager, ConfigBuilder, layers (`manager/` loading/security/repair, `manager/persistence.rs` saves, `config.rs`, `bootstrap.rs`, `toml_patch.rs` generic comment-preserving TOML updates) | `core/` AgentConfig and nested configs (`agent/`, `provider_override.rs`, `anthropic_speed.rs`).
 - `constants/` models, env vars, URLs, tools, limits, `ui.rs` | `models/` ModelId + Provider | `types/` | `defaults/` | `schema.rs` (feature-gated JSON Schema).
 - `api_keys.rs` + `api_keys/credential_resolution.rs` | `mcp/`, `webmcp.rs`, `acp.rs`, `hooks.rs`, `subagents/`, `network_allowlist.rs`, `accessibility.rs`.
 
@@ -36,5 +36,6 @@ Enum values `/config` cycles come from quoted `"..."` strings after `Options:` i
 - Changing token-efficiency or timeout defaults requires updating `docs/config/config_field_reference.md` and the guard-rail tests.
 - `accessibility.rs` Windows FFI is never compile-checked on other hosts, so keep its `#[expect(unsafe_code, ...)]` and `// SAFETY:` attached.
 - `ModelId::generation_sort_key()` orders newest generation first from numeric digit runs; both pickers rely on it, so keep `generation()` values numeric-prefixed.
+- Use `read_config_toml_for_edit` and `merge_toml_value_preserving_comments` for targeted edits to existing files. Patch the snapshot that the edit used, preserving unrelated explicit defaults. Whole array-of-tables replacements regenerate that array.
 
 Details: [maintainer notes](../../../docs/development/maintainer-notes/vtcode-config.md) — read the section for the subsystem you change before editing it.

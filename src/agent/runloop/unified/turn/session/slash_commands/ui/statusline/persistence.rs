@@ -10,9 +10,7 @@ use crate::agent::runloop::slash_commands::StatuslineTargetMode;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
 use crate::agent::runloop::unified::turn::session::slash_commands::SlashCommandContext;
 
-use super::super::super::config_toml::{
-    ensure_child_table, load_private_toml_value, load_toml_value, save_private_toml_value, save_toml_value,
-};
+use super::super::super::config_toml::{edit_toml_value, ensure_child_table};
 use super::config::statusline_mode_id;
 use vtcode_commons::VtCodePaths;
 
@@ -60,7 +58,7 @@ pub(super) async fn persist_statusline_config(
     target: StatuslineTargetMode,
     script_path: &Path,
 ) -> Result<()> {
-    write_statusline_config(config_path, &draft, target)?;
+    write_statusline_config(config_path, &draft)?;
     refresh_runtime_config_from_manager(
         ctx.renderer,
         ctx.handle,
@@ -85,35 +83,28 @@ pub(super) async fn persist_statusline_config(
     Ok(())
 }
 
-fn write_statusline_config(config_path: &Path, draft: &StatusLineConfig, target: StatuslineTargetMode) -> Result<()> {
-    let mut root = match target {
-        StatuslineTargetMode::User => load_private_toml_value(config_path)?,
-        StatuslineTargetMode::Workspace => load_toml_value(config_path)?,
-    };
-    let root_table = root.as_table_mut().context("Status line config root is not a TOML table")?;
-    let ui_table = ensure_child_table(root_table, "ui");
-    let status_table = ensure_child_table(ui_table, "status_line");
+fn write_statusline_config(config_path: &Path, draft: &StatusLineConfig) -> Result<()> {
+    edit_toml_value(config_path, |root_table| {
+        let ui_table = ensure_child_table(root_table, "ui");
+        let status_table = ensure_child_table(ui_table, "status_line");
 
-    status_table.insert("mode".to_string(), TomlValue::String(statusline_mode_id(&draft.mode).to_string()));
-    status_table.insert("show_clock".to_string(), TomlValue::Boolean(draft.show_clock));
-    if let Some(command) = draft.command.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-        status_table.insert("command".to_string(), TomlValue::String(command.to_string()));
-    } else {
-        status_table.remove("command");
-    }
-    status_table.insert(
-        "refresh_interval_ms".to_string(),
-        TomlValue::Integer(u64_to_toml_integer(draft.refresh_interval_ms, "refresh_interval_ms")?),
-    );
-    status_table.insert(
-        "command_timeout_ms".to_string(),
-        TomlValue::Integer(u64_to_toml_integer(draft.command_timeout_ms, "command_timeout_ms")?),
-    );
-
-    match target {
-        StatuslineTargetMode::User => save_private_toml_value(config_path, &root),
-        StatuslineTargetMode::Workspace => save_toml_value(config_path, &root),
-    }
+        status_table.insert("mode".to_string(), TomlValue::String(statusline_mode_id(&draft.mode).to_string()));
+        status_table.insert("show_clock".to_string(), TomlValue::Boolean(draft.show_clock));
+        if let Some(command) = draft.command.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            status_table.insert("command".to_string(), TomlValue::String(command.to_string()));
+        } else {
+            status_table.remove("command");
+        }
+        status_table.insert(
+            "refresh_interval_ms".to_string(),
+            TomlValue::Integer(u64_to_toml_integer(draft.refresh_interval_ms, "refresh_interval_ms")?),
+        );
+        status_table.insert(
+            "command_timeout_ms".to_string(),
+            TomlValue::Integer(u64_to_toml_integer(draft.command_timeout_ms, "command_timeout_ms")?),
+        );
+        Ok(())
+    })
 }
 
 fn u64_to_toml_integer(value: u64, label: &str) -> Result<i64> {

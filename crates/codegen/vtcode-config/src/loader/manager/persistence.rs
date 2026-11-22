@@ -6,6 +6,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use vtcode_commons::VtCodePaths;
 
+use super::super::toml_patch::render_toml_edit;
 use super::{ConfigLayerSource, ConfigManager, VTCodeConfig};
 
 fn ensure_private_parent_dir(path: &Path) -> Result<()> {
@@ -32,6 +33,34 @@ impl ConfigManager {
     /// older version that flattened the effective configuration.
     pub fn save_repository_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
         Self::save_config_to_path_internal(path, config, true)
+    }
+
+    /// Render a targeted edit, pruning deprecated configuration keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the original document or requested update cannot be rendered.
+    pub fn merge_config_edit(original: &str, updated: &toml::Value) -> Result<String> {
+        render_toml_edit(original, updated, Self::remove_deprecated_config_keys)
+    }
+
+    /// Render a targeted edit while applying the repository provider trust policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the original document or requested update cannot be rendered.
+    pub fn merge_repository_config_edit(original: &str, updated: &toml::Value) -> Result<String> {
+        render_toml_edit(original, updated, |doc| {
+            let removed_deprecated = Self::remove_deprecated_config_keys(doc);
+            Self::remove_protected_repository_keys(doc) || removed_deprecated
+        })
+    }
+
+    fn remove_protected_repository_keys(doc: &mut toml_edit::DocumentMut) -> bool {
+        let provider_changed = Self::remove_repository_provider_settings(doc);
+        let auth_changed =
+            Self::remove_path_and_prune_empty_parents(doc.as_table_mut(), &["auth", "copilot", "command"]);
+        provider_changed || auth_changed
     }
 
     fn save_config_to_path_internal(
@@ -77,8 +106,7 @@ impl ConfigManager {
                 .with_context(|| format!("Failed to parse existing config: {}", path.display()))?;
             Self::remove_deprecated_config_keys(&mut doc);
             if repository_controlled {
-                Self::remove_repository_provider_settings(&mut doc);
-                Self::remove_path_and_prune_empty_parents(doc.as_table_mut(), &["auth", "copilot", "command"]);
+                Self::remove_protected_repository_keys(&mut doc);
             }
 
             let new_doc: toml_edit::DocumentMut = sparse_content
@@ -145,39 +173,45 @@ impl ConfigManager {
     /// Returns true when `table` itself is now empty.
     fn remove_path_and_prune_empty_parents(table: &mut dyn toml_edit::TableLike, path: &[&str]) -> bool {
         let Some((first, rest)) = path.split_first() else {
-            return table.is_empty();
+            return false;
         };
         if rest.is_empty() {
-            table.remove(first);
-        } else if let Some(child) = table.get_mut(first).and_then(toml_edit::Item::as_table_like_mut) {
-            if Self::remove_path_and_prune_empty_parents(child, rest) {
-                table.remove(first);
-            }
+            return table.remove(first).is_some();
         }
-        table.is_empty()
-    }
-
-    fn remove_deprecated_config_keys(doc: &mut toml_edit::DocumentMut) {
-        let table = doc.as_table_mut();
-        table.remove("project_doc_max_bytes");
-        table.remove("project_doc_fallback_filenames");
-        Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
-        Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools", "auto_permission"]);
-        // Keep the prune list in lockstep with the loader's removed-key warning
-        // (which promises the key "will be pruned on the next config save").
-        for &key_path in super::REMOVED_CONFIG_KEY_PATHS {
-            Self::remove_path_and_prune_empty_parents(table, key_path);
-        }
-    }
-
-    fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {
-        let Some(section) = table.get_mut(section).and_then(toml_edit::Item::as_table_mut) else {
-            return;
+        let Some(child) = table.get_mut(first).and_then(toml_edit::Item::as_table_like_mut) else {
+            return false;
         };
-
-        for key in keys {
-            section.remove(key);
+        let changed = Self::remove_path_and_prune_empty_parents(child, rest);
+        if child.is_empty() {
+            table.remove(first);
+            return true;
         }
+        changed
+    }
+
+    fn remove_deprecated_config_keys(doc: &mut toml_edit::DocumentMut) -> bool {
+        let table = doc.as_table_mut();
+        let mut changed = table.remove("project_doc_max_bytes").is_some();
+        changed |= table.remove("project_doc_fallback_filenames").is_some();
+        changed |= Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
+        changed |=
+            Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools", "auto_permission"]);
+        // Keep this in sync with the loader warning that retired keys are pruned on save.
+        for &key_path in super::REMOVED_CONFIG_KEY_PATHS {
+            changed |= Self::remove_path_and_prune_empty_parents(table, key_path);
+        }
+        changed
+    }
+
+    fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) -> bool {
+        let Some(section) = table.get_mut(section).and_then(toml_edit::Item::as_table_mut) else {
+            return false;
+        };
+        let mut changed = false;
+        for key in keys {
+            changed |= section.remove(key).is_some();
+        }
+        changed
     }
 
     pub fn sparse_config_value(config: &VTCodeConfig) -> Result<toml::Value> {
@@ -332,6 +366,36 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repository_edit_writes_cleanup_when_setting_did_not_change() {
+        let original = concat!(
+            "[ui]\nshow_timeline_pane = false\n",
+            "[ui.fullscreen]\ncopy_on_select = true\n",
+            "\n[auth.copilot]\ncommand = 'helper'\n",
+        );
+        let updated = toml::from_str(original).expect("parse update");
+
+        let rendered = ConfigManager::merge_repository_config_edit(original, &updated).expect("patch repository");
+        let saved: toml::Value = toml::from_str(&rendered).expect("parse output");
+        assert_eq!(saved["ui"]["fullscreen"]["copy_on_select"].as_bool(), Some(true));
+        assert!(saved["ui"].get("show_timeline_pane").is_none());
+        assert!(saved.get("auth").is_none());
+    }
+
+    #[test]
+    fn repository_edit_preserves_explicit_defaults_and_strips_trusted_fields() {
+        let original = "# notes\n[ui.fullscreen]\ncopy_on_select  =  true # pinned\n";
+        let updated: toml::Value = toml::from_str(concat!(
+            "[ui.fullscreen]\ncopy_on_select = true\n",
+            "[auth.copilot]\ncommand = 'helper'\n",
+            "[provider_overrides.openai]\nbase_url = 'https://example.com'\napi_key_env = 'SENSITIVE'\n",
+        ))
+        .expect("parse update");
+
+        let rendered = ConfigManager::merge_repository_config_edit(original, &updated).expect("patch repository");
+        assert_eq!(rendered, original);
+    }
 
     #[test]
     fn save_prunes_removed_budget_keys_from_existing_config() {

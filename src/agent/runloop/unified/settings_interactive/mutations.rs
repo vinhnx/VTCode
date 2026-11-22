@@ -1,12 +1,11 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::HashSet;
 use std::fmt::Write as _;
-use std::fs;
 use std::path::{Path, PathBuf};
 use toml::Value as TomlValue;
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::config_keys::ConfigKey;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig, explicit_config_path};
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig, explicit_config_path, read_config_toml_for_edit};
 use vtcode_core::config::{constants::defaults, constants::model_helpers};
 use vtcode_core::llm::{auto_lightweight_model, lightweight_model_choices};
 use vtcode_tui_runtime::ui::theme;
@@ -358,18 +357,31 @@ fn persist_draft(state: &mut SettingsPaletteState, path: &str) -> Result<()> {
     let (target_path, persisted_path, persisted_value, repository_controlled) =
         persistence_target(state, path, &draft_value)?;
 
-    let mut target_value = load_or_default_toml(&target_path)?;
+    let original = read_config_toml_for_edit(&target_path)?;
+    let mut target_value = toml::from_str(original.as_deref().unwrap_or_default())
+        .with_context(|| format!("Failed to parse config file {}", target_path.display()))?;
     set_node(&mut target_value, &persisted_path, persisted_value)?;
 
     let target_config: VTCodeConfig = target_value
+        .clone()
         .try_into()
         .with_context(|| format!("Updated configuration at {} could not be deserialized", target_path.display()))?;
     target_config
         .validate()
         .with_context(|| format!("Updated configuration at {} failed validation", target_path.display()))?;
 
-    if repository_controlled {
-        ConfigManager::save_repository_config_to_path(&target_path, &target_config)
+    if let Some(original) = original.as_deref().or_else(|| repository_controlled.then_some("")) {
+        let content = if repository_controlled {
+            ConfigManager::merge_repository_config_edit(original, &target_value)
+        } else {
+            ConfigManager::merge_config_edit(original, &target_value)
+        }
+        .with_context(|| format!("Failed to patch {}", target_path.display()))?;
+        if content != original {
+            VtCodePaths::write_private_file_atomic(&target_path, content.as_bytes())
+        } else {
+            Ok(())
+        }
     } else {
         write_commented_config(&target_path, &target_config)
     }
@@ -437,28 +449,6 @@ fn is_trusted_provider_path(path: &str) -> bool {
         (segments.next(), segments.next(), segments.next(), segments.next()),
         (Some("provider_overrides"), Some(_), Some("base_url" | "api_key_env"), None)
     )
-}
-
-fn load_or_default_toml(path: &Path) -> Result<TomlValue> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            bail!("Refusing to read symlinked config file: {}", path.display())
-        }
-        Ok(metadata) if !metadata.is_file() => {
-            bail!("Config path is not a regular file: {}", path.display())
-        }
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(TomlValue::Table(toml::Table::new()));
-        }
-        Err(error) => {
-            return Err(error).with_context(|| format!("Failed to inspect config file {}", path.display()));
-        }
-    }
-
-    let content = String::from_utf8(VtCodePaths::read_file_no_follow(path)?)
-        .with_context(|| format!("Configuration file {} is not valid UTF-8", path.display()))?;
-    toml::from_str(&content).with_context(|| format!("Failed to parse config file {}", path.display()))
 }
 
 pub(super) fn render_commented_config(config: &VTCodeConfig) -> Result<String> {

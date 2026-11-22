@@ -196,3 +196,48 @@ fn copy_on_select_toggle_persists_manual_mode_to_disk() {
     let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
     assert!(persisted.contains("copy_on_select = false"));
 }
+
+#[test]
+fn settings_toggle_preserves_existing_comments_and_key_order() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let source_path = temp.path().join("vtcode.toml");
+    std::fs::write(
+        &source_path,
+        "# personal header\n\n[ui]\n# tool display preference\ntool_display_mode = \"compact\"\n\n[ui.fullscreen]\ncopy_on_select  =  true # explicitly pinned\n\n# agent section note\n[agent]\ntheme = \"ansi\"\n",
+    )
+    .expect("seed config");
+
+    let mut state = SettingsPaletteState {
+        workspace: temp.path().to_path_buf(),
+        source_path: source_path.clone(),
+        source_label: None,
+        draft: VTCodeConfig::default(),
+        view_path: Some("ui".to_string()),
+        last_selection: None,
+        selection_by_view: BTreeMap::new(),
+        pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
+        status: None,
+    };
+
+    assert!(
+        apply_settings_action(&mut state, "settings:set:ui.tool_display_mode:cycle")
+            .expect("cycle tool display mode")
+            .saved
+    );
+
+    let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
+    assert!(persisted.contains("# personal header"), "lost header comment:\n{persisted}");
+    assert!(persisted.contains("# tool display preference"), "lost field comment:\n{persisted}");
+    assert!(
+        persisted.contains("copy_on_select  =  true # explicitly pinned"),
+        "lost explicit default:\n{persisted}"
+    );
+    assert!(persisted.contains("# agent section note"), "lost section comment:\n{persisted}");
+    assert!(persisted.contains("tool_display_mode = \"expanded\""), "change missing:\n{persisted}");
+    assert!(persisted.contains("theme = \"ansi\""), "unrelated setting lost:\n{persisted}");
+    let ui = persisted.find("[ui]").expect("ui table");
+    let agent = persisted.find("[agent]").expect("agent table");
+    assert!(ui < agent, "key order changed:\n{persisted}");
+}

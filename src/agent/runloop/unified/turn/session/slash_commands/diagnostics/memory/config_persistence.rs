@@ -7,10 +7,7 @@ use vtcode_core::config::loader::ConfigManager;
 
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
 
-use super::super::super::config_toml::{
-    ensure_child_table, load_private_toml_value, load_toml_value, preferred_workspace_config_path,
-    save_private_toml_value, save_toml_value,
-};
+use super::super::super::config_toml::{edit_toml_value, ensure_child_table, preferred_workspace_config_path};
 use super::SlashCommandContext;
 
 pub(crate) async fn persist_workspace_config_change<F>(ctx: &mut SlashCommandContext<'_>, update: F) -> Result<()>
@@ -20,10 +17,7 @@ where
     let manager =
         ConfigManager::load_from_workspace(&ctx.config.workspace).context("Failed to load VT Code configuration")?;
     let workspace_config_path = preferred_workspace_config_path(&manager, &ctx.config.workspace);
-    let mut root = load_toml_value(&workspace_config_path)?;
-    let root_table = root.as_table_mut().context("Workspace config root is not a TOML table")?;
-    update(root_table)?;
-    save_toml_value(&workspace_config_path, &root)?;
+    edit_toml_value(&workspace_config_path, update)?;
     refresh_runtime_config_from_manager(
         ctx.renderer,
         ctx.handle,
@@ -57,36 +51,34 @@ pub(super) async fn persist_user_directory_override(
 }
 
 pub(super) fn write_user_directory_override(path: &Path, value: Option<String>) -> Result<()> {
-    let mut root = load_private_toml_value(path)?;
-
-    let root_table = root.as_table_mut().context("User config root is not a TOML table")?;
-    match value {
-        Some(value) if !value.trim().is_empty() => {
-            let agent_table = ensure_child_table(root_table, "agent");
-            let memory_table = ensure_child_table(agent_table, "persistent_memory");
-            memory_table.insert("directory_override".to_string(), TomlValue::String(value));
-        }
-        _ => {
-            let remove_memory_table = {
+    edit_toml_value(path, |root_table| {
+        match value {
+            Some(value) if !value.trim().is_empty() => {
                 let agent_table = ensure_child_table(root_table, "agent");
                 let memory_table = ensure_child_table(agent_table, "persistent_memory");
-                memory_table.remove("directory_override");
-                memory_table.is_empty()
-            };
-            if remove_memory_table {
-                let remove_agent_table = {
+                memory_table.insert("directory_override".to_string(), TomlValue::String(value));
+            }
+            _ => {
+                let remove_memory_table = {
                     let agent_table = ensure_child_table(root_table, "agent");
-                    agent_table.remove("persistent_memory");
-                    agent_table.is_empty()
+                    let memory_table = ensure_child_table(agent_table, "persistent_memory");
+                    memory_table.remove("directory_override");
+                    memory_table.is_empty()
                 };
-                if remove_agent_table {
-                    root_table.remove("agent");
+                if remove_memory_table {
+                    let remove_agent_table = {
+                        let agent_table = ensure_child_table(root_table, "agent");
+                        agent_table.remove("persistent_memory");
+                        agent_table.is_empty()
+                    };
+                    if remove_agent_table {
+                        root_table.remove("agent");
+                    }
                 }
             }
         }
-    }
-
-    save_private_toml_value(path, &root)
+        Ok(())
+    })
 }
 
 pub(super) fn set_workspace_memory_enabled(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
@@ -213,18 +205,20 @@ mod tests {
         std::fs::write(&path, "[agent]\ntheme = \"ciapre\"\n[agent.small_model]\nmodel = \"gpt-5-mini\"\n")
             .expect("seed config");
 
-        let mut root = load_toml_value(&path).expect("load config");
-        let root_table = root.as_table_mut().expect("root table");
-        set_workspace_memory_enabled(root_table, false);
-        set_workspace_memory_auto_write(root_table, false);
-        set_workspace_memory_line_limit(root_table, 111).expect("line limit");
-        set_workspace_memory_byte_limit(root_table, 222).expect("byte limit");
-        set_workspace_instruction_import_depth(root_table, 7).expect("import depth");
-        set_workspace_instruction_excludes(root_table, vec!["**/other-team/.vtcode/rules/**".to_string()]);
-        set_workspace_small_model_for_memory(root_table, false);
-        save_toml_value(&path, &root).expect("save config");
+        edit_toml_value(&path, |root_table| {
+            set_workspace_memory_enabled(root_table, false);
+            set_workspace_memory_auto_write(root_table, false);
+            set_workspace_memory_line_limit(root_table, 111).expect("line limit");
+            set_workspace_memory_byte_limit(root_table, 222).expect("byte limit");
+            set_workspace_instruction_import_depth(root_table, 7).expect("import depth");
+            set_workspace_instruction_excludes(root_table, vec!["**/other-team/.vtcode/rules/**".to_string()]);
+            set_workspace_small_model_for_memory(root_table, false);
+            Ok(())
+        })
+        .expect("save config");
 
-        let saved = load_toml_value(&path).expect("reload config");
+        let saved: TomlValue =
+            toml::from_str(&std::fs::read_to_string(&path).expect("read config")).expect("parse config");
         let agent = saved.get("agent").and_then(TomlValue::as_table).expect("agent table");
         assert_eq!(agent.get("theme").and_then(TomlValue::as_str), Some("ciapre"));
         assert!(agent.get("provider").is_none());
@@ -252,5 +246,48 @@ mod tests {
             .expect("small model table");
         assert_eq!(small_model.get("model").and_then(TomlValue::as_str), Some("gpt-5-mini"));
         assert_eq!(small_model.get("use_for_memory").and_then(TomlValue::as_bool), Some(false));
+    }
+
+    #[test]
+    fn user_directory_override_preserves_comments_and_unrelated_values() {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("vtcode.toml");
+        std::fs::write(&path, "# my header\n\n[agent]\n# theme note\ntheme = \"ciapre\"\n").expect("seed config");
+
+        write_user_directory_override(&path, Some("/tmp/mem".to_string())).expect("write override");
+
+        let saved = std::fs::read_to_string(&path).expect("read saved config");
+        assert!(saved.contains("# my header"), "lost header comment:\n{saved}");
+        assert!(saved.contains("# theme note"), "lost field comment:\n{saved}");
+        assert!(saved.contains("theme = \"ciapre\""), "lost unrelated value:\n{saved}");
+        assert!(saved.contains("directory_override = \"/tmp/mem\""), "new value missing:\n{saved}");
+    }
+
+    #[test]
+    fn workspace_memory_settings_preserve_comments_and_key_order() {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("vtcode.toml");
+        std::fs::write(
+            &path,
+            "# my config\n\n[agent]\n# keep this theme\ntheme = \"ciapre\"\n\n[ui]\n# display note\ntool_display_mode = \"compact\"\n",
+        )
+        .expect("seed config");
+
+        edit_toml_value(&path, |root_table| {
+            set_workspace_memory_enabled(root_table, false);
+            Ok(())
+        })
+        .expect("save config");
+
+        let saved = std::fs::read_to_string(&path).expect("read saved config");
+        assert!(saved.contains("# my config"), "lost header comment:\n{saved}");
+        assert!(saved.contains("# keep this theme"), "lost field comment:\n{saved}");
+        assert!(saved.contains("# display note"), "lost section comment:\n{saved}");
+        assert!(saved.contains("theme = \"ciapre\""), "lost unrelated setting:\n{saved}");
+        assert!(saved.contains("tool_display_mode = \"compact\""), "lost unrelated table:\n{saved}");
+        assert!(saved.contains("enabled = false"), "new setting missing:\n{saved}");
+        let agent = saved.find("[agent]").expect("agent table");
+        let ui = saved.find("[ui]").expect("ui table");
+        assert!(agent < ui, "key order changed:\n{saved}");
     }
 }
