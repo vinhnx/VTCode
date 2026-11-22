@@ -306,6 +306,15 @@ mod tests {
     }
 
     #[test]
+    fn patch_inserts_nested_table_into_inline_table() {
+        let original = "agent = { theme = 'ciapre' }\n";
+        let updated: TomlValue = toml::from_str("agent = { theme = 'ciapre', persistent_memory = { enabled = true } }")
+            .expect("parse updated");
+        let rendered = merge_toml_value_preserving_comments(original, &updated).expect("patch");
+        assert_eq!(toml::from_str::<TomlValue>(&rendered).expect("parse output"), updated);
+    }
+
+    #[test]
     fn patch_adds_new_keys_under_existing_tables() {
         let original = "# note\n[features]\nmemories = false\n";
         let mut updated: TomlValue = toml::from_str(original).expect("parse");
