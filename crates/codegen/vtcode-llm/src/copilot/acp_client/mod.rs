@@ -600,9 +600,18 @@ fn is_runtime_request_channel_closed_error(err: &anyhow::Error) -> bool {
 }
 
 fn clear_active_prompt_state(inner: &Arc<CopilotAcpClientInner>) {
-    if let Ok(mut active_prompt) = inner.active_prompt.lock() {
-        *active_prompt = None;
-    }
+    // This is the recovery path: we are about to discard the state, so recover
+    // the guard even when a panic poisoned the lock. An `if let Ok(..)` here
+    // would silently skip the clear and leave a stale sender in place, causing
+    // every later prompt update to fail and re-enter this same dead cleanup.
+    let mut active_prompt = inner.active_prompt.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("copilot acp active prompt lock was poisoned; discarding stale state");
+        poisoned.into_inner()
+    });
+    *active_prompt = None;
+    // Clear the poison while the guard is still held, so no other locker can
+    // poison the lock again in between. The state is now safe to reuse.
+    inner.active_prompt.clear_poison();
 }
 
 // ---------------------------------------------------------------------------

@@ -298,9 +298,7 @@ impl CopilotAcpClient {
     }
 
     pub(super) fn clear_active_prompt(&self) {
-        if let Ok(mut active_prompt) = self.inner.active_prompt.lock() {
-            *active_prompt = None;
-        }
+        clear_active_prompt_state(&self.inner);
     }
 
     fn compatibility_state(&self) -> Result<CopilotAcpCompatibilityState> {

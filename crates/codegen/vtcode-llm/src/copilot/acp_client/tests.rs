@@ -14,6 +14,30 @@ fn make_inner(write_tx: mpsc::Sender<String>) -> Arc<CopilotAcpClientInner> {
     })
 }
 
+#[test]
+fn clearing_poisoned_active_prompt_state_recovers_and_discards_stale_sender() {
+    let inner = make_inner(mpsc::channel(1).0);
+    let (updates, _update_rx) = mpsc::unbounded_channel();
+    let (runtime_requests, _request_rx) = mpsc::unbounded_channel();
+    *inner.active_prompt.lock().unwrap() = Some(ActivePrompt { updates, runtime_requests });
+
+    // Poison the lock the way a panic in an update handler would.
+    let poison_target = Arc::clone(&inner);
+    let panicked = std::thread::spawn(move || {
+        let _guard = poison_target.active_prompt.lock().unwrap();
+        panic!("simulated panic while holding the active prompt lock");
+    });
+    assert!(panicked.join().is_err());
+    assert!(inner.active_prompt.is_poisoned());
+
+    clear_active_prompt_state(&inner);
+
+    // The recovery path must not silently skip a poisoned lock: the stale
+    // sender is discarded and the poison is cleared so later calls recover.
+    assert!(!inner.active_prompt.is_poisoned());
+    assert!(inner.active_prompt.lock().unwrap().is_none());
+}
+
 #[tokio::test]
 async fn empty_tool_allowlist_is_serialized_in_session_create() {
     for available_tools in [Vec::new(), vec!["view".to_owned()]] {

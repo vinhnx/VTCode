@@ -149,9 +149,11 @@ fn take_managed_child(provider: LocalProvider) -> Option<Child> {
 }
 
 fn store_managed_child(provider: LocalProvider, child: Child) {
-    if let Ok(mut guard) = MANAGED_PROCESSES.lock() {
-        guard.entry(provider).or_insert_with(|| ManagedProcess { child: None }).child = Some(child);
-    }
+    // Recover the guard on poison just like `take_managed_child` does. An
+    // `if let Ok(..)` here would drop the child on the floor, leaving an
+    // orphaned server process that shutdown can never reap.
+    let mut guard = MANAGED_PROCESSES.lock().unwrap_or_else(|e| e.into_inner());
+    guard.entry(provider).or_insert_with(|| ManagedProcess { child: None }).child = Some(child);
 }
 
 fn is_managed_running(provider: LocalProvider) -> bool {
@@ -841,6 +843,29 @@ async fn parse_json_opt<T: serde::de::DeserializeOwned>(resp: Option<reqwest::Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn store_managed_child_recovers_poisoned_lock() {
+        let child = tokio::process::Command::new("true").spawn().expect("spawn test child");
+        let pid = child.id();
+
+        // Poison the registry the way a panic in a holder would.
+        let poisoned = std::thread::spawn(|| {
+            let _guard = MANAGED_PROCESSES.lock().unwrap();
+            panic!("simulated panic while holding managed processes lock");
+        });
+        assert!(poisoned.join().is_err());
+        assert!(MANAGED_PROCESSES.is_poisoned());
+
+        // A poisoned lock must not drop the child on the floor (which would
+        // leave an orphaned server process that shutdown cannot reap).
+        store_managed_child(LocalProvider::LmStudio, child);
+
+        let mut taken = take_managed_child(LocalProvider::LmStudio).expect("child must be registered despite poison");
+        assert_eq!(taken.id(), pid);
+        let _ = taken.wait().await;
+    }
 
     #[test]
     fn test_provider_from_key() {
