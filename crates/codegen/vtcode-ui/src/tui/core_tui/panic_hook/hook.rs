@@ -76,7 +76,7 @@ fn record_panic(ctx: &PanicContext) {
 /// collector, which is drained at graceful session finalization — a release
 /// panic raw-exits before that. The human-panic report is always written, so
 /// pin the semantic context there as a TOML comment (valid anywhere in the
-/// document, needs no escaping beyond newline flattening).
+/// document; control characters are flattened to keep it one valid line).
 fn append_context_to_crash_report(path: Option<&Path>, ctx: &PanicContext) {
     let Some(path) = path else {
         return;
