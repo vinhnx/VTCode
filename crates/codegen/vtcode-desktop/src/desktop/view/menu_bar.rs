@@ -19,7 +19,13 @@ const STATUS_ICON_EDGE: f64 = 18.;
 /// Monochrome V mark for the status item. Installed as a template image, so
 /// AppKit recolors it for light/dark appearances automatically; the app-icon
 /// preference and theme mode never touch this art.
-const STATUS_ICON_PNG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-mono-120.png");
+///
+/// This is a purpose-built 36x36 asset (18pt at 2x): the glyph is tightly
+/// framed to fill the tile instead of sitting inside the generously padded
+/// `vtcode-mono-120.png` registration art. `setSize` maps one bitmap pixel to
+/// one device pixel on Retina displays, so the mark stays sharp instead of
+/// being resampled from a larger tile with a small glyph and a thin stroke.
+const STATUS_ICON_PNG: &[u8] = include_bytes!("../../../../../../resources/icons/vtcode-status-36.png");
 
 /// Decode the embedded monochrome art into a menu-bar-sized template image.
 #[cfg(not(test))]
@@ -621,12 +627,13 @@ mod tests {
     }
 
     #[test]
-    fn mono_status_icon_is_a_centered_white_glyph() {
+    fn status_icon_is_a_tightly_framed_white_template() {
         assert_eq!(&STATUS_ICON_PNG[..8], b"\x89PNG\r\n\x1a\n", "status icon must be a PNG");
         let art = image::load_from_memory(STATUS_ICON_PNG)
             .expect("status icon must decode")
             .to_rgba8();
-        assert_eq!((art.width(), art.height()), (120, 120));
+        // 18pt at 2x, so the bitmap maps 1:1 to Retina device pixels.
+        assert_eq!((art.width(), art.height()), (36, 36));
         // Template images ignore color; only alpha carries the glyph, and the
         // source art keeps every visible pixel pure white.
         for pixel in art.pixels() {
@@ -637,21 +644,27 @@ mod tests {
         let opaque = art.pixels().filter(|pixel| pixel[3] >= 248).count();
         let fraction = opaque as f64 / f64::from(art.width() * art.height());
         assert!(
-            (0.02..=0.10).contains(&fraction),
-            "status opaque fraction {fraction:.3} outside the 0.02-0.10 glyph band"
+            (0.01..=0.12).contains(&fraction),
+            "status opaque fraction {fraction:.3} outside the 0.01-0.12 glyph band"
         );
         let (left, top, right, bottom) = art
             .enumerate_pixels()
             .filter(|(_, _, pixel)| pixel[3] > 128)
-            .fold((120, 120, 0, 0), |(left, top, right, bottom), (x, y, _)| {
+            .fold((36, 36, 0, 0), |(left, top, right, bottom), (x, y, _)| {
                 (left.min(x), top.min(y), right.max(x), bottom.max(y))
             });
         let center = (f64::from(left + right) / 2., f64::from(top + bottom) / 2.);
         assert!(
-            (center.0 - 60.).abs() <= 8. && (center.1 - 60.).abs() <= 8.,
+            (center.0 - 18.).abs() <= 3. && (center.1 - 18.).abs() <= 3.,
             "glyph center {center:?} must sit near the tile center"
         );
-        for (x, y) in [(0, 0), (119, 0), (0, 119), (119, 119), (60, 0), (0, 60)] {
+        assert!(
+            bottom - top >= 24 && right - left >= 22,
+            "glyph must fill the tile (got {}x{}), not sit in registration-art padding",
+            right - left + 1,
+            bottom - top + 1
+        );
+        for (x, y) in [(0, 0), (35, 0), (0, 35), (35, 35), (18, 0), (0, 18)] {
             assert!(art.get_pixel(x, y)[3] < 16, "margin ({x}, {y}) must be transparent");
         }
     }
