@@ -19,7 +19,7 @@ on:
 
 jobs:
   relay:
-    uses: hotpath-rs/hotpath/.github/workflows/hotpath-relay.yml@f8724d1e001c8a7f8ab805c26627a4fa0f9407f6 # v0.30.1
+    uses: hotpath-rs/hotpath/.github/workflows/hotpath-relay.yml@ca0fb29fa6a42805df93d0f4a40a7a13a7eea2d7 # v0.31.3
     permissions:
       actions: read # download the artifact of the benchmark run
       id-token: write # authenticate the upload
