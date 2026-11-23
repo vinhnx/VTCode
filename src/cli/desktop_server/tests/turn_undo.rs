@@ -560,10 +560,9 @@ async fn undo_refuses_symlink_file_and_directory() {
     }
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn undo_refuses_symlinked_ancestor_directory() {
-    #[cfg(not(unix))]
-    return;
     let directory = hermetic_workspace();
     let workspace = canonical_workspace(&directory);
     let outside = tempfile::tempdir().expect("outside");
@@ -589,10 +588,9 @@ async fn undo_refuses_symlinked_ancestor_directory() {
     assert_eq!(std::fs::read_to_string(outside.path().join("inner.txt")).expect("read"), "new\n");
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn undo_partial_flush_reports_applied_files() {
-    #[cfg(not(unix))]
-    return;
     use std::os::unix::fs::PermissionsExt;
     let directory = hermetic_workspace();
     let workspace = canonical_workspace(&directory);
