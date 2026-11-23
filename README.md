@@ -25,26 +25,26 @@
 
 ## Overview
 
-VT Code is an auditable, resumable agentic coding loop — terminal TUI plus native macOS app on one
-shared runloop, open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and [License](#license)).
-Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
+VT Code is an auditable, resumable agentic coding loop — one shared runloop powers the terminal TUI and the
+native macOS app. It is open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and
+[License](#license)). Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
-| At a glance   | What you get                                                                                                                                                               |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Plan**      | [Plan read-only](./docs/guides/planning-workflow.md), review [turn diffs](./docs/development/diff-preview.md).                                                             |
-| **Safety**    | [Auditable command policy](./docs/security/security_model.md) with sandboxing.                                                                                             |
-| **Long runs** | [Headless exec](./docs/user-guide/exec-mode.md) with resume; [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md).                   |
-| **Extend**    | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
-| **Models**    | [Hosted or local providers](./docs/providers/provider_guides.md) per task.                                                                                                 |
+| At a glance | What you get |
+| ----------- | ------------ |
+| **Plan** | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md). |
+| **Safety** | Sandboxed, [auditable command policy](./docs/security/security_model.md). |
+| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md); [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
+| **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
+| **Models** | Per-task [hosted or local providers](./docs/providers/provider_guides.md). |
 
 <!-- markdownlint-enable MD060 -->
 
 ## Quick start
 
-Install on macOS, Linux, or Windows/WSL, configure once, and run. Source builds need Rust
-1.100.0+ (edition 2024); the [installation guide](./docs/installation/README.md) covers every method.
+Install on macOS, Linux, or Windows/WSL, configure once, and run. Source builds need Rust 1.100.0+
+(edition 2024); the [installation guide](./docs/installation/README.md) covers every method.
 
 ### 1. Install
 
@@ -65,7 +65,6 @@ From your project directory:
 cd path/to/your/project
 vtcode init # scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before committing
 vtcode secret add openai # replace `openai` with your provider
-vtcode --version # confirm the install before your first task
 ```
 
 Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login`
@@ -81,9 +80,8 @@ Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/gu
 vtcode # open the interactive TUI
 ```
 
-Ask one focused question, review the proposed changes and test results, then commit. Run
-`vtcode --version` if the binary is not on your `PATH`.
-See [Usage](#usage) for automation and session commands.
+Ask one focused question, review the proposed changes and test results, then commit. If the binary is not on
+your `PATH`, rerun `vtcode --version` to confirm the install. See [Usage](#usage) for automation commands.
 
 ## Usage
 
@@ -101,12 +99,11 @@ Common commands (full list in [command reference](./docs/user-guide/commands.md)
 | Roll back a snapshot    | `vtcode snapshots` / `vtcode revert`               |
 | Inspect a run log       | `vtcode trajectory`                                |
 
-Trust levels: `ask` never runs tools, `review` inspects uncommitted changes without the agent loop, and
-only `exec` runs the full tool loop. `exec` needs workspace trust: approve the TTY prompt, or set
-`VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead). For larger tasks, start
-read-only, review the turn diff, and use `/explain` without another model call. See
-[interactive mode](./docs/user-guide/interactive-mode.md), [exec mode](./docs/user-guide/exec-mode.md),
-and [full automation](./docs/guides/full-automation.md).
+Trust levels: `ask` never runs tools, `review` inspects uncommitted changes without the agent loop, and only
+`exec` runs the full tool loop. `exec` needs workspace trust — approve the TTY prompt, or set
+`VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead). For larger tasks, start read-only,
+review the turn diff, and use `/explain` without another model call. See [interactive mode](./docs/user-guide/interactive-mode.md),
+[exec mode](./docs/user-guide/exec-mode.md), and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
@@ -122,14 +119,13 @@ brew install --cask vinhnx/tap/vtcode-desktop
 Update cask installs with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. Without Homebrew, download the
 [latest release](https://github.com/vinhnx/vtcode/releases/latest) or run `vtcode desktop --install`,
 then launch with `vtcode desktop` or from Finder. The cask ships Apple Silicon builds; Intel Macs install
-from source with `vtcode desktop --install`. Full options are in the
-[installation guide](./docs/installation/README.md).
+from source with `vtcode desktop --install`. Full options are in the [installation guide](./docs/installation/README.md).
 
 > [!WARNING]
-> **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included):
-> open the app once from Applications, click **Open Anyway** in **System Settings › Privacy & Security**,
-> then reopen from Finder (or `vtcode desktop`). The button expires about an hour after a blocked launch —
-> reopen the app to bring it back. Notarized releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
+> **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included): open the app once
+> from Applications, click **Open Anyway** in **System Settings › Privacy & Security**, then reopen from Finder
+> (or `vtcode desktop`). The button expires about an hour after a blocked launch — reopen the app to bring it
+> back. Notarized releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
 
 ## Documentation
 
@@ -169,9 +165,9 @@ This section keeps one link per task.
 
 ## Development
 
-27-crate workspace at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md);
+27-crate workspace at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md)).
 `default-members` builds only the root binary plus `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and
-`vtcode-ui`). The sketch below shows the core harness path, not every crate:
+`vtcode-ui`. The sketch below shows the core harness path, not every crate:
 
 ```mermaid
 graph LR
@@ -196,8 +192,7 @@ cargo nextest run          # tests via nextest (see testing guide)
 ```
 
 CI uses `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
-`RUSTFLAGS="-D warnings" cargo check --locked`. See [development](./docs/development/README.md) and
-[testing](./docs/development/testing.md).
+`RUSTFLAGS="-D warnings" cargo check --locked`. See [development](./docs/development/README.md) and [testing](./docs/development/testing.md).
 
 Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/vtcode/releases).
 
@@ -205,10 +200,9 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/v
 
 VT Code is open source and community-driven. Code, docs, [evals](./docs/guides/eval.md), and fixes are welcome —
 include `vtcode trajectory` output in bug reports where possible. Before a PR, read
-[contributing](./docs/CONTRIBUTING.md) and pick a [good first
-issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or [help
-wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item. Forks: keep license and third-party notices
-intact (see [License](#license)).
+[contributing](./docs/CONTRIBUTING.md) and pick a [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue)
+or [help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item. Forks: keep license and third-party
+notices intact (see [License](#license)).
 
 ## Security
 
@@ -221,7 +215,8 @@ reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [s
   [Request a feature](https://github.com/vinhnx/vtcode/issues/new?template=feature_request.md) ·
   [Discussions](https://github.com/vinhnx/vtcode/discussions)
 - Elsewhere: [building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in) ·
-  [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
+  [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) ·
+  [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
 The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
