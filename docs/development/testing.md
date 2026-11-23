@@ -191,9 +191,12 @@ is never suppressed — a failing check still prints its rustfmt diff, clippy di
 gap: it deterministically scans every tracked `.rs` file (independent of `cfg`) and enforces the same two obligations
 as `rust.unsafe_code` and `clippy::undocumented_unsafe_blocks` — every file that uses `unsafe` must carry an
 `unsafe_code` allow/expect, and every `unsafe { … }` / `unsafe impl` / `unsafe trait` must be preceded by a `SAFETY:`
-marker. It adds a third, clippy-invisible obligation for `unsafe` in type position (`type Cb = unsafe extern "C" fn()`),
-which fires no lint at all: those declarations need a `///` contract doc (clippy rejects a `// SAFETY:` marker there as
-`unnecessary_safety_comment`). The clippy-equivalent rules are deliberately more permissive than clippy, so clippy-clean
+marker. It adds two obligations clippy cannot fully see: `unsafe` in type position (`type Cb = unsafe extern "C" fn()`)
+fires no lint at all, so those declarations need a `///` contract doc (clippy rejects a `// SAFETY:` marker there as
+`unnecessary_safety_comment`); and every `unsafe fn` definition — including private or cfg/test-only
+`unsafe extern "C" fn` ABI shims, which clippy's `missing_safety_doc` does not check — needs a `/// # Safety` section
+stating the caller's preconditions. The `unsafe fn` rule also applies inside `tests/`, `benches/` and `examples/`, where
+the other rules are suppressed. The clippy-equivalent rules are deliberately more permissive than clippy, so clippy-clean
 host code never trips them; deliberate exceptions go in `scripts/unsafe_allowlist.txt`.
 
 ```bash

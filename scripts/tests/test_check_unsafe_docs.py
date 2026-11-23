@@ -111,6 +111,47 @@ class ScanFileTests(unittest.TestCase):
             self.scan("src/lib.rs", 'type Cb = extern "C" fn() -> u32;\n'), []
         )
 
+    def test_unsafe_fn_definition_needs_safety_contract(self):
+        content = '#[allow(unsafe_code, reason = "ffi")]\nunsafe fn probe() {}\n'
+        self.assert_reasons(
+            self.scan("src/lib.rs", content),
+            ["unsafe fn needs a # Safety contract doc"],
+        )
+
+    def test_unsafe_extern_c_abi_shim_needs_safety_contract(self):
+        content = (
+            '#[allow(unsafe_code, reason = "ffi")]\n'
+            'unsafe extern "C" fn shim(_ptr: *const u8) {}\n'
+        )
+        self.assert_reasons(
+            self.scan("src/lib.rs", content),
+            ["unsafe fn needs a # Safety contract doc"],
+        )
+
+    def test_safety_doc_above_unsafe_fn_satisfies_rule_d(self):
+        content = (
+            '#[allow(unsafe_code, reason = "ffi")]\n'
+            "/// # Safety\n"
+            "/// The caller passes a valid, nul-terminated pointer.\n"
+            'unsafe extern "C" fn shim(_ptr: *const u8) {}\n'
+        )
+        self.assertEqual(self.scan("src/lib.rs", content), [])
+
+    def test_type_position_unsafe_signature_is_not_a_fn_definition(self):
+        # Rule C owns type-position `unsafe`; Rule D must not double-report it.
+        self.assert_reasons(
+            self.scan("src/lib.rs", 'type Cb = unsafe extern "C" fn() -> u32;\n'),
+            ["type-position `unsafe` needs a contract doc"],
+        )
+
+    def test_rule_d_applies_in_tests_where_rules_a_b_c_are_suppressed(self):
+        rel = "crates/x/tests/it.rs"
+        self.assertEqual(self.scan(rel, "fn probe() { unsafe { g() } }\n"), [])
+        self.assert_reasons(
+            self.scan(rel, 'unsafe extern "C" fn shim() {}\n'),
+            ["unsafe fn needs a # Safety contract doc"],
+        )
+
     def test_unsafe_extern_block_needs_no_marker(self):
         content = (
             '#[allow(unsafe_code, reason = "win32 ffi")]\n'
@@ -182,6 +223,30 @@ class InvocationTests(unittest.TestCase):
 
         self.assertEqual(enforce_status, 1)
         self.assertEqual(warn_status, 0)
+
+    def test_expand_paths_includes_tests_but_not_vendored_trees(self):
+        rels = [
+            "src/a.rs",
+            "crates/x/src/native_plugin/tests.rs",
+            "patches/block/src/lib.rs",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = []
+            for rel in rels:
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("")
+                files.append(path)
+            with (
+                mock.patch.object(module, "REPO_ROOT", root),
+                mock.patch.object(
+                    module, "list_tracked_rust_files", return_value=files
+                ),
+            ):
+                scanned = module.expand_paths([])
+        names = {p.relative_to(root).as_posix() for p in scanned}
+        self.assertEqual(names, set(rels[:2]))
 
     def test_clean_tree_passes_in_enforce_mode(self):
         with tempfile.TemporaryDirectory() as directory:

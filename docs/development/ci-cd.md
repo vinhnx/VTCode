@@ -504,7 +504,7 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh test     # Run tests
 ./scripts/check.sh build    # Build project
 ./scripts/check.sh docs     # Generate docs
-./scripts/check.sh unsafe-docs # Gate unsafe SAFETY/allowance + type-position contract docs
+./scripts/check.sh unsafe-docs # Gate unsafe SAFETY/allowance + type-position contract + unsafe fn # Safety docs
 ./scripts/check.sh deny     # cargo-deny policy (RustSec advisories, licenses, bans, sources)
 ./scripts/check.sh contracts # Release-artifact contract tests
 ```

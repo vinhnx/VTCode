@@ -30,6 +30,12 @@ unsafe extern "C" fn test_free_string(ptr: *const c_char) {
 
 /// Counting deallocator: proves the bridge releases a plugin buffer exactly
 /// once, including on error paths (no leak, no double-free).
+///
+/// # Safety
+///
+/// The caller must pass either null or a pointer produced by
+/// `CString::into_raw` in this module; `from_raw` reclaims that allocation
+/// exactly once.
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_free_counting(ptr: *const c_char) {
     TEST_FREE_CALLS.fetch_add(1, Ordering::SeqCst);
@@ -89,6 +95,12 @@ fn update_max_concurrency(active_calls: usize) {
     }
 }
 
+/// # Safety
+///
+/// The loader calls this through the plugin ABI with a nul-terminated input
+/// pointer that stays valid for the call (the shim ignores it). The returned
+/// pointer is an owned `CString::into_raw` buffer that the loader releases with
+/// the matching free symbol.
 unsafe extern "C" fn test_execute_with_delay(_input: *const c_char) -> *const c_char {
     let active_calls = TEST_EXECUTE_ACTIVE_CALLS.fetch_add(1, Ordering::SeqCst) + 1;
     update_max_concurrency(active_calls);
@@ -103,22 +115,45 @@ unsafe extern "C" fn test_execute_with_delay(_input: *const c_char) -> *const c_
 /// Boundary adversarial inputs: a conforming plugin must never return null,
 /// invalid UTF-8, or malformed JSON, but the bridge must fail closed (and still
 /// release the buffer) rather than introducing a crash of its own.
+/// # Safety
+///
+/// The loader calls this through the plugin ABI with a nul-terminated input
+/// pointer valid for the call; it is ignored. This shim intentionally returns
+/// null to exercise the bridge's fail-closed path, so no buffer is transferred.
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_execute_null(_input: *const c_char) -> *const c_char {
     std::ptr::null()
 }
 
+/// # Safety
+///
+/// The loader calls this through the plugin ABI with a nul-terminated input
+/// pointer valid for the call; it is ignored. The returned pointer is an owned
+/// nul-terminated `into_raw` buffer that the loader releases with the matching
+/// free symbol.
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_execute_invalid_utf8(_input: *const c_char) -> *const c_char {
     // 0xFF is never valid UTF-8; the nul keeps it a well-formed C string.
     CString::from_vec_with_nul(vec![0xFF, 0x00]).unwrap().into_raw()
 }
 
+/// # Safety
+///
+/// The loader calls this through the plugin ABI with a nul-terminated input
+/// pointer valid for the call; it is ignored. The returned pointer is an owned
+/// `CString::into_raw` buffer that the loader releases with the matching free
+/// symbol.
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_execute_malformed_json(_input: *const c_char) -> *const c_char {
     CString::new("not json").unwrap().into_raw()
 }
 
+/// # Safety
+///
+/// The loader calls this through the plugin ABI with a nul-terminated input
+/// pointer valid for the call; it is ignored. The returned pointer is an owned
+/// `CString::into_raw` buffer that the loader releases with the matching free
+/// symbol.
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_execute_valid(_input: *const c_char) -> *const c_char {
     CString::new(r#"{"success":true,"output":{},"error":null,"files":[]}"#)

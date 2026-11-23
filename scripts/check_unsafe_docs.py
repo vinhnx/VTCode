@@ -13,9 +13,14 @@ tracked `.rs` file, whether or not it compiles here:
 
 * every file (or its crate root) that emits `unsafe_code` must carry an
   `unsafe_code` allow/expect,
-* every `unsafe { ... }` / `unsafe impl` must be preceded by a `SAFETY:` marker, and
+* every `unsafe { ... }` / `unsafe impl` must be preceded by a `SAFETY:` marker,
 * every type-position `unsafe` (e.g. `type Cb = unsafe extern "C" fn()`) must be
-  preceded by a contract doc comment (`///`).
+  preceded by a contract doc comment (`///`), and
+* every `unsafe fn` definition (including `unsafe extern "C" fn` ABI shims) must
+  carry a `# Safety` section — clippy's `missing_safety_doc` only fires for public
+  items on the compiling host, so this closes the same gap for cfg-gated and
+  test-only code. Unlike the other rules, this one applies to tests, benches and
+  examples too.
 
 The first two rules mirror clippy and are intentionally *more permissive* — a
 marker anywhere in the preceding window counts, and `unsafe extern` blocks and
@@ -54,9 +59,14 @@ SAFETY_MARKER_RE = re.compile(r"(?i)//.*\bsafety\s*:")
 # rejected by clippy's `unnecessary_safety_comment`, so only `///` counts.)
 TYPE_UNSAFE_RE = re.compile(r"\bunsafe\b")
 TYPE_CONTRACT_DOC_RE = re.compile(r"^\s*(?:///|/\*\*)")
+# Rule D: `unsafe fn foo()` / `unsafe extern "C" fn foo()` definitions. Requires a
+# name after `fn`, so type-position signatures (`type F = unsafe extern "C" fn()`)
+# and `unsafe extern { fn foo(); }` blocks do not match — those have their own rules.
+UNSAFE_FN_DEF_RE = re.compile(r'\bunsafe\s+(?:extern\s+"[^"]+"\s+)?fn\s+\w+')
+SAFETY_DOC_RE = re.compile(r"(?i)#\s*safety\b")
 MARKER_WINDOW = 12
 
-EXCLUDED_PREFIXES = ("fuzz/", "target/", "patches/")
+VENDORED_PREFIXES = ("fuzz/", "target/", "patches/")
 EXCLUDED_SEGMENTS = ("/tests/", "/benches/", "/examples/")
 
 
@@ -76,7 +86,10 @@ class Finding:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate every `unsafe` carries an `unsafe_code` allowance and a SAFETY marker.",
+        description=(
+            "Validate every `unsafe` carries an `unsafe_code` allowance and a SAFETY marker, "
+            "and every `unsafe fn` definition carries a # Safety contract doc."
+        ),
     )
     parser.add_argument(
         "--mode",
@@ -116,14 +129,22 @@ def list_tracked_rust_files() -> list[Path]:
     return [REPO_ROOT / Path(rel) for rel in raw.split("\0") if rel]
 
 
-def is_excluded(path: Path) -> bool:
+def is_vendored(path: Path) -> bool:
+    """Vendored/generated trees are never scanned (no first-party contracts)."""
     try:
         rel = path.relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return False
-    return rel.startswith(EXCLUDED_PREFIXES) or any(
-        seg in f"/{rel}" for seg in EXCLUDED_SEGMENTS
-    )
+    return rel.startswith(VENDORED_PREFIXES)
+
+
+def is_excluded(path: Path) -> bool:
+    """Paths where Rules A/B/C are suppressed; Rule D still applies."""
+    try:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return False
+    return is_vendored(path) or any(seg in f"/{rel}" for seg in EXCLUDED_SEGMENTS)
 
 
 def display_path(path: Path) -> str:
@@ -134,13 +155,15 @@ def display_path(path: Path) -> str:
 
 
 def expand_paths(paths: list[Path]) -> list[Path]:
+    # Include tests/benches/examples: Rule D applies there too. `scan_file`
+    # suppresses Rules A/B/C for paths where `is_excluded` holds.
     if not paths:
-        return [p for p in list_tracked_rust_files() if not is_excluded(p)]
+        return [p for p in list_tracked_rust_files() if not is_vendored(p)]
     files: list[Path] = []
     for raw in paths:
         path = raw if raw.is_absolute() else REPO_ROOT / raw
         if path.is_dir():
-            files.extend(sorted(p for p in path.rglob("*.rs") if not is_excluded(p)))
+            files.extend(sorted(p for p in path.rglob("*.rs") if not is_vendored(p)))
         elif path.suffix == ".rs":
             files.append(path)
     return files
@@ -259,54 +282,78 @@ def scan_file(path: Path, rules: list[AllowRule]) -> list[Finding]:
     lines = text.splitlines()
     findings: list[Finding] = []
 
-    # Rule A: a file that emits `unsafe_code` needs an allowance in the file or
-    # its crate root. Report a single finding per file at the first offending line.
-    if not has_allowance(text):
-        root = crate_root(path)
-        root_allows = (
-            root is not None
-            and root != path
-            and has_allowance(root.read_text(encoding="utf-8", errors="ignore"))
-        )
-        if not root_allows:
-            first = first_unsafe_code_line(lines)
-            if first is not None and not is_allowlisted(rel_path, first, rules):
-                findings.append(
-                    Finding(
-                        rel_path,
-                        first,
-                        "missing `unsafe_code` allowance",
-                        lines[first - 1].strip(),
+    # Rules A/B/C mirror clippy and stay suppressed for vendored code and the
+    # test/bench/example trees (which compile under their own allowances).
+    if not is_excluded(path):
+        # Rule A: a file that emits `unsafe_code` needs an allowance in the file or
+        # its crate root. Report a single finding per file at the first offending line.
+        if not has_allowance(text):
+            root = crate_root(path)
+            root_allows = (
+                root is not None
+                and root != path
+                and has_allowance(root.read_text(encoding="utf-8", errors="ignore"))
+            )
+            if not root_allows:
+                first = first_unsafe_code_line(lines)
+                if first is not None and not is_allowlisted(rel_path, first, rules):
+                    findings.append(
+                        Finding(
+                            rel_path,
+                            first,
+                            "missing `unsafe_code` allowance",
+                            lines[first - 1].strip(),
+                        )
                     )
-                )
 
-    # Rule B: each marker-requiring `unsafe` needs a preceding SAFETY marker.
+        # Rule B: each marker-requiring `unsafe` needs a preceding SAFETY marker.
+        for idx, raw_line in enumerate(lines):
+            if not UNSAFE_MARKER_RE.search(code_only(raw_line)):
+                continue
+            line_no = idx + 1
+            window = lines[max(0, idx - MARKER_WINDOW) : idx]
+            if any(SAFETY_MARKER_RE.search(candidate) for candidate in window):
+                continue
+            if is_allowlisted(rel_path, line_no, rules):
+                continue
+            findings.append(
+                Finding(rel_path, line_no, "missing SAFETY marker", raw_line.strip())
+            )
+
+        # Rule C: type-position `unsafe` fires no lint, so require a contract doc.
+        for start_line, source in iter_type_unsafe_statements(lines):
+            window = lines[max(0, start_line - 1 - MARKER_WINDOW) : start_line - 1]
+            if any(TYPE_CONTRACT_DOC_RE.match(candidate) for candidate in window):
+                continue
+            if is_allowlisted(rel_path, start_line, rules):
+                continue
+            findings.append(
+                Finding(
+                    rel_path,
+                    start_line,
+                    "type-position `unsafe` needs a contract doc",
+                    source,
+                )
+            )
+
+    # Rule D: every `unsafe fn` definition states its caller contract. Clippy's
+    # `missing_safety_doc` only sees public items on the compiling host; FFI ABI
+    # shims are private and often cfg/test-only. Applies to every scanned file.
     for idx, raw_line in enumerate(lines):
-        if not UNSAFE_MARKER_RE.search(code_only(raw_line)):
+        if not UNSAFE_FN_DEF_RE.search(code_only(raw_line)):
             continue
         line_no = idx + 1
         window = lines[max(0, idx - MARKER_WINDOW) : idx]
-        if any(SAFETY_MARKER_RE.search(candidate) for candidate in window):
+        if any(SAFETY_DOC_RE.search(candidate) for candidate in window):
             continue
         if is_allowlisted(rel_path, line_no, rules):
             continue
         findings.append(
-            Finding(rel_path, line_no, "missing SAFETY marker", raw_line.strip())
-        )
-
-    # Rule C: type-position `unsafe` fires no lint, so require a contract doc.
-    for start_line, source in iter_type_unsafe_statements(lines):
-        window = lines[max(0, start_line - 1 - MARKER_WINDOW) : start_line - 1]
-        if any(TYPE_CONTRACT_DOC_RE.match(candidate) for candidate in window):
-            continue
-        if is_allowlisted(rel_path, start_line, rules):
-            continue
-        findings.append(
             Finding(
                 rel_path,
-                start_line,
-                "type-position `unsafe` needs a contract doc",
-                source,
+                line_no,
+                "unsafe fn needs a # Safety contract doc",
+                raw_line.strip(),
             )
         )
 
@@ -347,10 +394,12 @@ def main() -> int:
             '2. For type-position `unsafe` (`type Cb = unsafe extern "C" fn()`), add a `///`\n'
             "   contract doc comment above the `type` statement (a `// SAFETY:` marker is\n"
             "   rejected there by `clippy::unnecessary_safety_comment`).\n"
-            "3. Platform-gated code is not compiled on the host: run this check locally instead\n"
+            '3. For an `unsafe fn` definition (including `unsafe extern "C" fn` ABI shims),\n'
+            "   add a `/// # Safety` section stating the caller's preconditions.\n"
+            "4. Platform-gated code is not compiled on the host: run this check locally instead\n"
             "   of relying on `cargo clippy`.\n"
-            "4. For a deliberate exception, add a scoped rule to scripts/unsafe_allowlist.txt.\n"
-            "5. Re-run: python3 scripts/check_unsafe_docs.py --mode enforce",
+            "5. For a deliberate exception, add a scoped rule to scripts/unsafe_allowlist.txt.\n"
+            "6. Re-run: python3 scripts/check_unsafe_docs.py --mode enforce",
             file=sys.stderr,
         )
         return 1
