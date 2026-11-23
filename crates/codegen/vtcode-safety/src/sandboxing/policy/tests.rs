@@ -167,15 +167,25 @@ fn test_default_sensitive_paths() {
 
 #[test]
 fn resolved_vtcode_roots_are_sensitive_without_duplicate_entries() {
+    // Drive-less `/...` roots are not absolute on Windows, so the fixture uses
+    // a drive-qualified prefix there.
+    let prefix = if cfg!(windows) { "C:/" } else { "/" };
+    let home = format!("{prefix}home/tester");
+    let shared = format!("{prefix}vtcode/shared");
+    let state = format!("{prefix}xdg/state");
+    let cache = format!("{prefix}xdg/cache");
+    let runtime = format!("{prefix}xdg/runtime");
+    let bin = format!("{prefix}xdg/bin");
+    let legacy = format!("{prefix}legacy/vtcode");
     let environment = [
-        ("HOME", "/home/tester"),
-        ("VTCODE_CONFIG", "/vtcode/shared"),
-        ("VTCODE_DATA", "/vtcode/shared"),
-        ("XDG_STATE_HOME", "/xdg/state"),
-        ("XDG_CACHE_HOME", "/xdg/cache"),
-        ("XDG_RUNTIME_DIR", "/xdg/runtime"),
-        ("XDG_BIN_HOME", "/xdg/bin"),
-        ("VTCODE_HOME", "/legacy/vtcode"),
+        ("HOME", home.as_str()),
+        ("VTCODE_CONFIG", shared.as_str()),
+        ("VTCODE_DATA", shared.as_str()),
+        ("XDG_STATE_HOME", state.as_str()),
+        ("XDG_CACHE_HOME", cache.as_str()),
+        ("XDG_RUNTIME_DIR", runtime.as_str()),
+        ("XDG_BIN_HOME", bin.as_str()),
+        ("VTCODE_HOME", legacy.as_str()),
     ];
     let resolved = VtCodePaths::from_environment(&environment).expect("explicit absolute VT Code paths should resolve");
     let paths = vtcode_sensitive_paths(&environment).expect("explicit absolute VT Code paths should resolve");
@@ -194,7 +204,7 @@ fn resolved_vtcode_roots_are_sensitive_without_duplicate_entries() {
         let expected = expected.display().to_string();
         assert!(path_strings.contains(&expected.as_str()), "missing sensitive root: {expected}");
     }
-    assert_eq!(path_strings.iter().filter(|path| **path == "/vtcode/shared").count(), 1);
+    assert_eq!(path_strings.iter().filter(|path| **path == shared.as_str()).count(), 1);
 }
 
 #[test]
