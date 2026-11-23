@@ -230,6 +230,7 @@ fn tool_output_item(id: &str, spool_path: Option<&str>, inline_preview: &str) ->
 mod cancel_watchdog;
 mod config_auth;
 mod config_restart;
+mod diagnostics;
 mod exec_commands;
 mod goal;
 mod model_review;

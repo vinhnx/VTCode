@@ -363,9 +363,11 @@ into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `mem
   interview wizard presents selectable answers and resumes planning with the chosen answer. Use `/plan off` to cancel an
   active planning workflow without implementing its draft and restore the previous execution agent (`build`/`auto`).
 - `/doctor` runs the setup checkup: installation, configuration, provider credentials, dependencies, MCP status,
-  workspace links, loaded skills, and reversible optimizations. Reports findings first and confirms before mutating
+  workspace links, loaded skills, reversible optimizations, and setup repairs (missing/broken config, unknown
+  provider, invalid model, missing key, unanswered consent). Reports findings first and confirms before mutating
   anything. Use `/doctor [--quick|--full]` (defaults to the interactive picker in the TUI, or a full pass elsewhere);
-  `/config checkup`, `/config doctor`, and `/checkup` remain compatibility aliases.
+  `/config checkup`, `/config doctor`, and `/checkup` remain compatibility aliases. `/config` also has a
+  "Diagnose & fix setup" action that jumps here, and desktop Settings has a Setup health group with the same repairs.
 - `/doctor prompt-audit` audits always-loaded guidance instead of the installation. It reports instruction-file sizes
   and budget usage, full-content duplicates and shared long lines across `AGENTS.md`/`CLAUDE.md` files, fenced
   example content that is usually derivable from the codebase, skill description cost, and configured MCP providers.

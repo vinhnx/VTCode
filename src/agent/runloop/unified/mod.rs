@@ -36,6 +36,7 @@ mod session_runtime;
 mod session_settings;
 pub(crate) mod session_setup;
 pub(crate) mod settings_interactive;
+pub(crate) mod setup_repairs;
 mod shell;
 pub(crate) mod state;
 mod status_line;

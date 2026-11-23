@@ -262,6 +262,15 @@ missing sources do not fail the handoff) and write `retention-pin.json` under th
 retention cannot evict forensics while the blocker is unresolved. Resolving the archive unpins only when no other
 unresolved archive still references that session.
 
+## Setup repairs share one core across CLI and Desktop
+
+`unified/setup_repairs.rs` owns detection (`compute_setup_repairs`) and direct apply for bypassed-wizard config
+(missing/broken workspace file, unknown provider, invalid model, missing key, unasked consent). The CLI `/doctor`
+repairs section, the `/config` "Diagnose & fix setup" launcher (submits `/doctor` via the palette redirect), and the
+desktop `diagnostics/checkup` + `diagnostics/apply` methods are thin renderers over it. Picker and secret kinds route
+to native UI and must never reach `apply_setup_repair`, which bails on them. Detection fails closed (unknown states
+yield no repairs); file repairs skip symlinks and explicit-override sessions.
+
 ## First-run consent answers live in the user layer
 
 The bundled-skills consent answer is home-scoped, so the first-run wizard persists it via `ConfigService::write`

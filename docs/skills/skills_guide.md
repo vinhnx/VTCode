@@ -163,8 +163,8 @@ configuration; MCP servers are never installed automatically.
   refreshing without re-asking.
 - Declining (or disabling later) removes the cache. VT Code keeps working; skill features that need the
   bundled set report how to enable them.
-- Re-enable anytime in `/config` (`skills.bundled.enabled`), your user `vtcode.toml`, or by re-running setup.
-  The change applies to new sessions.
+- Re-enable anytime in `/config` (`skills.bundled.enabled`), your user `vtcode.toml`, `/doctor` repairs, or by
+  re-running setup. The change applies to new sessions.
 - CLI sessions surface a one-line welcome hint while no answer is recorded, covering entry points that bypass
   both wizards (`vtcode init`, non-interactive first runs, pre-existing workspaces on fresh machines).
 

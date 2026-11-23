@@ -73,6 +73,7 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
             "Secrets",
             "Actions",
             "Reload configuration",
+            "Diagnose & fix setup",
             "Reset configuration",
         ]
     );
@@ -85,9 +86,38 @@ fn root_settings_contains_only_curated_groups_and_global_actions() {
                 .is_some_and(|subtitle| subtitle.contains("editable setting"))
             || matches!(
                 item.title.as_str(),
-                "Advanced settings" | "Secrets" | "Reload configuration" | "Reset configuration"
+                "Advanced settings"
+                    | "Secrets"
+                    | "Reload configuration"
+                    | "Diagnose & fix setup"
+                    | "Reset configuration"
             )
     }));
+}
+
+#[test]
+fn root_actions_diagnose_entry_launches_doctor() {
+    let state = SettingsPaletteState {
+        workspace: PathBuf::from("."),
+        source_path: PathBuf::from("vtcode.toml"),
+        source_label: None,
+        draft: VTCodeConfig::default(),
+        view_path: None,
+        last_selection: None,
+        selection_by_view: BTreeMap::new(),
+        pending_edit_path: None,
+        pending_secret: None,
+        secret_config: None,
+        status: None,
+    };
+    let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+    let items = build_settings_items(&state, &draft).expect("settings items");
+    let entry = items
+        .iter()
+        .find(|item| item.title == "Diagnose & fix setup")
+        .expect("diagnose entry");
+    assert_eq!(entry.selection, Some(InlineListSelection::ConfigAction(ACTION_DIAGNOSE_FIX.to_string())));
 }
 #[test]
 fn root_settings_remove_quick_access_duplicates_and_nested_fields() {

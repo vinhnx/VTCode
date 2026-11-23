@@ -40,6 +40,7 @@ const ADVANCED_SEARCH_PLACEHOLDER: &str = "path, label, description, value, or o
 pub(crate) const ACTION_RELOAD: &str = "settings:reload";
 pub(crate) const ACTION_OPEN_ROOT: &str = "settings:open_root";
 pub(crate) const ACTION_BACK: &str = "settings:back";
+pub(crate) const ACTION_DIAGNOSE_FIX: &str = "settings:diagnose";
 pub(crate) const ACTION_RESET: &str = "settings:reset";
 pub(crate) const ACTION_RESET_CONFIRM: &str = "settings:reset_confirm";
 pub(crate) const ACTION_RESET_CANCEL: &str = "settings:reset_cancel";

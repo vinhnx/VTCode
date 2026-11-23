@@ -20,8 +20,8 @@ use crate::agent::runloop::unified::palettes::{
 use crate::agent::runloop::unified::planning_workflow::{PlanExecutionContext, PlanExecutionTarget};
 use crate::agent::runloop::unified::settings_interactive::secrets::{self, SecretPaletteAction};
 use crate::agent::runloop::unified::settings_interactive::{
-    ACTION_CONFIGURE_EDITOR, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_EDIT, apply_string_edit, begin_string_edit,
-    show_settings_palette, string_editor_overlay,
+    ACTION_CONFIGURE_EDITOR, ACTION_DIAGNOSE_FIX, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_EDIT, apply_string_edit,
+    begin_string_edit, show_settings_palette, string_editor_overlay,
 };
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::unified::url_guard::{
@@ -459,6 +459,12 @@ impl<'a> InlineModalProcessor<'a> {
             {
                 self.palette.state.take();
                 Ok(Some(InlineLoopAction::Submit("/config tools.editor".into())))
+            }
+            (Some(ActivePalette::Settings { .. }), InlineListSelection::ConfigAction(action))
+                if action == ACTION_DIAGNOSE_FIX =>
+            {
+                self.palette.state.take();
+                Ok(Some(InlineLoopAction::Submit("/doctor".into())))
             }
             _ => Ok(None),
         }

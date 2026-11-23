@@ -133,6 +133,7 @@ mod configuration_render;
 mod context_format;
 mod curated;
 mod deeplinks;
+mod diagnostics;
 mod exec_controls;
 mod file_rename;
 mod file_tree;
@@ -568,6 +569,10 @@ struct DesktopView {
     pending_permission_choice: Option<protocol::PermissionMode>,
     full_access_confirm: Option<FullAccessConfirmState>,
     full_access_focus: FocusHandle,
+    diagnostics_repairs: Option<Vec<protocol::DiagnosticsRepair>>,
+    diagnostics_pending: bool,
+    diagnostics_armed: Option<String>,
+    diagnostics_notice: Option<String>,
     skills_consent_open: bool,
     skills_consent_seen: bool,
     skills_consent_focus: FocusHandle,

@@ -187,6 +187,12 @@ impl DesktopView {
                     protocol::method::UPDATE_CHECK => {
                         self.handle_update_check_response(result);
                     }
+                    protocol::method::DIAGNOSTICS_CHECKUP => {
+                        self.handle_diagnostics_checkup_response(result);
+                    }
+                    protocol::method::DIAGNOSTICS_APPLY => {
+                        self.handle_diagnostics_apply_response(result);
+                    }
                     protocol::method::UPDATE_INSTALL => {
                         // The response only acknowledges the start; phases
                         // arrive on `update/installProgress`. Adopt the echoed

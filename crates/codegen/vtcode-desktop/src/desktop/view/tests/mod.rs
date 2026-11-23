@@ -779,6 +779,7 @@ mod curated_config;
 mod custom_themes;
 mod deeplinks;
 mod diagnostic_notice;
+mod diagnostics;
 mod diff_settings;
 mod edit_stats_rows;
 mod effort_rail;

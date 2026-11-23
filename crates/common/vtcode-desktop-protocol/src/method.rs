@@ -111,3 +111,8 @@ pub const UPDATE_INSTALL_PROGRESS: &str = "update/installProgress";
 
 /// Transient UI progress for the active desktop session.
 pub const UI_PROGRESS: &str = "session/ui_progress";
+
+/// List applicable setup repairs for the workspace (pure detection, no writes).
+pub const DIAGNOSTICS_CHECKUP: &str = "diagnostics/checkup";
+/// Apply one directly-appliable setup repair by id.
+pub const DIAGNOSTICS_APPLY: &str = "diagnostics/apply";

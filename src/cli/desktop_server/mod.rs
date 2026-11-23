@@ -1,5 +1,6 @@
 mod composer_resources;
 mod config_settings;
+mod diagnostics;
 mod mcp_app;
 mod session_options;
 mod session_preferences;

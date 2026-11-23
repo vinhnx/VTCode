@@ -909,3 +909,40 @@ fn interaction_selection_fields_default_and_round_trip() {
         response
     );
 }
+
+#[test]
+fn diagnostics_repairs_round_trip_with_wire_names() {
+    let repair = DiagnosticsRepair {
+        id: "reset_invalid_config".to_string(),
+        title: "Reset broken workspace config".to_string(),
+        subtitle: "Back it up and write fresh defaults.".to_string(),
+        kind: DiagnosticsRepairKind::Apply,
+        destructive: true,
+    };
+    let value = serde_json::to_value(&repair).unwrap();
+    assert_eq!(value["id"], "reset_invalid_config");
+    assert_eq!(value["kind"], "apply");
+    assert_eq!(value["destructive"], true);
+    assert_eq!(serde_json::from_value::<DiagnosticsRepair>(value).unwrap(), repair);
+
+    let picker = DiagnosticsRepair {
+        id: "pick_provider_model".to_string(),
+        title: "Choose provider & model".to_string(),
+        subtitle: "Unknown provider.".to_string(),
+        kind: DiagnosticsRepairKind::ModelPicker,
+        destructive: false,
+    };
+    assert_eq!(serde_json::to_value(&picker).unwrap()["kind"], "model_picker");
+
+    let result = DiagnosticsCheckupResult { repairs: Vec::from([repair, picker]) };
+    let round_tripped: DiagnosticsCheckupResult =
+        serde_json::from_value(serde_json::to_value(&result).unwrap()).unwrap();
+    assert_eq!(round_tripped, result);
+
+    let params = DiagnosticsApplyParams { repair_id: "allow_bundled_skills".to_string() };
+    assert_eq!(serde_json::to_value(&params).unwrap()["repairId"], "allow_bundled_skills");
+    let applied = DiagnosticsApplyResult { applied: true, message: "Applied.".to_string() };
+    let round_tripped: DiagnosticsApplyResult =
+        serde_json::from_value(serde_json::to_value(&applied).unwrap()).unwrap();
+    assert_eq!(round_tripped, applied);
+}

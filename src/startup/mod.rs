@@ -10,17 +10,15 @@ mod first_run;
 mod first_run_prompts;
 mod resume;
 mod theme;
-mod validation;
+pub(crate) mod validation;
 mod workspace_trust;
 
 use config_loading::load_startup_config;
 pub(crate) use desktop_notice::{DesktopSuggestNotice, take_desktop_suggest_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
-use validation::{
-    apply_cli_permission_overrides, validate_full_auto_configuration, validate_runtime_provider,
-    validate_startup_configuration,
-};
+pub(crate) use validation::validate_runtime_provider;
+use validation::{apply_cli_permission_overrides, validate_full_auto_configuration, validate_startup_configuration};
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_config::workspace_env::read_workspace_env_value;
 use vtcode_config::{OpenAIPreferredMethod, PromptCacheRetention};
@@ -759,6 +757,21 @@ fn is_local_model_without_remote_auth(selection: &RuntimeModelSelection) -> bool
 }
 
 fn missing_api_key_message(
+    config: &VTCodeConfig,
+    selection: &RuntimeModelSelection,
+    first_run_occurred: bool,
+    command: Option<&Commands>,
+    workspace: &Path,
+) -> String {
+    let base = missing_api_key_message_body(config, selection, first_run_occurred, command, workspace);
+    if command_launches_tui(command) {
+        format!("{base} Or run `/doctor` to diagnose and fix setup.")
+    } else {
+        base
+    }
+}
+
+fn missing_api_key_message_body(
     config: &VTCodeConfig,
     selection: &RuntimeModelSelection,
     first_run_occurred: bool,

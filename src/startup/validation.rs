@@ -129,7 +129,7 @@ pub(super) fn validate_full_auto_configuration(config: &VTCodeConfig, workspace:
 /// `--provider` value (or broken `[agent].provider` config) only surfaces deep
 /// inside session setup as an opaque "Failed to initialize provider client"
 /// report, after the terminal probe has already started.
-pub(super) fn validate_runtime_provider(config: &VTCodeConfig, provider: &str) -> Result<()> {
+pub(crate) fn validate_runtime_provider(config: &VTCodeConfig, provider: &str) -> Result<()> {
     let provider_key = provider.trim();
     if provider_key.is_empty() {
         return Ok(());

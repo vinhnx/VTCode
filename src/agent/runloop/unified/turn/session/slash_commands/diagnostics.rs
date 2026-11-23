@@ -7,7 +7,10 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_tui_runtime::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::InlineListSelection;
 
+use crate::agent::runloop::slash_commands::SecretCommandAction;
 use crate::agent::runloop::unified::diagnostics::{CheckupOptions, count_configured_hooks, run_checkup_diagnostics};
+use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
+use crate::agent::runloop::unified::setup_repairs as repairs;
 use crate::agent::runloop::unified::ui_interaction::display_session_status;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -18,6 +21,8 @@ pub(super) mod memory;
 const CHECKUP_ACTION_PREFIX: &str = "checkup.action.";
 const CHECKUP_ACTION_BACK: &str = "checkup.action.back";
 const CHECKUP_ACTION_OPTIMIZE_PREFIX: &str = "checkup.optimize.";
+const CHECKUP_ACTION_REPAIR_PREFIX: &str = "checkup.repair.";
+const CHECKUP_ACTION_REPAIR_CONFIRM_APPLY: &str = "checkup.repair.confirm.apply";
 
 /// Identifies an applicable `/doctor` optimization the user can apply.
 ///
@@ -241,6 +246,10 @@ pub(crate) async fn handle_start_checkup_interactive(mut ctx: SlashCommandContex
         return handle_apply_checkup_optimization(ctx, opt_id.to_string()).await;
     }
 
+    if let Some(repair_id) = action.strip_prefix(CHECKUP_ACTION_REPAIR_PREFIX) {
+        return handle_apply_setup_repair(ctx, repair_id.to_string()).await;
+    }
+
     let Some(action_key) = action.strip_prefix(CHECKUP_ACTION_PREFIX) else {
         return Ok(SlashCommandControl::Continue);
     };
@@ -272,6 +281,91 @@ pub(crate) async fn handle_apply_checkup_optimization(
     // Re-run the checkup so the updated state is visible immediately.
     run_checkup(&mut ctx, false).await?;
     Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_apply_setup_repair(
+    mut ctx: SlashCommandContext<'_>,
+    id: String,
+) -> Result<SlashCommandControl> {
+    let repair = repairs::compute_setup_repairs(&ctx.config.workspace)
+        .into_iter()
+        .find(|repair| repair.id == id);
+    let Some(repair) = repair else {
+        ctx.renderer
+            .line(MessageStyle::Info, "That repair no longer applies; the setup changed.")?;
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    match repair.kind {
+        repairs::SetupRepairKind::OpenModelPicker => {
+            return super::ui::handle_start_model_selection(ctx).await;
+        }
+        repairs::SetupRepairKind::GuidedSecret { provider, .. } => {
+            return super::super::secrets::handle_manage_secrets(
+                ctx,
+                SecretCommandAction::Add { provider, key_name: None },
+            )
+            .await;
+        }
+        repairs::SetupRepairKind::SetConfig { .. }
+        | repairs::SetupRepairKind::ScaffoldWorkspaceConfig
+        | repairs::SetupRepairKind::ResetWorkspaceConfigWithBackup => {}
+    }
+
+    if repair.destructive && !confirm_destructive_repair(&mut ctx, &repair).await? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let description = repairs::apply_setup_repair(&ctx.config.workspace, &repair)?;
+    refresh_runtime_config_from_manager(
+        ctx.renderer,
+        ctx.handle,
+        ctx.config,
+        ctx.vt_cfg,
+        ctx.provider_client.as_ref(),
+        ctx.session_bootstrap,
+        ctx.full_auto,
+    )
+    .await?;
+    ctx.renderer.line(MessageStyle::Status, &format!("[OK] {description}"))?;
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+
+    // Re-run the checkup so the updated state is visible immediately.
+    run_checkup(&mut ctx, false).await?;
+    Ok(SlashCommandControl::Continue)
+}
+
+/// Extra confirm step for destructive repairs (config reset). Anything else
+/// applies on selection, matching the optimization UX.
+async fn confirm_destructive_repair(ctx: &mut SlashCommandContext<'_>, repair: &repairs::SetupRepair) -> Result<bool> {
+    ctx.renderer.show_list_modal(
+        "Confirm repair",
+        Vec::from([format!("{} — {}", repair.title, repair.subtitle)]),
+        Vec::from([
+            ui_list::action(
+                format!("Apply: {}", repair.title),
+                "Back up first, then apply (recommended)".to_string(),
+                Some("Destructive".to_string()),
+                Tone::Danger,
+                Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_REPAIR_CONFIRM_APPLY.to_string())),
+            )
+            .with_search_value("repair confirm apply yes".to_string()),
+            ui_list::action(
+                "Back",
+                "Close without applying".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
+            )
+            .with_search_value("back close cancel".to_string()),
+        ]),
+        Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
+        None,
+    );
+    let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
+        return Ok(false);
+    };
+    Ok(matches!(selection, InlineListSelection::ConfigAction(action) if action == CHECKUP_ACTION_REPAIR_CONFIRM_APPLY))
 }
 
 async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()> {
@@ -336,6 +430,20 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
                 Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_OPTIMIZE_PREFIX}{}", remediation.id))),
             )
             .with_search_value(remediation.search_value),
+        );
+    }
+
+    for repair in repairs::compute_setup_repairs(&ctx.config.workspace) {
+        let tone = if repair.destructive { Tone::Danger } else { Tone::Accent };
+        items.push(
+            ui_list::action(
+                repair.title,
+                repair.subtitle,
+                Some("Repair".to_string()),
+                tone,
+                Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_REPAIR_PREFIX}{}", repair.id))),
+            )
+            .with_search_value(repair.search_value),
         );
     }
 

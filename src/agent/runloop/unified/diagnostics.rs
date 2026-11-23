@@ -198,6 +198,8 @@ pub(crate) async fn run_checkup_diagnostics(
     let api_key_result =
         if provider_for_api_check.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
             DoctorCheckOutcome::Pass("ChatGPT subscription active for OpenAI".to_string())
+        } else if let Some(guidance) = managed_auth_guidance(provider_for_api_check) {
+            DoctorCheckOutcome::Pass(guidance)
         } else if provider_requires_api_key(provider_for_api_check) {
             let storage_mode = vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
             match get_api_key_with_mode(provider_for_api_check, &ApiKeySources::default(), storage_mode) {
@@ -333,6 +335,8 @@ pub(crate) async fn run_checkup_diagnostics(
         renderer.line(MessageStyle::Status, "[OK] All checks passed. You are ready to use VT Code.")?;
     }
 
+    render_setup_repair_section(renderer, &config.workspace)?;
+
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Status, "[Recommended Next Actions]")?;
     if summary.failures > 0 {
@@ -438,6 +442,29 @@ pub(crate) fn count_configured_hooks(hooks: &LifecycleHooksConfig) -> usize {
     .sum()
 }
 
+/// List applicable setup repairs with their apply path. Quiet when healthy.
+fn render_setup_repair_section(renderer: &mut AnsiRenderer, workspace: &std::path::Path) -> Result<()> {
+    let repairs = super::setup_repairs::compute_setup_repairs(workspace);
+    if repairs.is_empty() {
+        return Ok(());
+    }
+    renderer.line(MessageStyle::Info, "")?;
+    renderer.line(MessageStyle::Status, "[Setup Repairs]")?;
+    for repair in &repairs {
+        let marker = if repair.destructive { "[!]" } else { "[+]" };
+        renderer.line(MessageStyle::Info, &format!("{marker} {} — {}", repair.title, repair.subtitle))?;
+    }
+    if renderer.supports_inline_ui() {
+        renderer.line(MessageStyle::Info, "Run `/doctor` (no flags) to apply these from the repairs menu.")?;
+    } else {
+        renderer.line(
+            MessageStyle::Info,
+            "Headless session: apply these from a terminal with `/doctor`, or fix manually.",
+        )?;
+    }
+    Ok(())
+}
+
 fn render_doctor_check(
     renderer: &mut AnsiRenderer,
     summary: &mut DoctorSummary,
@@ -500,8 +527,27 @@ fn canonical_provider_name(raw: &str) -> String {
     }
 }
 
-fn provider_requires_api_key(provider: &str) -> bool {
+pub(crate) fn provider_requires_api_key(provider: &str) -> bool {
     !matches!(provider, "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp")
+}
+
+/// Guidance for providers authenticated outside VT Code. These must never
+/// report a missing API key: their login flows own auth, and no repair here
+/// could help.
+fn managed_auth_guidance(provider: &str) -> Option<String> {
+    if provider.eq_ignore_ascii_case("copilot") {
+        Some(
+            "Authentication is managed by the GitHub Copilot CLI (run `vtcode login copilot` if unauthenticated)"
+                .to_string(),
+        )
+    } else if provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
+        Some(
+            "Authentication is managed by the Codex app-server (run `vtcode login codex` if unauthenticated)"
+                .to_string(),
+        )
+    } else {
+        None
+    }
 }
 
 fn api_key_env_hint(provider: &str) -> String {
@@ -560,12 +606,25 @@ fn detect_command_version(command: &str, args: &[&str]) -> std::result::Result<S
 
 #[cfg(test)]
 mod tests {
-    use super::{api_key_env_hint, canonical_provider_name, provider_requires_api_key};
+    use super::{api_key_env_hint, canonical_provider_name, managed_auth_guidance, provider_requires_api_key};
 
     #[test]
     fn canonical_provider_keeps_openresponses_runtime_adapter() {
         assert_eq!(canonical_provider_name("openresponses"), "openresponses");
         assert_eq!(canonical_provider_name("open-responses"), "openresponses");
+    }
+
+    #[test]
+    fn managed_auth_guidance_covers_companion_providers_only() {
+        let copilot = managed_auth_guidance("copilot").expect("copilot guidance");
+        assert!(copilot.contains("Copilot CLI"), "guidance: {copilot}");
+        assert!(copilot.contains("vtcode login copilot"), "guidance: {copilot}");
+        let codex = managed_auth_guidance("Codex").expect("codex guidance");
+        assert!(codex.contains("app-server"), "guidance: {codex}");
+        assert!(codex.contains("vtcode login codex"), "guidance: {codex}");
+        assert!(managed_auth_guidance("openai").is_none());
+        assert!(managed_auth_guidance("ollama").is_none());
+        assert!(managed_auth_guidance("mycorp").is_none());
     }
 
     #[test]

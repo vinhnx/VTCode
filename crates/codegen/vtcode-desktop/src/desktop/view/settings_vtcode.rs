@@ -14,6 +14,7 @@ pub(super) struct VtcodeSettingsProps {
     pub(super) model: String,
     pub(super) secret_store: Option<protocol::SecretStoreInfo>,
     pub(super) credential_setup_command: String,
+    pub(super) diagnostics: diagnostics::DiagnosticsSettingsProps,
     pub(super) shared: shared_preferences::SharedPreferencesProps,
     pub(super) cli: configuration::CliConfigurationProps,
     pub(super) show_in_menu_bar: bool,
@@ -37,6 +38,7 @@ impl VtcodeSettingsProps {
                 .as_ref()
                 .map_or_else(String::new, |configuration| configuration.model.clone()),
             secret_store: view.secret_store_info().cloned(),
+            diagnostics: diagnostics::DiagnosticsSettingsProps::capture(view),
             credential_setup_command: view
                 .configuration
                 .as_ref()
@@ -66,6 +68,7 @@ impl DesktopView {
             .flex_col()
             .gap_6()
             .child(Self::render_provider_settings_content(&props, view.clone(), cx))
+            .child(Self::render_diagnostics_settings_content(&props.diagnostics, view.clone(), cx))
             .child(Self::render_shared_preferences_content(&props.shared, view.clone(), cx))
             .child(Self::render_cli_configuration_content(&props.cli, view.clone(), cx))
             .child(Self::render_licenses_settings_content(view.clone(), cx))

@@ -299,6 +299,12 @@ pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlVal
             None,
             super::ACTION_RELOAD,
         ));
+        items.push(action_item(
+            "Diagnose & fix setup",
+            "Find broken setup essentials and fix them with one click each",
+            None,
+            super::ACTION_DIAGNOSE_FIX,
+        ));
         items.push(action_item_with_tone(
             "Reset configuration",
             "Clear every setting in the write target (asks first)",

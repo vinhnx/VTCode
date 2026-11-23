@@ -349,6 +349,31 @@ fn missing_api_key_message_suggests_migrate_when_key_in_workspace_env() {
 }
 
 #[test]
+fn missing_api_key_message_points_tui_at_doctor_only() {
+    let cfg = VTCodeConfig::default();
+    let selection = RuntimeModelSelection {
+        model: "gpt-4o".to_string(),
+        provider: "openai".to_string(),
+        api_key_env: "OPENAI_API_KEY".to_string(),
+        model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
+    };
+
+    let tui = missing_api_key_message(&cfg, &selection, false, None, Path::new("/tmp"));
+    assert!(tui.contains("`/doctor`"), "tui message: {tui}");
+
+    let exec_command = Commands::Exec {
+        json: false,
+        dry_run: false,
+        events: None,
+        last_message_file: None,
+        command: None,
+        prompt: Some("hello".to_string()),
+    };
+    let headless = missing_api_key_message(&cfg, &selection, false, Some(&exec_command), Path::new("/tmp"));
+    assert!(!headless.contains("`/doctor`"), "headless message: {headless}");
+}
+
+#[test]
 fn missing_api_key_message_uses_cli_hint_for_headless_exec() {
     let cfg = VTCodeConfig::default();
     let selection = RuntimeModelSelection {

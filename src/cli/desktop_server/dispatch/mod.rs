@@ -18,6 +18,7 @@ pub(super) async fn handle_request(context: &ServiceContext, request: &Request) 
             | protocol::method::CONFIG_OPTIONS
             | protocol::method::CONFIG_THEME
             | protocol::method::CONFIG_SECRET_STORE
+            | protocol::method::DIAGNOSTICS_APPLY
             | protocol::method::SESSION_CREATE
             | protocol::method::SESSION_LOAD
             | protocol::method::SESSION_CLOSE
@@ -223,6 +224,24 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             let params: protocol::ConfigOpenFileParams = parse_params(&request.params)?;
             config_settings::open_file(context.workspace.clone(), params.target).await?;
             Ok((json!({ "opened": true }), false))
+        }
+        method::DIAGNOSTICS_CHECKUP => {
+            let result = diagnostics::checkup(&context.workspace);
+            Ok((serde_json::to_value(result)?, false))
+        }
+        method::DIAGNOSTICS_APPLY => {
+            let params: protocol::DiagnosticsApplyParams = parse_params(&request.params)?;
+            ensure_no_active_turn(context).await?;
+            if !context.state.lock().await.pending_interactions.is_empty() {
+                bail!("Resolve the pending CLI interaction before changing configuration");
+            }
+            let result = diagnostics::apply(&context.workspace, &params.repair_id)?;
+            if result.applied {
+                stop_webmcp_bridge(context).await;
+                // The repair targets disk; keep the thread across the restart.
+                restart_session_preserving_thread(context, |_| {}).await?;
+            }
+            Ok((serde_json::to_value(result)?, false))
         }
         method::WEBMCP_STATUS => {
             let status = webmcp_status(context).await;

@@ -63,6 +63,7 @@ impl DesktopView {
                     }
                     self.cancel_session_load_task();
                     self.interrupt_cli_config_write();
+                    self.interrupt_diagnostics();
                     self.interrupt_armed_running_switch();
                     self.backend = None;
                     self.clear_pending_interaction();
