@@ -20,7 +20,7 @@ chrono = { workspace = true }
 futures = { workspace = true }
 hashbrown = { workspace = true }
 iana-time-zone = "0.1"
-jsonschema = "0.60"
+jsonschema = "0.61"
 lru = "0.19"
 parking_lot = "0.13"
 rmcp = { workspace = true, features = [

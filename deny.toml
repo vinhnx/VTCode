@@ -43,13 +43,6 @@ ignore = [
   # paste is unmaintained; pulled in via image 0.25 -> exr -> pulp/rav1e, all
   # at their latest releases. No patched release.
   { id = "RUSTSEC-2024-0436", reason = "unmaintained paste, transitive via image/exr (latest); no patched release" },
-  # zvariant, zbus_names, zvariant_derive were merged into zbus 6.0 as its
-  # `wire`/`names` modules. The fix requires zbus 6, but the latest
-  # notify-rust (4.18.2, our only consumer via vtcode-core notifications)
-  # still requires zbus ^5. Re-check on every notify-rust release.
-  { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
-  { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
-  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; blocked by notify-rust 4.18.2 requiring zbus ^5" },
   # chrono 0.4.x was declared unmaintained (all versions affected, no patched
   # release); recommended replacements are jiff/time. It is a direct dependency
   # across many first-party crates and transitive via rmcp 3.9 / schemars 1.2,

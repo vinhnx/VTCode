@@ -83,7 +83,7 @@ roff = "1.1"
 unicode-width = { workspace = true }
 # Keep the optional SQLite feature on the stable toolchain: rusqlite 0.40
 # requires libsqlite3-sys 0.38, which uses unstable cfg_select.
-rusqlite = { version = "0.41", features = ["bundled"], optional = true }
+rusqlite = { version = "0.43", features = ["bundled"], optional = true }
 
 rig = { workspace = true }
 portable-pty = { workspace = true }
@@ -111,7 +111,7 @@ schemars = { workspace = true, optional = true }
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
 url = { workspace = true }
-jsonschema = "0.60"
+jsonschema = "0.61"
 uuid = { workspace = true, features = ["v4", "serde"] }
 which = { workspace = true }
 textwrap = "0.16"
