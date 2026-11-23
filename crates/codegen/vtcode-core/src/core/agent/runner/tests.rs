@@ -13,3 +13,4 @@ mod session_state;
 mod shared;
 mod tool_execution;
 mod tool_exposure;
+mod tool_exposure_full_auto;

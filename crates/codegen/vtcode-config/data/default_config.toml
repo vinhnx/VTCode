@@ -484,12 +484,17 @@ enabled = false
 # Maximum number of turns before asking for human input
 max_turns = 100
 
-# Tools allowed in full automation mode
+# Tools allowed in full automation mode (mirrors the compiled default in
+# `automation.rs::default_full_auto_allowed_tools`; entries must name tools
+# in the active tool profile or exec advertises no tools on local routes)
 allowed_tools = [
-    "write_file",
-    "read_file",
-    "list_files",
-    "grep_file",
+    "exec_command",
+    "write_stdin",
+    "apply_patch",
+    "code_search",
+    "task_tracker",
+    "start_planning",
+    "request_user_input",
 ]
 
 # Require profile acknowledgment before using full auto

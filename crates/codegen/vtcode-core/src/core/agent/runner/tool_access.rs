@@ -139,6 +139,14 @@ impl AgentRunner {
 
     /// Check if a tool is exposed to the active runtime after feature gating.
     pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
+        self.tool_exposed_inner(tool_name, true).await
+    }
+
+    /// [`Self::is_tool_exposed`] with control over the full-auto allowlist
+    /// gate. `honor_full_auto_deny = false` is the stale-allowlist fallback
+    /// (see `build_exposed_tool_snapshot`): advertisement only, never
+    /// execution admission, which must keep honoring the allowlist.
+    pub(super) async fn tool_exposed_inner(&self, tool_name: &str, honor_full_auto_deny: bool) -> bool {
         if !self
             .features()
             .allows_tool_name(tool_name, self.tool_registry.is_planning_active(), false)
@@ -146,11 +154,21 @@ impl AgentRunner {
             return false;
         }
 
-        self.is_tool_permitted_for_advertisement(tool_name).await
+        self.tool_permitted_for_advertisement_inner(tool_name, honor_full_auto_deny)
+            .await
     }
 
     /// Check policy and permission gates without applying runtime mode filtering.
-    pub(super) async fn is_tool_permitted_for_advertisement(&self, tool_name: &str) -> bool {
+    ///
+    /// Callers pass `honor_full_auto_deny = false` only for the
+    /// stale-allowlist advertisement fallback (see
+    /// `build_exposed_tool_snapshot`); every other caller (notably execution
+    /// admission via `resolve_executable_tool_name`) passes `true`.
+    pub(super) async fn tool_permitted_for_advertisement_inner(
+        &self,
+        tool_name: &str,
+        honor_full_auto_deny: bool,
+    ) -> bool {
         if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
             && !primary_agent_allows_tool(active_primary_agent, tool_name)
         {
@@ -178,7 +196,7 @@ impl AgentRunner {
             return false;
         }
 
-        if self.tool_registry.is_denied_in_full_auto(tool_name).await {
+        if honor_full_auto_deny && self.tool_registry.is_denied_in_full_auto(tool_name).await {
             return false;
         }
 

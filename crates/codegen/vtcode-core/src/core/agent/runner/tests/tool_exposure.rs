@@ -479,7 +479,7 @@ async fn advertisement_keeps_multi_action_tools_conservative_with_and_without_an
             runner.active_primary_agent =
                 has_agent.then(|| ActivePrimaryAgent::from_spec(&vtcode_config::builtin_primary_auto_agent()));
 
-            assert_eq!(runner.is_tool_permitted_for_advertisement(tools::UNIFIED_FILE).await, !deny_write);
+            assert_eq!(runner.tool_permitted_for_advertisement_inner(tools::UNIFIED_FILE, true).await, !deny_write);
             assert!(runner.is_tool_exposed(tools::APPLY_PATCH).await);
         }
     }

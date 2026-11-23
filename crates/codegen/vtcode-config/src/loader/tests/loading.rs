@@ -133,6 +133,22 @@ fn scaffold_config_inherits_program_status_default() {
 /// raises the removed-key warning against a file the tool itself created. Pin
 /// the scaffold to the same path list the loader warns on, so the template
 /// cannot drift behind the schema again.
+/// The scaffold's full-auto allowlist must match the compiled default: every
+/// entry must name a tool in the default profile, otherwise a scaffolded
+/// config silently collapses exec toward a zero-tool catalog on local routes
+/// (2026-11-23: the scaffold listed legacy file-tool names that match nothing
+/// in the default VtCode profile).
+#[test]
+fn scaffold_full_auto_allowlist_matches_compiled_default() {
+    let scaffold_text = include_str!("../../../data/default_config.toml");
+    let scaffold: VTCodeConfig = toml::from_str(scaffold_text).expect("scaffold config must parse");
+    let compiled = VTCodeConfig::default();
+    assert_eq!(
+        scaffold.automation.full_auto.allowed_tools, compiled.automation.full_auto.allowed_tools,
+        "scaffold allowed_tools must mirror default_full_auto_allowed_tools"
+    );
+}
+
 #[test]
 fn scaffold_config_carries_no_removed_keys() {
     let scaffold_text = include_str!("../../../data/default_config.toml");

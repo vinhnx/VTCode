@@ -70,24 +70,40 @@ impl AgentRunner {
         }
         let mut runtime_tool_names: HashSet<String> =
             runtime_tools.into_iter().map(|tool| tool.function_name().to_string()).collect();
-        if let Some(full_auto_allowlist) = self.tool_registry.current_full_auto_allowlist().await {
-            runtime_tool_names.extend(full_auto_allowlist);
+        // Stale-allowlist detection must run against the actually emitted
+        // current-mode tools, captured before the allowlist entries
+        // themselves are merged in below (matching after the merge would
+        // trivially succeed and the drift would stay silent).
+        let emitted_runtime_names = runtime_tool_names.clone();
+        let full_auto_allowlist = self.tool_registry.current_full_auto_allowlist().await;
+        if let Some(allowlist) = full_auto_allowlist.as_ref() {
+            runtime_tool_names.extend(allowlist.iter().cloned());
         }
         let supports_active_name_restriction = self.provider_client.supports_native_allowed_tools(&self.model);
-        let mut active_tool_names = Vec::new();
-        let mut exposed_definitions = Vec::new();
-        for tool in definitions {
-            let tool_name = tool.function_name().to_string();
-            if !self.is_tool_permitted_for_advertisement(tool_name.as_str()).await {
-                continue;
-            }
-            let active = runtime_tool_names.contains(&tool_name) && self.is_tool_exposed(tool_name.as_str()).await;
-            if active {
-                active_tool_names.push(tool_name);
-            }
-            if supports_active_name_restriction || active {
-                exposed_definitions.push(tool);
-            }
+        let (mut active_tool_names, mut exposed_definitions) = self
+            .advertise_snapshot_tools(&definitions, &runtime_tool_names, supports_active_name_restriction, true)
+            .await;
+        // Stale-allowlist fallback (mirrors the interactive tool_shaping
+        // guard): a non-empty full-auto allowlist whose entries match no
+        // emitted tool is pure config drift, so degrade to the unrestricted
+        // catalog for ADVERTISEMENT rather than handing the model a silent
+        // zero-tool catalog (fatal on routes without native allowed-tools,
+        // e.g. local models). An intentionally empty allowlist ("no tools
+        // allowed") and permission-denial collapses are left untouched, and
+        // execution dispatch keeps enforcing the allowlist at call time.
+        if exposed_definitions.is_empty()
+            && !definitions.is_empty()
+            && let Some(allowlist) = full_auto_allowlist.as_ref()
+            && !allowlist.is_empty()
+            && !allowlist.iter().any(|entry| emitted_runtime_names.contains(entry.as_str()))
+        {
+            tracing::warn!(
+                allowed_tools = ?allowlist,
+                "automation.full_auto.allowed_tools matched no emitted tool; falling back to the full catalog for advertisement (execution still enforces the allowlist)"
+            );
+            (active_tool_names, exposed_definitions) = self
+                .advertise_snapshot_tools(&definitions, &runtime_tool_names, supports_active_name_restriction, false)
+                .await;
         }
 
         Ok(self
@@ -99,6 +115,40 @@ impl AgentRunner {
                 planning_active,
                 request_user_input_enabled,
             ))
+    }
+
+    /// Partition `definitions` into advertised names and wire definitions.
+    ///
+    /// Extracted so `build_exposed_tool_snapshot` can re-run advertisement
+    /// with the full-auto allowlist suspended for the stale-allowlist
+    /// fallback without duplicating the permit/active/native gating.
+    async fn advertise_snapshot_tools(
+        &self,
+        definitions: &[ToolDefinition],
+        runtime_tool_names: &HashSet<String>,
+        supports_active_name_restriction: bool,
+        honor_full_auto_deny: bool,
+    ) -> (Vec<String>, Vec<ToolDefinition>) {
+        let mut active_tool_names = Vec::new();
+        let mut exposed_definitions = Vec::new();
+        for tool in definitions {
+            let tool_name = tool.function_name().to_string();
+            if !self
+                .tool_permitted_for_advertisement_inner(tool_name.as_str(), honor_full_auto_deny)
+                .await
+            {
+                continue;
+            }
+            let active = runtime_tool_names.contains(&tool_name)
+                && self.tool_exposed_inner(tool_name.as_str(), honor_full_auto_deny).await;
+            if active {
+                active_tool_names.push(tool_name);
+            }
+            if supports_active_name_restriction || active {
+                exposed_definitions.push(tool.clone());
+            }
+        }
+        (active_tool_names, exposed_definitions)
     }
 
     async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
