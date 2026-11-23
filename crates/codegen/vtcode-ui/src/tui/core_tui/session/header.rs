@@ -17,7 +17,7 @@ use super::terminal_capabilities;
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
 
-fn ultrafast_badge_style(colors_enabled: bool, safe_colors_only: bool, bold_is_bright: bool) -> Style {
+pub(crate) fn ultrafast_badge_style(colors_enabled: bool, safe_colors_only: bool, bold_is_bright: bool) -> Style {
     let mut style = Style::default().remove_modifier(Modifier::DIM | Modifier::REVERSED);
     style = if !colors_enabled {
         style.fg(Color::Reset).bg(Color::Reset).add_modifier(Modifier::REVERSED)
@@ -435,7 +435,7 @@ impl Session {
         (!tier.is_empty() && !tier.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| tier.to_owned())
     }
 
-    fn header_computer_use_short_value(&self) -> Option<String> {
+    pub(super) fn header_computer_use_short_value(&self) -> Option<String> {
         let raw = self.header_context.computer_use.as_deref()?;
         let state = Self::strip_prefix(raw, ui::HEADER_COMPUTER_USE_PREFIX).trim();
         (!state.is_empty() && !state.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| state.to_owned())

@@ -10,9 +10,9 @@ use vtcode_commons::formatting::{
     wrap_shell_command_with_continuations,
 };
 use vtcode_commons::tool_headlines::{
-    collect_param_details, compact_command_headline, describe_code_search, describe_fetch_action, describe_grep_file,
-    describe_list_files, exec_session_param_detail, mcp_tool_display_name, relativize_to_workspace,
-    unified_exec_action_label, write_stdin_action_label,
+    collect_param_details, compact_command_headline, describe_code_search, describe_computer_use,
+    describe_fetch_action, describe_grep_file, describe_list_files, exec_session_param_detail, mcp_tool_display_name,
+    relativize_to_workspace, unified_exec_action_label, write_stdin_action_label,
 };
 use vtcode_commons::ui_protocol::{CompactToolSummaryLine, CompactToolSummaryLineKind};
 
@@ -816,6 +816,10 @@ pub(crate) fn describe_tool_action(
                 || actual_name == tool_names::FETCH =>
         {
             let (desc, keys) = describe_fetch_action(args);
+            with_keys(desc, keys)
+        }
+        actual_name if actual_name == tool_names::COMPUTER_USE => {
+            let (desc, keys) = describe_computer_use(args);
             with_keys(desc, keys)
         }
         _ => with_mcp(format!("Use {}", humanize_tool_name(actual_tool_name)), HashSet::new()),

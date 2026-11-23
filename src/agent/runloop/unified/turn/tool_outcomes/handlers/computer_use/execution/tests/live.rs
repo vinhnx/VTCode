@@ -59,16 +59,16 @@ async fn computer_use_turn_executes_over_real_container() {
         &provider,
         request(),
         &e2e_config(),
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async { Ok(true) },
     )
     .await
     .unwrap();
+    let report = super::super::super::report::turn_report_lines(&outcome).join("\n");
+    assert!(!report.contains("base64"), "report must stay redacted");
     let ComputerTurnOutcomeKind::Completed { results, summary } = outcome.kind else {
         panic!(
             "expected completion, got {:?}; build the image first: docker build --tag {} browser",
@@ -98,16 +98,35 @@ async fn computer_use_turn_executes_over_real_container() {
         "real browser screenshot must be PNG payload, got {} bytes",
         shot_data.len()
     );
-    assert!(!summary.message("completed").contains("base64"), "summary must stay redacted");
 
+    // Progress streams every stage against the outer row; the wrapper owns
+    // start/completion, so a dispatcher-only run leaves progress only.
     let raw = std::fs::read_to_string(&path).unwrap();
-    let completed = raw
+    let events = raw
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|event| event["event"]["type"] == "item.completed")
         .collect::<Vec<_>>();
-    assert_eq!(completed.len(), 1);
-    assert_eq!(completed[0]["event"]["item"]["status"], serde_json::json!("completed"));
+    assert!(events.iter().all(|event| event["event"]["type"] != "item.completed"));
+    let updated = events
+        .iter()
+        .filter(|event| event["event"]["type"] == "item.updated")
+        .collect::<Vec<_>>();
+    assert!(!updated.is_empty(), "completed turn must stream progress");
+    let stages = updated
+        .iter()
+        .map(|update| update["event"]["item"]["output"].as_str().unwrap_or("").to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for stage in [
+        "Proposing actions with",
+        "awaiting approval",
+        "Approved 2 actions",
+        "Preview ready",
+        "Removing preview",
+    ] {
+        assert!(stages.contains(stage), "missing stage {stage:?}: {stages}");
+    }
+    assert!(!raw.contains("iVBORw0KGgo"), "screenshot bytes must never reach durable events");
 }
 
 /// Live dogfood: a real model drives a real computer turn against the real
@@ -183,16 +202,16 @@ async fn computer_use_live_turn_executes_over_real_container() {
         &provider,
         request,
         &e2e_config(),
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async { Ok(true) },
     )
     .await
     .unwrap();
+    let report = super::super::super::report::turn_report_lines(&outcome).join("\n");
+    assert!(!report.contains("base64"), "report must stay redacted");
     let ComputerTurnOutcomeKind::Completed { results, summary } = outcome.kind else {
         panic!("live turn must complete, got {:?}", outcome.kind);
     };
@@ -207,7 +226,6 @@ async fn computer_use_live_turn_executes_over_real_container() {
     };
     assert!(!outputs.is_empty(), "live turn returned no call outputs");
     assert!(outcome.usage.as_ref().is_some_and(|usage| usage.total_tokens > 0), "live turn must report usage");
-    assert!(!summary.message("completed").contains("base64"), "summary must stay redacted");
     eprintln!("live turn verified: {} executed units, usage={:?}", summary.executed_units, outcome.usage);
 }
 
@@ -255,12 +273,10 @@ async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
         &provider,
         request(),
         &e2e_config(),
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |approval| async move {
             assert_eq!(approval.action_kinds, vec!["screenshot".to_string(), "type".to_string()]);
             Ok(true)
@@ -268,6 +284,8 @@ async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
     )
     .await
     .unwrap();
+    let report = super::super::super::report::turn_report_lines(&outcome).join("\n");
+    assert!(!report.contains(TYPED_SENTINEL), "typed text must never reach the report");
     let ComputerTurnOutcomeKind::Completed { summary, .. } = outcome.kind else {
         panic!("expected completion, got {:?}", outcome.kind);
     };
@@ -276,7 +294,6 @@ async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
     let raw = std::fs::read_to_string(&path).unwrap();
     assert!(!raw.contains(TYPED_SENTINEL), "typed text must never reach durable events");
     assert!(!raw.contains("iVBORw0KGgo"), "screenshot bytes must never reach durable events");
-    assert!(!summary.message("completed").contains(TYPED_SENTINEL));
 }
 
 #[tokio::test]
@@ -309,12 +326,10 @@ async fn computer_use_turn_cancel_tears_down_launched_target() {
         &provider,
         request(),
         &e2e_config(),
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async {
             stop.request_local_cancel();
             notify.notify_one();
@@ -325,19 +340,12 @@ async fn computer_use_turn_cancel_tears_down_launched_target() {
     .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Cancelled));
 
+    // Progress only: approval streams, then the stop lands before any input
+    // runs. The wrapper completes the cancelled row; teardown still ran.
     let raw = std::fs::read_to_string(&path).unwrap();
-    let completed = raw
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|event| event["event"]["type"] == "item.completed")
-        .collect::<Vec<_>>();
-    assert_eq!(completed.len(), 1);
-    let output = completed[0]["event"]["item"]["output"].as_str().unwrap_or("");
-    assert!(output.contains("cancelled"), "verdict must be cancelled: {output}");
-    assert!(
-        output.contains("removed") || output.contains("already gone"),
-        "cancel must still tear the target down: {output}"
-    );
+    assert!(!raw.contains("item.completed"), "{raw}");
+    assert!(raw.contains("Approved 1 action (screenshot)"), "{raw}");
+    assert!(!raw.contains("Preview ready"), "{raw}");
 }
 
 #[cfg(unix)]
@@ -363,7 +371,13 @@ async fn launch_failure_message_preserves_error_chain() {
     let mut stats = SessionStats::default();
     let mut runtime = runtime(&stop, &notify, &mut stats);
     let turn = CancellationToken::new();
-    let execution = run_guarded_execution(&summary, Vec::new(), "img:1", &target, &config(), &mut runtime, &turn).await;
+    let progress = ComputerTurnProgress {
+        emitter: None,
+        item_id: "test-item",
+        call_id: "test-call",
+    };
+    let execution =
+        run_guarded_execution(&summary, Vec::new(), "img:1", &target, &config(), &mut runtime, &turn, progress).await;
     let GuardedOutcome::Failed { stage, message } = execution.outcome else {
         panic!("expected launch failure for missing build dir");
     };

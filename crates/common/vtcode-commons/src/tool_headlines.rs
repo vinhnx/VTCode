@@ -166,20 +166,6 @@ pub fn strip_mcp_prefix(tool_name: &str) -> &str {
     mcp_tool_display_name(tool_name).unwrap_or(tool_name)
 }
 
-/// Summarize a string list to two items plus an overflow count.
-#[must_use]
-pub fn summarize_list(items: &[String]) -> String {
-    if items.is_empty() {
-        return String::new();
-    }
-    let shown: Vec<String> = items.iter().take(2).map(|s| truncate_middle(s, 60)).collect();
-    if items.len() > 2 {
-        format!("{} +{} more", shown.join(", "), items.len() - 2)
-    } else {
-        shown.join(", ")
-    }
-}
-
 /// Raw content keys too verbose for a summary row (commands, file bodies).
 #[must_use]
 pub fn is_verbose_key(key: &str) -> bool {
@@ -332,7 +318,8 @@ pub fn exec_session_param_detail(args: &Value) -> Option<String> {
 
 mod descriptors;
 pub use descriptors::{
-    describe_code_search, describe_computer_use, describe_fetch_action, describe_grep_file, describe_list_files,
+    COMPUTER_USE_RUNNING_STATUS_PREFIX, describe_code_search, describe_computer_use, describe_fetch_action,
+    describe_grep_file, describe_list_files, status_is_computer_use_running, summarize_list,
 };
 
 /// Exact flag tokens that introduce an inline script for a runner.

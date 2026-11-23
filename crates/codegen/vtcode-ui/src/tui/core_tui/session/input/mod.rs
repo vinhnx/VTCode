@@ -180,13 +180,11 @@ impl Session {
         let shell_mode_title = self.shell_mode_border_title();
         let active_subagent_title = self.active_subagent_input_title();
         let active_subagent_border_style = self.active_subagent_input_border_style();
-        let mut block = if shell_mode_title.is_some() || active_subagent_title.is_some() {
-            Block::bordered()
-        } else {
-            Block::new()
-        };
+        let computer_use_title = self.computer_use_running_input_title();
+        let bordered = shell_mode_title.is_some() || active_subagent_title.is_some() || computer_use_title.is_some();
+        let mut block = if bordered { Block::bordered() } else { Block::new() };
         block = block.style(background_style).padding(self.input_block_padding());
-        if shell_mode_title.is_some() || active_subagent_title.is_some() {
+        if bordered {
             block = block.border_set(super::terminal_capabilities::get_border_set()).border_style(
                 active_subagent_border_style.unwrap_or_else(|| self.styles.accent_style().add_modifier(Modifier::BOLD)),
             );
@@ -195,6 +193,9 @@ impl Session {
             block = block.title_top(Line::from(title).left_aligned());
         }
         if let Some(title) = active_subagent_title {
+            block = block.title_top(title);
+        }
+        if let Some(title) = computer_use_title {
             block = block.title_top(title);
         }
         let inner = block.inner(input_area);
@@ -292,11 +293,10 @@ impl Session {
     }
 
     pub(crate) fn input_block_extra_height(&self) -> u16 {
-        if self.active_subagent_input_title().is_some() && !self.input_uses_shell_prefix() {
-            2
-        } else {
-            0
-        }
+        // Bordered titles add top+bottom rows; shell mode reserves its own chrome (existing behavior).
+        let bordered = !self.input_uses_shell_prefix()
+            && (self.active_subagent_input_title().is_some() || self.computer_use_running_input_title().is_some());
+        u16::from(bordered) * 2
     }
 
     fn input_layout(&self, width: u16, prompt_display_width: u16) -> InputLayout {

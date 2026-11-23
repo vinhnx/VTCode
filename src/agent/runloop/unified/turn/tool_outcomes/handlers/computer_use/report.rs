@@ -5,7 +5,10 @@
 
 use serde_json::Value;
 
-use super::execution::{ComputerTurnOutcome, ComputerTurnOutcomeKind, NativeTurnResults};
+use super::execution::{
+    ComputerTurnOutcome, ComputerTurnOutcomeKind, NativeTurnResults, RedactedTurnSummary, TeardownOutcome,
+};
+use super::review::BatchReviewVerdict;
 
 /// Shell-fallback recipe for an external-scope refusal, selected for the OS
 /// the turn runs on. Chrome flags are identical everywhere; only binary
@@ -69,9 +72,19 @@ pub(crate) fn turn_report_lines(outcome: &ComputerTurnOutcome) -> Vec<String> {
                 "Computer turn refused: {proposed} proposed actions exceed the budget of {max}."
             )]
         }
-        ComputerTurnOutcomeKind::ReviewHalted => {
-            vec!["Review halted the turn: the batch was judged SUSPECT.".to_string()]
-        }
+        ComputerTurnOutcomeKind::ReviewHalted { verdict } => match verdict {
+            BatchReviewVerdict::Halt => {
+                vec!["Review halted the turn: the batch was judged SUSPECT.".to_string()]
+            }
+            BatchReviewVerdict::Unreviewed { reason } => {
+                vec![format!(
+                    "Review halted the turn: the batch could not be screened ({reason}); nothing executed."
+                )]
+            }
+            // Unreachable: a Proceed verdict never halts. Degrade to the
+            // generic halt rather than naming a verdict that did not happen.
+            BatchReviewVerdict::Proceed => vec!["Review halted the turn.".to_string()],
+        },
         ComputerTurnOutcomeKind::Cancelled => vec!["Computer turn cancelled.".to_string()],
         ComputerTurnOutcomeKind::Failed { stage, message } => {
             vec![format!("Computer turn failed at the {stage:?} stage: {message}")]
@@ -81,10 +94,40 @@ pub(crate) fn turn_report_lines(outcome: &ComputerTurnOutcome) -> Vec<String> {
                 "Computer turn completed ({}): {} units.",
                 outcome.model, summary.executed_units
             )];
+            lines.push(summary_line(summary));
             lines.extend(result_report_lines(results));
             lines
         }
     }
+}
+
+/// Redacted one-line audit: routing metadata only (target, kinds, teardown,
+/// recipient, review state) — never typed text or image bytes. Shared by the
+/// model-facing tool result and the durable completion event, so the two can
+/// never disagree about what ran.
+fn summary_line(summary: &RedactedTurnSummary) -> String {
+    let review = match &summary.review {
+        None => String::new(),
+        Some(BatchReviewVerdict::Proceed) => "; reviewed".to_string(),
+        Some(BatchReviewVerdict::Halt) => "; review halted".to_string(),
+        Some(BatchReviewVerdict::Unreviewed { reason }) => format!("; review unreviewed ({reason})"),
+    };
+    let noun = if summary.action_count == 1 { "action" } else { "actions" };
+    format!(
+        "{} {} ({} {noun}: {}): target {} ({}); screenshots to {}{review}",
+        summary.target_kind,
+        summary.target,
+        summary.action_count,
+        summary.action_kinds.join(", "),
+        match &summary.teardown {
+            TeardownOutcome::NotLaunched => "not launched".to_string(),
+            TeardownOutcome::Removed => "removed".to_string(),
+            TeardownOutcome::AlreadyGone => "already gone".to_string(),
+            TeardownOutcome::Failed(error) => format!("teardown failed: {error}"),
+        },
+        summary.teardown_trigger,
+        summary.recipient,
+    )
 }
 
 /// Per-call verdicts without payloads: screenshots never reach the transcript.
@@ -115,6 +158,7 @@ fn result_report_lines(results: &NativeTurnResults) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::super::execution::{ComputerFailureStage, RedactedTurnSummary, TeardownOutcome};
+    use super::super::review::BatchReviewVerdict;
     use super::*;
 
     #[test]
@@ -233,7 +277,13 @@ mod tests {
                 ComputerTurnOutcomeKind::BudgetExceeded { proposed: 60, max: 50 },
                 "60 proposed actions exceed the budget of 50",
             ),
-            (ComputerTurnOutcomeKind::ReviewHalted, "SUSPECT"),
+            (ComputerTurnOutcomeKind::ReviewHalted { verdict: BatchReviewVerdict::Halt }, "SUSPECT"),
+            (
+                ComputerTurnOutcomeKind::ReviewHalted {
+                    verdict: BatchReviewVerdict::Unreviewed { reason: "timed out" },
+                },
+                "could not be screened (timed out)",
+            ),
             (ComputerTurnOutcomeKind::Cancelled, "cancelled."),
             (
                 ComputerTurnOutcomeKind::Failed {
@@ -256,6 +306,11 @@ mod tests {
             summary: summary.clone(),
         }));
         assert!(lines[0].contains("completed (test-model): 1 units"), "{lines:?}");
+        assert!(
+            lines.iter().any(|line| line
+                == "browser fixture-app (1 action: screenshot): target removed (finished); screenshots to test-model (test)"),
+            "{lines:?}"
+        );
         assert!(lines.iter().any(|line| line == "call c1 (#1): ok"), "{lines:?}");
         assert!(lines.iter().any(|line| line == "call c2 (#3): error"), "{lines:?}");
         assert!(!lines.iter().any(|line| line.contains("secret")), "{lines:?}");
@@ -265,5 +320,37 @@ mod tests {
         }));
         assert!(lines.iter().any(|line| line == "call call_1: ok"), "{lines:?}");
         assert!(!lines.iter().any(|line| line.contains("SECRET")), "{lines:?}");
+    }
+
+    #[test]
+    fn completed_summary_line_names_routing_and_review_state() {
+        // The audit line carries routing metadata only: target, kinds,
+        // teardown, recipient, and the review verdict when the review ran.
+        let summary = |review| RedactedTurnSummary {
+            target_kind: "browser",
+            target: "fixture-app".to_string(),
+            recipient: "test-model (test)".to_string(),
+            action_kinds: vec!["click".to_string()],
+            action_count: 1,
+            executed_units: 1,
+            review,
+            teardown_trigger: "finished",
+            teardown: TeardownOutcome::Removed,
+        };
+        for (review, needle) in [
+            (None, "; screenshots to test-model (test)"),
+            (Some(BatchReviewVerdict::Proceed), "; reviewed"),
+            (Some(BatchReviewVerdict::Halt), "; review halted"),
+            (Some(BatchReviewVerdict::Unreviewed { reason: "timed out" }), "; review unreviewed (timed out)"),
+        ] {
+            let line = summary_line(&summary(review));
+            assert!(line.contains(needle), "{line:?} missing {needle}");
+            assert!(line.contains("browser fixture-app (1 action: click)"), "{line:?}");
+            assert!(line.contains("target removed (finished)"), "{line:?}");
+        }
+        // Asymmetric: a failed teardown flips the target phrase, never the shape.
+        let mut failed = summary(None);
+        failed.teardown = TeardownOutcome::Failed("boom".to_string());
+        assert!(summary_line(&failed).contains("target teardown failed: boom (finished)"));
     }
 }

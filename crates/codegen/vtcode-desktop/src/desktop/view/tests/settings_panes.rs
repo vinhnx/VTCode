@@ -436,3 +436,92 @@ fn computer_use_configure_lands_on_the_browser_target_setting(cx: &mut TestAppCo
     })
     .unwrap();
 }
+
+fn computer_use_snapshot(enabled: bool) -> std::rc::Rc<vtcode_desktop_protocol::ConfigSettingsSnapshot> {
+    std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+        settings: vec![config_page_setting(
+            "computer_use.enabled",
+            json!(enabled),
+            "Computer Use",
+        )],
+        target_versions: Vec::new(),
+        omitted_sensitive: 0,
+        omitted_large: 0,
+        omitted_limit: 0,
+    })
+}
+
+#[gpui_kit::test]
+fn computer_use_composer_badge_follows_the_master_switch(cx: &mut TestAppContext) {
+    // The premium badge mounts above the input while CUA is on and unmounts
+    // when it turns off; the label reuses the settings group string.
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.cli_config_settings = Some(computer_use_snapshot(false));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("computer-use-composer-badge").is_none());
+        assert!(!view.read(cx).computer_use_enabled());
+
+        view.update(cx, |view, _| {
+            view.cli_config_settings = Some(computer_use_snapshot(true));
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("computer-use-composer-badge").label(), Some("Computer use On"));
+        assert!(view.read(cx).computer_use_enabled());
+
+        view.update(cx, |view, _| {
+            view.cli_config_settings = Some(computer_use_snapshot(false));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("computer-use-composer-badge").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn computer_use_running_tracks_live_computer_rows(cx: &mut TestAppContext) {
+    // Only a running row owned by the computer-use tool arms the composer's
+    // accent: other tools' rows and settled computer rows keep it idle.
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            assert!(!view.computer_use_running());
+            let mut other = TranscriptItem::new(
+                "tool-read".into(),
+                "tool".into(),
+                "Read Cargo.toml".into(),
+                "running\nreading".into(),
+            );
+            other.has_activity_status = true;
+            other.tool_name = Some("read_file".into());
+            view.transcript.push(other);
+            assert!(!view.computer_use_running(), "other tools must not arm the accent");
+
+            let mut settled = TranscriptItem::new(
+                "tool-cua-done".into(),
+                "tool".into(),
+                "Computer use: shot".into(),
+                "completed\nretired".into(),
+            );
+            settled.has_activity_status = true;
+            settled.tool_name = Some("computer_use".into());
+            view.transcript.push(settled);
+            assert!(!view.computer_use_running(), "settled rows must not arm the accent");
+
+            let mut running = TranscriptItem::new(
+                "tool-cua-live".into(),
+                "tool".into(),
+                "Computer use: shot".into(),
+                "running\nProposing actions…".into(),
+            );
+            running.has_activity_status = true;
+            running.tool_name = Some("computer_use".into());
+            view.transcript.push(running);
+            assert!(view.computer_use_running(), "a live computer row arms the accent");
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+}

@@ -19,10 +19,7 @@ use vtcode_computer_use::browser::BrowserDriver;
 use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, TerminateOutcome, docker_available};
 use vtcode_computer_use::{Driver, TurnControl};
 use vtcode_config::ComputerUseConfig;
-use vtcode_core::exec::events::{
-    ItemCompletedEvent, ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus,
-    ToolInvocationItem, ToolOutputItem,
-};
+use vtcode_core::core::agent::events::tool_output_updated_event;
 use vtcode_core::llm::provider::{
     LLMProvider, LLMRequest, NativeCall, NativeCallBody, NativeProvider, ToolCall, Usage,
 };
@@ -31,17 +28,38 @@ use vtcode_llm::providers::anthropic::computer_use as anthropic_use;
 use vtcode_llm::providers::openai::computer_use as openai_use;
 
 use super::review::{BatchReviewVerdict, ComputerBatchSummary, REVIEW_TIMEOUT, review_computer_batch};
-use super::{ApprovalRequest, ComputerUseTarget, TOOL_NAME, action_kind, approval_args};
+use super::{ApprovalRequest, ComputerUseTarget, action_kind};
 use crate::agent::runloop::unified::auto_permission::wait_for_stop;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 
-/// Stop signal, accounting, and event sinks for one computer turn.
+/// Stop signal and accounting for one computer turn. Progress events ride
+/// the separate [`ComputerTurnProgress`] sink, which also carries the
+/// outer row identity the updates address.
 pub(crate) struct ComputerTurnRuntime<'a> {
     pub stop: &'a CtrlCState,
     pub notify: &'a Notify,
     pub stats: &'a mut SessionStats,
+}
+
+/// Redacted progress sink for one computer turn: stage updates ride the
+/// existing output-item channel against the outer tool row, so transcripts
+/// stream without new event types. The `computer_use` wrapper owns
+/// invocation start/completion; the dispatcher only ever emits progress.
+#[derive(Clone, Copy)]
+pub(crate) struct ComputerTurnProgress<'a> {
     pub emitter: Option<&'a HarnessEventEmitter>,
+    pub item_id: &'a str,
+    pub call_id: &'a str,
+}
+
+impl ComputerTurnProgress<'_> {
+    fn emit(&self, message: String) {
+        let Some(emitter) = self.emitter else {
+            return;
+        };
+        let _ = emitter.emit(tool_output_updated_event(self.item_id.to_string(), Some(self.call_id), message));
+    }
 }
 
 /// Where a computer turn failed.
@@ -79,34 +97,6 @@ pub(crate) struct RedactedTurnSummary {
     pub teardown: TeardownOutcome,
 }
 
-impl RedactedTurnSummary {
-    fn message(&self, outcome: &str) -> String {
-        let review = match &self.review {
-            None => String::new(),
-            Some(BatchReviewVerdict::Proceed) => "; reviewed".to_string(),
-            Some(BatchReviewVerdict::Halt) => "; review halted".to_string(),
-            Some(BatchReviewVerdict::Unreviewed { reason }) => {
-                format!("; review unreviewed ({reason})")
-            }
-        };
-        format!(
-            "computer_use {} {} ({} actions: {}): {outcome}; target {} ({}); screenshots to {}{review}",
-            self.target_kind,
-            self.target,
-            self.action_count,
-            self.action_kinds.join(", "),
-            match &self.teardown {
-                TeardownOutcome::NotLaunched => "not launched".to_string(),
-                TeardownOutcome::Removed => "removed".to_string(),
-                TeardownOutcome::AlreadyGone => "already gone".to_string(),
-                TeardownOutcome::Failed(error) => format!("teardown failed: {error}"),
-            },
-            self.teardown_trigger,
-            self.recipient,
-        )
-    }
-}
-
 /// How a computer turn ended. Usage rides alongside for turn-level accounting.
 #[derive(Debug)]
 pub(crate) struct ComputerTurnOutcome {
@@ -131,8 +121,10 @@ pub(crate) enum ComputerTurnOutcomeKind {
     ApprovalDenied,
     /// Proposed actions exceeded the configured budget.
     BudgetExceeded { proposed: usize, max: usize },
-    /// Decisions review judged the proposed actions suspect.
-    ReviewHalted,
+    /// Decisions review halted the batch: suspect, or unscreened because the
+    /// review could not conclude. The verdict rides along so the report can
+    /// name which without re-deriving it.
+    ReviewHalted { verdict: BatchReviewVerdict },
     /// Executed to completion with wire results and a redacted summary.
     Completed {
         results: NativeTurnResults,
@@ -145,21 +137,6 @@ pub(crate) enum ComputerTurnOutcomeKind {
     },
     /// Stopped; input halted and the target removed.
     Cancelled,
-}
-
-impl ComputerTurnOutcomeKind {
-    fn outcome_word(&self) -> &'static str {
-        match self {
-            Self::Disabled { .. } => "disabled",
-            Self::NoNativeCalls { .. } => "no native calls",
-            Self::ApprovalDenied => "approval denied",
-            Self::BudgetExceeded { .. } => "budget exceeded",
-            Self::ReviewHalted => "review halted",
-            Self::Completed { .. } => "completed",
-            Self::Failed { .. } => "failed",
-            Self::Cancelled => "cancelled",
-        }
-    }
 }
 
 /// Display data derived from decoded native calls.
@@ -240,22 +217,32 @@ pub(crate) enum ComputerTurnProposal {
 
 /// Test-only combined entry: production flows propose, approve through the
 /// permission flow, then execute, so only tests drive turns end to end.
+/// Progress streams against the caller-supplied outer row identity, exactly
+/// as the wrapper supplies it in production.
 #[cfg(test)]
 pub(crate) async fn run_computer_turn<Fut>(
     provider: &dyn LLMProvider,
     request: LLMRequest,
     config: &ComputerUseConfig,
     runtime: &mut ComputerTurnRuntime<'_>,
+    emitter: Option<&HarnessEventEmitter>,
+    harness_item_id: &str,
+    tool_call_id: &str,
     approve: impl FnOnce(ApprovalRequest) -> Fut,
 ) -> Result<ComputerTurnOutcome>
 where
     Fut: Future<Output = Result<bool>>,
 {
-    match propose_computer_turn(provider, request, config, runtime).await? {
+    let progress = ComputerTurnProgress {
+        emitter,
+        item_id: harness_item_id,
+        call_id: tool_call_id,
+    };
+    match propose_computer_turn(provider, request, config, runtime, progress).await? {
         ComputerTurnProposal::Done(outcome) => Ok(outcome),
         ComputerTurnProposal::Proceed(proposed) => {
             let granted = approve(proposed.approval.clone()).await?;
-            execute_proposed_turn(proposed, config, runtime, granted).await
+            execute_proposed_turn(proposed, config, runtime, granted, progress).await
         }
     }
 }
@@ -276,12 +263,14 @@ fn requested_task(request: &LLMRequest) -> String {
 
 /// Run the turn through batch proposal: gates, native generation, budget,
 /// and Decisions review. Returns `Done` for every terminal-before-approval
-/// outcome; `Proceed` carries a turn with nothing launched.
+/// outcome; `Proceed` carries a turn with nothing launched. Proposal streams
+/// progress only; the wrapper completes the outer row for every outcome.
 pub(crate) async fn propose_computer_turn(
     provider: &dyn LLMProvider,
     request: LLMRequest,
     config: &ComputerUseConfig,
     runtime: &mut ComputerTurnRuntime<'_>,
+    progress: ComputerTurnProgress<'_>,
 ) -> Result<ComputerTurnProposal> {
     let model = request.model.clone();
     // Capture before `generate_native` consumes the request. This is the
@@ -306,6 +295,7 @@ pub(crate) async fn propose_computer_turn(
     let target = ComputerUseTarget::Browser { build_dir };
     let recipient = format!("{} ({})", request.model, provider.name());
 
+    progress.emit(format!("Proposing actions with {model}…"));
     let response = tokio::select! {
         biased;
         _ = wait_for_stop(runtime.stop, runtime.notify) => {
@@ -385,34 +375,14 @@ pub(crate) async fn propose_computer_turn(
     record_review_usage(&mut *runtime.stats, provider.name(), &review);
     // An enabled review is the only semantic injection screen: the human
     // approves action kinds, not payloads. If it could not conclude, refuse
-    // the batch instead of letting an unscreened one reach the target.
+    // the batch instead of letting an unscreened one reach the target. The
+    // refusal itself is audit material; the wrapper completes the outer row
+    // with it, so proposal emits nothing terminal here.
     if !matches!(review.verdict, BatchReviewVerdict::Proceed) {
-        // Terminal evidence without a start event: the turn halted before
-        // approval, so nothing launched, but the refusal itself is audit
-        // material and must reach durable events.
         let kind = match &review.verdict {
             BatchReviewVerdict::Unreviewed { reason: "cancelled" } => ComputerTurnOutcomeKind::Cancelled,
-            _ => ComputerTurnOutcomeKind::ReviewHalted,
+            _ => ComputerTurnOutcomeKind::ReviewHalted { verdict: review.verdict.clone() },
         };
-        let item_id = format!("computer_use:{}", summary.call_ids.first().map_or("turn", String::as_str));
-        let redacted = RedactedTurnSummary {
-            target_kind: target.kind(),
-            target: target.display(),
-            recipient,
-            action_kinds: summary.kinds.clone(),
-            action_count: summary.valid_actions,
-            executed_units: 0,
-            review: Some(review.verdict),
-            teardown_trigger: "review",
-            teardown: TeardownOutcome::NotLaunched,
-        };
-        emit_computer_turn_completed(
-            runtime.emitter,
-            &item_id,
-            summary.call_ids.first(),
-            &redacted.message(kind.outcome_word()),
-            ToolCallStatus::Failed,
-        );
         return Ok(ComputerTurnProposal::Done(ComputerTurnOutcome { kind, model, usage }));
     }
 
@@ -423,6 +393,24 @@ pub(crate) async fn propose_computer_turn(
         action_kinds: summary.kinds.clone(),
         action_count: summary.valid_actions,
     };
+    let batch_noun = if summary.valid_actions == 1 {
+        "action"
+    } else {
+        "actions"
+    };
+    if review_armed {
+        progress.emit(format!(
+            "Safety review passed — proposed {} {batch_noun} ({}), awaiting approval…",
+            summary.valid_actions,
+            summary.kinds.join(", "),
+        ));
+    } else {
+        progress.emit(format!(
+            "Proposed {} {batch_noun} ({}), awaiting approval…",
+            summary.valid_actions,
+            summary.kinds.join(", "),
+        ));
+    }
     Ok(ComputerTurnProposal::Proceed(ProposedComputerTurn {
         approval,
         model,
@@ -439,15 +427,17 @@ pub(crate) async fn propose_computer_turn(
 
 /// Execute a proposed turn after the human decision. Denial ends the turn
 /// before anything launches; approval launches, executes, and tears down
-/// through the same guarded path as before.
+/// through the same guarded path as before. Execution streams progress
+/// only; the wrapper completes the outer row for every outcome.
 pub(crate) async fn execute_proposed_turn(
     proposed: ProposedComputerTurn,
     config: &ComputerUseConfig,
     runtime: &mut ComputerTurnRuntime<'_>,
     granted: bool,
+    progress: ComputerTurnProgress<'_>,
 ) -> Result<ComputerTurnOutcome> {
     let ProposedComputerTurn {
-        approval,
+        approval: _,
         model,
         usage,
         calls,
@@ -470,10 +460,18 @@ pub(crate) async fn execute_proposed_turn(
         });
     }
 
-    let item_id = format!("computer_use:{}", summary.call_ids.first().map_or("turn", String::as_str));
-    let started_args = approval_args(&approval);
-    emit_computer_turn_started(runtime.emitter, &item_id, &started_args, summary.call_ids.first());
-    let execution = run_guarded_execution(&summary, calls, &config.image, &target, config, runtime, &turn_token).await;
+    let batch_noun = if summary.valid_actions == 1 {
+        "action"
+    } else {
+        "actions"
+    };
+    progress.emit(format!(
+        "Approved {} {batch_noun} ({}) — launching preview…",
+        summary.valid_actions,
+        summary.kinds.join(", "),
+    ));
+    let execution =
+        run_guarded_execution(&summary, calls, &config.image, &target, config, runtime, &turn_token, progress).await;
     let executed_units = match &execution.outcome {
         GuardedOutcome::Completed { units, .. } => *units,
         _ => 0,
@@ -496,17 +494,6 @@ pub(crate) async fn execute_proposed_turn(
         GuardedOutcome::Failed { stage, message } => ComputerTurnOutcomeKind::Failed { stage, message },
         GuardedOutcome::Cancelled => ComputerTurnOutcomeKind::Cancelled,
     };
-    let status = match &kind {
-        ComputerTurnOutcomeKind::Completed { .. } => ToolCallStatus::Completed,
-        _ => ToolCallStatus::Failed,
-    };
-    emit_computer_turn_completed(
-        runtime.emitter,
-        &item_id,
-        summary.call_ids.first(),
-        &redacted.message(kind.outcome_word()),
-        status,
-    );
     Ok(ComputerTurnOutcome { kind, model, usage })
 }
 
@@ -560,6 +547,7 @@ async fn run_guarded_execution(
     config: &ComputerUseConfig,
     runtime: &mut ComputerTurnRuntime<'_>,
     turn: &CancellationToken,
+    progress: ComputerTurnProgress<'_>,
 ) -> GuardedExecution {
     let turn_timeout = Duration::from_secs(config.turn_timeout_secs);
     let launched = async {
@@ -597,6 +585,16 @@ async fn run_guarded_execution(
             teardown,
         };
     }
+    let batch_noun = if summary.valid_actions == 1 {
+        "action"
+    } else {
+        "actions"
+    };
+    progress.emit(format!(
+        "Preview ready — running {} {batch_noun} ({})…",
+        summary.valid_actions,
+        summary.kinds.join(", "),
+    ));
     let mut control = TurnControl::after_approval(driver, turn);
     let executed = tokio::time::timeout(turn_timeout, async {
         tokio::select! {
@@ -605,7 +603,7 @@ async fn run_guarded_execution(
                 turn.cancel();
                 None
             }
-            result = execute_native_calls(summary.provider, &mut control, native_calls, turn_timeout)
+            result = execute_native_calls(summary.provider, &mut control, native_calls, turn_timeout, progress)
             => Some(result),
         }
     })
@@ -631,6 +629,7 @@ async fn run_guarded_execution(
             }
         }
     };
+    progress.emit("Removing preview target…".to_string());
     let teardown = terminate_for_audit(&handle).await;
     // A teardown failure after completion changes the verdict: the target
     // state is unknown, so success must not be reported.
@@ -671,12 +670,15 @@ fn record_review_usage(stats: &mut SessionStats, provider: &str, review: &super:
 /// Execute decoded natives against one live target. Anthropic calls run as
 /// one batch with halt/skip semantics; OpenAI calls run in order, failing
 /// the turn on the first malformed or failed call. Returns wire results and
-/// the answered unit count.
+/// the answered unit count. OpenAI progress names each call (ids correlate
+/// with the completion verdicts); the Anthropic batch is one unit, so its
+/// pre-batch line above is the only per-turn progress it needs.
 async fn execute_native_calls<D: Driver>(
     provider_kind: NativeProvider,
     control: &mut TurnControl<D>,
     native_calls: Vec<NativeCall>,
     timeout: Duration,
+    progress: ComputerTurnProgress<'_>,
 ) -> Result<(NativeTurnResults, usize)> {
     match provider_kind {
         NativeProvider::Anthropic => {
@@ -685,68 +687,25 @@ async fn execute_native_calls<D: Driver>(
             Ok((NativeTurnResults::Anthropic(results), units))
         }
         NativeProvider::OpenAi => {
-            let mut results = Vec::with_capacity(native_calls.len());
-            for call in native_calls {
+            let total = native_calls.len();
+            let mut results = Vec::with_capacity(total);
+            for (index, call) in native_calls.into_iter().enumerate() {
+                let kinds = match &call.body {
+                    NativeCallBody::OpenAi { actions, .. } => actions
+                        .iter()
+                        .map(action_kind)
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    NativeCallBody::Anthropic { .. } => "batch".to_string(),
+                };
+                progress.emit(format!("Running call {}/{total} ({}, {kinds})…", index + 1, call.id));
                 results.push(openai_use::execute_decoded_call(control, call, timeout).await?);
             }
             let units = results.len();
             Ok((NativeTurnResults::OpenAi(results), units))
         }
     }
-}
-
-/// Emit the invocation event when execution begins.
-fn emit_computer_turn_started(
-    emitter: Option<&HarnessEventEmitter>,
-    item_id: &str,
-    args: &Value,
-    call_id: Option<&String>,
-) {
-    let Some(emitter) = emitter else {
-        return;
-    };
-    let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: ThreadItem {
-            id: item_id.to_string(),
-            context: None,
-            details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
-                tool_name: TOOL_NAME.to_string(),
-                arguments: Some(args.clone()),
-                tool_call_id: call_id.cloned(),
-                status: ToolCallStatus::InProgress,
-                outcome: None,
-            })),
-        },
-    }));
-}
-
-/// Emit the completion event with the redacted summary.
-fn emit_computer_turn_completed(
-    emitter: Option<&HarnessEventEmitter>,
-    item_id: &str,
-    call_id: Option<&String>,
-    summary: &str,
-    status: ToolCallStatus,
-) {
-    let Some(emitter) = emitter else {
-        return;
-    };
-    let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: ThreadItem {
-            id: format!("{item_id}:output"),
-            context: None,
-            details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
-                is_delta: None,
-                call_id: item_id.to_string(),
-                tool_call_id: call_id.cloned(),
-                spool_path: None,
-                output: summary.to_string(),
-                exit_code: None,
-                status,
-                app_previews: Vec::new(),
-            })),
-        },
-    }));
 }
 
 #[cfg(test)]

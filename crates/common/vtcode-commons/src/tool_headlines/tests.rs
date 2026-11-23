@@ -266,6 +266,62 @@ fn describe_computer_use_phrases_task_gist_with_fallback() {
 }
 
 #[test]
+fn describe_computer_use_phrases_approval_batch_without_task() {
+    // Approval-shaped payloads (no task key) stay specific: count plus the
+    // summarized kinds. Each arm reports exactly the keys it consumed so
+    // detail lines never echo the title.
+    assert_eq!(
+        describe_computer_use(&json!({ "action_count": 3, "action_kinds": ["click", "type", "screenshot"] })),
+        ("Computer use: 3 actions (click, type +1 more)".to_string(), &["action_count", "action_kinds"][..])
+    );
+    assert_eq!(
+        describe_computer_use(&json!({ "action_count": 1, "action_kinds": [] })),
+        ("Computer use: 1 action".to_string(), &["action_count"][..])
+    );
+    assert_eq!(
+        describe_computer_use(&json!({ "action_kinds": ["screenshot"] })),
+        ("Computer use: screenshot".to_string(), &["action_kinds"][..])
+    );
+    // Asymmetric: a blank task falls through to the batch arm, and the task
+    // arm wins when both shapes are present (the merged dispatcher args).
+    assert_eq!(
+        describe_computer_use(&json!({ "task": "  ", "action_count": 2 })),
+        ("Computer use: 2 actions".to_string(), &["action_count"][..])
+    );
+    assert_eq!(
+        describe_computer_use(&json!({ "task": "open settings", "action_count": 2 })),
+        ("Computer use: open settings".to_string(), &["task"][..])
+    );
+    assert_eq!(
+        verb_callout_headline("computer_use", &json!({ "action_count": 2, "action_kinds": ["click"] }), None),
+        "Computer use: 2 actions (click)"
+    );
+}
+
+#[test]
+fn computer_use_running_status_matches_prefix_only() {
+    // The runloop sets this footer text at turn start; the TUI input reads
+    // it back to paint the running accent. Task gists and stage suffixes
+    // ride after the prefix and never affect detection.
+    for running in [
+        "Running Computer use: take a screenshot",
+        "Running Computer use — launching preview…",
+        "  Running Computer use: padded",
+    ] {
+        assert!(status_is_computer_use_running(running), "{running:?} marks a running turn");
+    }
+    for idle in [
+        "",
+        "Running tool: computer_use",
+        "Running command: computer_use",
+        "Computer use: on",
+        "running computer use: lowercase",
+    ] {
+        assert!(!status_is_computer_use_running(idle), "{idle:?} must not mark a running turn");
+    }
+}
+
+#[test]
 fn describe_list_files_phrases_location_then_patterns() {
     assert_eq!(
         describe_list_files(&json!({ "path": "checkpoints" }), None),

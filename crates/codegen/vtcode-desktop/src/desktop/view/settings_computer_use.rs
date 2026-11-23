@@ -126,6 +126,19 @@ impl DesktopView {
         snapshot_bool(self.cli_config_settings.as_deref(), COMPUTER_USE_ENABLED_PATH)
     }
 
+    /// Whether a computer-use turn is streaming right now: any running tool
+    /// row owned by the computer-use tool. Drives the composer's running
+    /// accent; the enabled switch alone drives the badge.
+    pub(super) fn computer_use_running(&self) -> bool {
+        self.transcript.items().any(|item| {
+            item.is_running_tool()
+                && item
+                    .tool_name
+                    .as_deref()
+                    .is_some_and(|name| name == vtcode_config::constants::tools::COMPUTER_USE)
+        })
+    }
+
     /// Flip the master switch through the shared CLI config service.
     pub(super) fn toggle_computer_use(&mut self, cx: &mut Context<Self>) {
         let enabled = !self.computer_use_enabled();
@@ -139,6 +152,29 @@ impl DesktopView {
     /// Switch, and turns fail closed until a target is set.
     pub(super) fn set_computer_use_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.save_cli_config_value(COMPUTER_USE_ENABLED_PATH.to_string(), Value::Bool(enabled), cx);
+    }
+
+    /// Premium computer-use badge above the composer input, mounted only
+    /// while the master switch is on. Shares the settings title's pill idiom
+    /// (primary fill, Computer glyph) and reuses its locale keys, so no
+    /// translation churn; the running accent lives on the input frame below.
+    pub(super) fn computer_use_composer_badge(cx: &App) -> AnyElement {
+        let label = rust_i18n::t!("app.settings.computer_use.group").to_string();
+        let state = rust_i18n::t!("app.settings.computer_use.status_on").to_string();
+        div()
+            .w_full()
+            .flex()
+            .items_center()
+            .pb_1()
+            .child(status_pill(
+                "computer-use-composer-badge",
+                rust_i18n::t!("app.settings.computer_use.status_aria", state = state).to_string(),
+                label,
+                true,
+                Some(IconName::Computer),
+                &cx.theme().colors,
+            ))
+            .into_any_element()
     }
 
     pub(super) fn set_computer_use_decisions_review(&mut self, enabled: bool, cx: &mut Context<Self>) {

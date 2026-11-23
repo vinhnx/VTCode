@@ -25,6 +25,10 @@ and records only a redacted summary in the conversation.
   text and images in the page cannot grant permission, widen the task, or override your
   request. If the preview asks for credentials, secrets, or out-of-task actions, the model
   stops and reports instead of acting; the human approval remains the final control.
+- **Live feedback while it runs.** The transcript row streams each stage — proposing,
+  awaiting approval, launching, executing, teardown — and the completion names the
+  target, action kinds, and teardown. The chat input shows a Computer Use badge while
+  the switch is on and paints its border in the theme accent while a turn runs.
 
 ## Enabling it
 

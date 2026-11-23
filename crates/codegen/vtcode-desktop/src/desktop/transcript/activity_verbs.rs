@@ -8,8 +8,8 @@
 use std::path::Path;
 
 use vtcode_commons::tool_headlines::{
-    describe_grep_file, describe_list_files, search_headline, session_followup_title, strip_mcp_prefix,
-    verb_callout_headline,
+    describe_computer_use, describe_grep_file, describe_list_files, search_headline, session_followup_title,
+    strip_mcp_prefix, verb_callout_headline,
 };
 use vtcode_exec_events::{ThreadItemDetails, ToolInvocationItem};
 
@@ -220,6 +220,7 @@ pub(crate) fn extra_gist_keys(tool: &ToolInvocationItem) -> &'static [&'static s
         "grep_file" => describe_grep_file(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
         "list_files" => describe_list_files(args, None).map(|(_, keys)| keys).unwrap_or(&[]),
         "code_search" | "grep" => search_headline(&tool.tool_name, args).map(|(_, keys)| keys).unwrap_or(&[]),
+        "computer_use" => describe_computer_use(args).1,
         _ => &[],
     }
 }
@@ -369,5 +370,33 @@ mod tests {
         let empty: &[&str] = &[];
         assert_eq!(keys("code_search", json!({"limit": 5})), empty);
         assert_eq!(keys("read_file", json!({"path": "a"})), empty);
+    }
+
+    #[test]
+    fn computer_use_gist_and_keys_follow_consumption() {
+        use serde_json::json;
+        // Task gist wins (the merged dispatcher args); batch shape covers
+        // approval-shaped payloads; the bare verb consumes nothing.
+        assert_eq!(
+            gist_with("computer_use", Some(json!({"task": "open settings"})), None),
+            "Computer use: open settings"
+        );
+        assert_eq!(
+            gist_with("computer_use", Some(json!({"action_count": 2, "action_kinds": ["click", "type"]})), None),
+            "Computer use: 2 actions (click, type)"
+        );
+        assert_eq!(gist_with("computer_use", Some(json!({"other": 1})), None), "Use computer");
+        let keys = |arguments: serde_json::Value| {
+            extra_gist_keys(&ToolInvocationItem {
+                tool_name: "computer_use".into(),
+                arguments: Some(arguments),
+                tool_call_id: None,
+                status: ToolCallStatus::Completed,
+                outcome: None,
+            })
+        };
+        assert_eq!(keys(json!({"task": "a", "action_count": 2})), &["task"][..]);
+        assert_eq!(keys(json!({"action_count": 2, "action_kinds": ["click"]})), &["action_count", "action_kinds"][..]);
+        assert_eq!(keys(json!({"other": 1})), &[] as &[&str]);
     }
 }

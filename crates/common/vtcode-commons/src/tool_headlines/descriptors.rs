@@ -8,6 +8,20 @@
 
 use super::*;
 
+/// Summarize a string list to two items plus an overflow count.
+#[must_use]
+pub fn summarize_list(items: &[String]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let shown: Vec<String> = items.iter().take(2).map(|s| truncate_middle(s, 60)).collect();
+    if items.len() > 2 {
+        format!("{} +{} more", shown.join(", "), items.len() - 2)
+    } else {
+        shown.join(", ")
+    }
+}
+
 /// Headline for `list_files`: location first, then the name and content
 /// pattern fallbacks. Reports exactly the keys its headline consumed, so
 /// detail collection hides if and only if the title phrased them.
@@ -86,12 +100,48 @@ pub fn describe_fetch_action(args: &Value) -> (String, &'static [&'static str]) 
     ("Use Fetch".to_string(), &[])
 }
 
-/// Headline for `computer_use`: the task gist, truncated. Falls back to a
-/// bare verb when no task is present, consuming no keys.
+/// Headline for `computer_use`: the task gist first, then the redacted
+/// batch shape (action count/kinds from the approval args), then a bare
+/// verb. The dispatcher merges the task with the approved batch into one
+/// args object, so the task arm keeps the running row stable while the
+/// batch arm keeps approval-shaped payloads specific instead of generic.
+/// Reports exactly the keys the headline consumed.
 #[must_use]
 pub fn describe_computer_use(args: &Value) -> (String, &'static [&'static str]) {
     if let Some(task) = lookup_string(args, "task") {
         return (format!("Computer use: {}", truncate_middle(&task, 60)), &["task"]);
     }
-    ("Use computer".to_string(), &[])
+    let count = args.get("action_count").and_then(Value::as_u64);
+    let kinds: Vec<String> = args
+        .get("action_kinds")
+        .and_then(Value::as_array)
+        .map(|kinds| kinds.iter().filter_map(|kind| kind.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    let noun = |count: u64| if count == 1 { "action" } else { "actions" };
+    match (count, kinds.is_empty()) {
+        (Some(count), false) => (
+            format!("Computer use: {count} {} ({})", noun(count), summarize_list(&kinds)),
+            &["action_count", "action_kinds"],
+        ),
+        (Some(count), true) => (format!("Computer use: {count} {}", noun(count)), &["action_count"]),
+        (None, false) => (format!("Computer use: {}", summarize_list(&kinds)), &["action_kinds"]),
+        (None, true) => ("Use computer".to_string(), &[]),
+    }
+}
+
+/// Footer-status prefix the runloop sets while a computer-use turn is
+/// active (`Running Computer use: <task gist>`). The TUI input reads it
+/// back through [`status_is_computer_use_running`] to paint the running
+/// accent; both sides share this const so the signal can never drift from
+/// the detector. Stage updates keep the prefix and append after it.
+pub const COMPUTER_USE_RUNNING_STATUS_PREFIX: &str = "Running Computer use";
+
+/// Whether footer status text marks an active computer-use turn.
+///
+/// Leading whitespace is tolerated (status lines are trimmed at render,
+/// not at rest). Matches the prefix only, so task gists and stage
+/// suffixes never affect detection.
+#[must_use]
+pub fn status_is_computer_use_running(status: &str) -> bool {
+    status.trim_start().starts_with(COMPUTER_USE_RUNNING_STATUS_PREFIX)
 }

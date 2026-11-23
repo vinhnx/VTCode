@@ -6,8 +6,9 @@ mod recorder;
 pub use context::{ExecutionContextTracker, decision_completed_event, validate_decision_input};
 pub use lifecycle::{
     SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event, file_change_completed_event,
-    tool_invocation_completed_event, tool_output_completed_event, tool_output_delta_event, tool_output_item_id,
-    tool_output_payload_from_value, tool_output_started_event, tool_output_updated_event, tool_started_event,
+    tool_invocation_completed_event, tool_invocation_updated_event, tool_output_completed_event,
+    tool_output_delta_event, tool_output_item_id, tool_output_payload_from_value, tool_output_started_event,
+    tool_output_updated_event, tool_started_event,
 };
 pub use recorder::{ActiveCommandHandle, ActiveToolHandle, ExecEventRecorder};
 
@@ -30,8 +31,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, TrySendError};
 use tokio::sync::OnceCell;
-use tokio::task::JoinHandle;
-use tokio::task::spawn_blocking;
+use tokio::task::{JoinHandle, spawn_blocking};
 use uuid::Uuid;
 
 use vtcode_memory::event_log::DEFAULT_MAX_EVENTS;

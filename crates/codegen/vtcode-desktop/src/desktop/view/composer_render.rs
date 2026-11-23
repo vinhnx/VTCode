@@ -560,30 +560,43 @@ impl DesktopView {
                         }),
                     )
                     .child({
-                        // True borderless: the group's own tint is cleared so
-                        // the input sits directly on the canvas. The
-                        // placeholder and caret carry the input affordance.
-                        div().id("message-composer-frame").test_support().w_full().min_w_0().child(
-                            InputGroup::new("message-composer")
-                                .with_size(composer_size)
-                                .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
-                                .w_full()
-                                .border_0()
-                                .bg(cx.theme().transparent)
-                                .focus_ring(false)
-                                .py_2()
-                                .when(self.zen_mode, |group| group.py_3())
-                                .input(input)
-                                .addon(
-                                    InputGroupAddon::new("composer-actions")
-                                        .align(InputGroupAddonAlignment::BlockEnd)
-                                        // Block addons inset by the size input
-                                        // token; zero it so button frames start
-                                        // on the transcript spine like the draft.
-                                        .px_0()
-                                        .child(buttons),
-                                ),
-                        )
+                        // Borderless while idle; computer use layers its badge and
+                        // accent ring on top only while armed.
+                        div()
+                            .id("message-composer-frame")
+                            .test_support()
+                            .w_full()
+                            .min_w_0()
+                            .when(self.computer_use_enabled(), |frame| {
+                                frame.child(Self::computer_use_composer_badge(cx))
+                            })
+                            .when(self.computer_use_running(), |frame| {
+                                frame
+                                    .border_1()
+                                    .border_color(cx.theme().colors.primary)
+                                    .rounded(cx.theme().radius_lg)
+                            })
+                            .child(
+                                InputGroup::new("message-composer")
+                                    .with_size(composer_size)
+                                    .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
+                                    .w_full()
+                                    .border_0()
+                                    .bg(cx.theme().transparent)
+                                    .focus_ring(false)
+                                    .py_2()
+                                    .when(self.zen_mode, |group| group.py_3())
+                                    .input(input)
+                                    .addon(
+                                        InputGroupAddon::new("composer-actions")
+                                            .align(InputGroupAddonAlignment::BlockEnd)
+                                            // Block addons inset by the size input
+                                            // token; zero it so button frames start
+                                            // on the transcript spine like the draft.
+                                            .px_0()
+                                            .child(buttons),
+                                    ),
+                            )
                     }),
             ),
         )

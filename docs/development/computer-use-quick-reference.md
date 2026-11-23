@@ -79,6 +79,16 @@ scan is the durable-output sentinel check.
 base64). Screenshots never leave the dispatcher; `NativeResponse`/`NativeCall` are
 in-memory, non-serializable, and their `Debug` impls expose routing metadata only.
 
+The wrapper owns the outer tool row end to end: it reuses the streamed
+invocation id, refreshes the row with the merged task-plus-batch args after
+approval, and completes it exactly once for every outcome (refusals and
+denials included, so no row dangles `in progress`). The dispatcher streams
+redacted stage progress against that row only — proposing, awaiting
+approval, launching, per-call execution (OpenAI) or batch execution
+(Anthropic), teardown — via the existing output-update channel, never new
+event types. Completion output is the shared report text, so the durable
+event and the model-facing tool result agree verbatim.
+
 ## Probe scripts
 
 | Script | Purpose |

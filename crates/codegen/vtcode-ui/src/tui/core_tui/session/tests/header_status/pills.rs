@@ -275,3 +275,55 @@ fn computer_use_header_badge_hides_without_an_enabled_switch() {
         assert!(!line.contains("COMPUTER USE"), "raw={raw:?} must hide the badge, got: {line}");
     }
 }
+#[test]
+fn computer_use_input_pill_follows_the_master_switch() {
+    // The chat-input pill mirrors the header's enabled signal: present while
+    // CUA is on, gone when it turns off.
+    let mut session = fresh_session();
+    session.header_context.computer_use = Some(format!("{}on", ui::HEADER_COMPUTER_USE_PREFIX));
+    let pill = session.computer_use_pill().expect("enabled pill");
+    assert_eq!(pill.0, "COMPUTER USE");
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
+        .unwrap_or_default();
+    assert!(rendered.contains("COMPUTER USE"), "missing input pill, got: {rendered}");
+
+    for raw in [None, Some(""), Some("unavailable"), Some("Computer use: unavailable")] {
+        let mut session = fresh_session();
+        session.header_context.computer_use = raw.map(str::to_string);
+        assert!(session.computer_use_pill().is_none(), "raw={raw:?} must hide the pill");
+        let rendered = session
+            .render_input_status_line(VIEW_WIDTH)
+            .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
+            .unwrap_or_default();
+        assert!(!rendered.contains("COMPUTER USE"), "raw={raw:?} must hide the pill, got: {rendered}");
+    }
+}
+#[test]
+fn computer_use_running_paints_input_badge_and_border() {
+    // While a turn runs, the input gains the gold badge title plus the two
+    // border rows; any other status (or none) keeps the borderless chrome.
+    let mut session = fresh_session();
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running Computer use: take a screenshot".to_string()),
+        right: None,
+    });
+    assert!(session.computer_use_running());
+    let title = session.computer_use_running_input_title().expect("running badge");
+    assert_eq!(line_text(&title), " COMPUTER USE ");
+    assert_eq!(session.input_block_extra_height(), 2);
+
+    for status in [
+        None,
+        Some("Running tool: read_file"),
+        Some("Thinking"),
+        Some("Computer use: on"),
+    ] {
+        let mut session = fresh_session();
+        session.handle_command(InlineCommand::SetInputStatus { left: status.map(str::to_string), right: None });
+        assert!(!session.computer_use_running(), "status={status:?} must not mark running");
+        assert!(session.computer_use_running_input_title().is_none());
+        assert_eq!(session.input_block_extra_height(), 0);
+    }
+}

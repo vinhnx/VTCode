@@ -125,7 +125,7 @@ fn config() -> ComputerUseConfig {
 }
 
 fn runtime<'a>(stop: &'a CtrlCState, notify: &'a Notify, stats: &'a mut SessionStats) -> ComputerTurnRuntime<'a> {
-    ComputerTurnRuntime { stop, notify, stats, emitter: None }
+    ComputerTurnRuntime { stop, notify, stats }
 }
 
 fn anthropic_click(index: usize, id: &str, x: u32, y: u32) -> NativeCall {
@@ -153,31 +153,49 @@ async fn computer_use_turn_refuses_without_config_capability_or_target() {
 
     let mut disabled = config();
     disabled.enabled = false;
-    let outcome =
-        run_computer_turn(&provider(), request(), &disabled, &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider(),
+        request(),
+        &disabled,
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Disabled { .. }));
 
     let incapable = ScriptedProvider { computer_use: false, ..provider() };
-    let outcome =
-        run_computer_turn(&incapable, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &incapable,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Disabled { .. }));
 
     let mut untargeted = config();
     untargeted.browser_build = None;
-    let outcome =
-        run_computer_turn(&provider(), request(), &untargeted, &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider(),
+        request(),
+        &untargeted,
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Disabled { .. }));
 }
 
@@ -194,12 +212,18 @@ async fn computer_use_turn_returns_ordinaries_when_no_natives() {
     let notify = Notify::new();
     let mut stats = SessionStats::default();
     let provider = ScriptedProvider { native: text_only, ..provider() };
-    let outcome =
-        run_computer_turn(&provider, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     let ComputerTurnOutcomeKind::NoNativeCalls { content, ordinaries } = outcome.kind else {
         panic!("expected ordinaries, got {:?}", outcome.kind);
     };
@@ -223,12 +247,18 @@ async fn computer_use_turn_enforces_budget_before_review_and_approval() {
     config.max_actions_per_turn = 1;
     config.decisions_review = true;
     let provider = ScriptedProvider { native: two_actions, decisions: true, ..provider() };
-    let outcome =
-        run_computer_turn(&provider, request(), &config, &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config,
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     let ComputerTurnOutcomeKind::BudgetExceeded { proposed, max } = outcome.kind else {
         panic!("expected budget refusal, got {:?}", outcome.kind);
     };
@@ -262,34 +292,36 @@ async fn computer_use_turn_review_halt_skips_approval_and_launch() {
         &provider,
         request(),
         &config,
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async { panic!("approval must not run") },
     )
     .await
     .unwrap();
-    assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ReviewHalted));
+    assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ReviewHalted { .. }));
     assert_eq!(*provider.decisions_calls.lock().unwrap(), 1);
 
+    // The dispatcher streams progress only: one proposing update against the
+    // outer row, nothing started or completed (the wrapper owns those, and
+    // the halt verdict reaches the transcript through its completion).
     let raw = std::fs::read_to_string(&path).unwrap();
     let events = raw
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .collect::<Vec<_>>();
     assert!(events.iter().all(|event| event["event"]["type"] != "item.started"));
-    let completed = events
+    assert!(events.iter().all(|event| event["event"]["type"] != "item.completed"));
+    let updated = events
         .iter()
-        .filter(|event| event["event"]["type"] == "item.completed")
+        .filter(|event| event["event"]["type"] == "item.updated")
         .collect::<Vec<_>>();
-    assert_eq!(completed.len(), 1);
-    assert_eq!(completed[0]["event"]["item"]["status"], serde_json::json!("failed"));
-    let output = completed[0]["event"]["item"]["output"].as_str().unwrap_or("");
-    assert!(output.contains("review halted"), "{output}");
-    assert!(output.contains("not launched"), "{output}");
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0]["event"]["item"]["id"], serde_json::json!("test-item:output"));
+    let output = updated[0]["event"]["item"]["output"].as_str().unwrap_or("");
+    assert!(output.contains("Proposing actions with"), "{output}");
+    assert!(!output.contains("awaiting approval"), "{output}");
 }
 
 #[tokio::test]
@@ -326,9 +358,16 @@ async fn computer_use_review_judges_the_requested_task_not_model_prose() {
     let mut config = config();
     config.decisions_review = true;
     let provider = ScriptedProvider { native: one_action, decisions: true, ..provider() };
-    let outcome = run_computer_turn(&provider, request, &config, &mut runtime(&stop, &notify, &mut stats), |_| async {
-        Ok(false)
-    })
+    let outcome = run_computer_turn(
+        &provider,
+        request,
+        &config,
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { Ok(false) },
+    )
     .await
     .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ApprovalDenied));
@@ -370,47 +409,23 @@ async fn computer_use_turn_unreviewed_batch_halts_before_approval() {
         &provider,
         request(),
         &config,
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async { panic!("approval must not run for an unreviewed batch") },
     )
     .await
     .unwrap();
-    assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ReviewHalted));
+    assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ReviewHalted { .. }));
     assert_eq!(*provider.decisions_calls.lock().unwrap(), 1);
+    // Progress only: the proposing update streams, while the unreviewed
+    // verdict itself completes the outer row in the wrapper (which names
+    // the reason in its report text).
     let raw = std::fs::read_to_string(&path).unwrap();
-    assert!(raw.contains("review unreviewed (inconclusive)"), "{raw}");
+    assert!(raw.contains("Proposing actions with"), "{raw}");
     assert!(!raw.contains("item.started"), "{raw}");
-}
-
-#[test]
-fn computer_use_summary_message_names_the_review_state() {
-    let summary = |review| RedactedTurnSummary {
-        target_kind: "browser",
-        target: "fixture-app".to_string(),
-        recipient: "test-model (test)".to_string(),
-        action_kinds: vec!["click".to_string()],
-        action_count: 1,
-        executed_units: 1,
-        review,
-        teardown_trigger: "finished",
-        teardown: TeardownOutcome::Removed,
-    };
-    assert!(!summary(None).message("completed").contains("review"));
-    assert!(
-        summary(Some(BatchReviewVerdict::Proceed))
-            .message("completed")
-            .contains("; reviewed")
-    );
-    assert!(
-        summary(Some(BatchReviewVerdict::Unreviewed { reason: "timed out" }))
-            .message("completed")
-            .contains("; review unreviewed (timed out)")
-    );
+    assert!(!raw.contains("item.completed"), "{raw}");
 }
 
 #[tokio::test]
@@ -425,12 +440,18 @@ async fn computer_use_turn_denied_approval_skips_launch() {
     let notify = Notify::new();
     let mut stats = SessionStats::default();
     let provider = ScriptedProvider { native: one_action, ..provider() };
-    let outcome =
-        run_computer_turn(&provider, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
-            Ok(false)
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { Ok(false) },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ApprovalDenied));
 }
 
@@ -457,12 +478,18 @@ async fn computer_use_turn_rejects_mixed_providers() {
     let notify = Notify::new();
     let mut stats = SessionStats::default();
     let provider = ScriptedProvider { native: mixed, ..provider() };
-    let outcome =
-        run_computer_turn(&provider, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     assert!(matches!(
         outcome.kind,
         ComputerTurnOutcomeKind::Failed { stage: ComputerFailureStage::Generate, .. }
@@ -477,12 +504,18 @@ async fn computer_use_turn_cancel_before_generate_skips_provider() {
     notify.notify_one();
     let mut stats = SessionStats::default();
     let provider = provider();
-    let outcome =
-        run_computer_turn(&provider, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
-            panic!("approval must not run")
-        })
-        .await
-        .unwrap();
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async { panic!("approval must not run") },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Cancelled));
     assert_eq!(*provider.generate_calls.lock().unwrap(), 0);
 }
@@ -499,13 +532,21 @@ async fn computer_use_turn_denied_during_stop_reports_cancelled() {
     let notify = Notify::new();
     let mut stats = SessionStats::default();
     let provider = ScriptedProvider { native: one_action, ..provider() };
-    let outcome =
-        run_computer_turn(&provider, request(), &config(), &mut runtime(&stop, &notify, &mut stats), |_| async {
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config(),
+        &mut runtime(&stop, &notify, &mut stats),
+        None,
+        "test-item",
+        "test-call",
+        |_| async {
             stop.request_local_cancel();
             Ok(false)
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
     assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::Cancelled));
 }
 
@@ -530,12 +571,10 @@ async fn computer_use_turn_launch_failure_emits_redacted_events() {
         &provider,
         request(),
         &bad,
-        &mut ComputerTurnRuntime {
-            stop: &stop,
-            notify: &notify,
-            stats: &mut stats,
-            emitter: Some(&emitter),
-        },
+        &mut ComputerTurnRuntime { stop: &stop, notify: &notify, stats: &mut stats },
+        Some(&emitter),
+        "test-item",
+        "test-call",
         |_| async { Ok(true) },
     )
     .await
@@ -546,27 +585,33 @@ async fn computer_use_turn_launch_failure_emits_redacted_events() {
     assert_eq!(stage, ComputerFailureStage::Launch);
     assert!(!message.is_empty());
 
+    // Progress streams stage by stage against the outer row; the wrapper
+    // owns start/completion, so a launch failure leaves progress only.
     let raw = std::fs::read_to_string(&path).unwrap();
     assert!(!raw.contains("data:image"), "events must never carry payloads");
     let events = raw
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(events.iter().filter(|event| event["event"]["type"] == "item.started").count(), 1);
-    let completed = events
+    assert!(events.iter().all(|event| event["event"]["type"] != "item.started"));
+    assert!(events.iter().all(|event| event["event"]["type"] != "item.completed"));
+    let updated = events
         .iter()
-        .filter(|event| event["event"]["type"] == "item.completed")
+        .filter(|event| event["event"]["type"] == "item.updated")
         .collect::<Vec<_>>();
-    assert_eq!(completed.len(), 1);
-    assert_eq!(completed[0]["event"]["item"]["tool_call_id"], serde_json::json!("c1"));
-    assert_eq!(completed[0]["event"]["item"]["status"], serde_json::json!("failed"));
-    assert!(
-        completed[0]["event"]["item"]["output"]
-            .as_str()
-            .is_some_and(|output| output.contains("failed")),
-        "completion output names the verdict: {}",
-        completed[0]["event"]["item"]["output"]
-    );
+    assert_eq!(updated.len(), 3);
+    for update in &updated {
+        assert_eq!(update["event"]["item"]["id"], serde_json::json!("test-item:output"));
+        assert_eq!(update["event"]["item"]["tool_call_id"], serde_json::json!("test-call"));
+    }
+    let outputs = updated
+        .iter()
+        .map(|update| update["event"]["item"]["output"].as_str().unwrap_or("").to_string())
+        .collect::<Vec<_>>();
+    assert!(outputs[0].contains("Proposing actions with"), "{}", outputs[0]);
+    assert!(outputs[1].contains("awaiting approval"), "{}", outputs[1]);
+    assert!(outputs[2].contains("Approved 1 action (click)"), "{}", outputs[2]);
+    assert!(!raw.contains("Preview ready"), "launch failed before the target ran: {raw}");
 }
 
 struct ScriptedDriver {
@@ -607,9 +652,15 @@ async fn computer_use_anthropic_batch_answers_malformed_and_halts() {
             },
         },
     ];
-    let (results, units) = execute_native_calls(NativeProvider::Anthropic, &mut control, calls, Duration::from_secs(5))
-        .await
-        .unwrap();
+    let quiet = ComputerTurnProgress {
+        emitter: None,
+        item_id: "test-item",
+        call_id: "test-call",
+    };
+    let (results, units) =
+        execute_native_calls(NativeProvider::Anthropic, &mut control, calls, Duration::from_secs(5), quiet)
+            .await
+            .unwrap();
     assert_eq!(units, 2);
     let NativeTurnResults::Anthropic(positioned) = results else {
         panic!("expected Anthropic results, got {results:?}");
@@ -659,10 +710,19 @@ async fn computer_use_openai_call_returns_screenshot_output() {
             ],
         },
     };
-    let (results, units) =
-        execute_native_calls(NativeProvider::OpenAi, &mut control, vec![call], Duration::from_secs(5))
-            .await
-            .unwrap();
+    let (results, units) = execute_native_calls(
+        NativeProvider::OpenAi,
+        &mut control,
+        vec![call],
+        Duration::from_secs(5),
+        ComputerTurnProgress {
+            emitter: None,
+            item_id: "test-item",
+            call_id: "test-call",
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(units, 1);
     let NativeTurnResults::OpenAi(outputs) = results else {
         panic!("expected OpenAI results, got {results:?}");
@@ -699,9 +759,19 @@ async fn computer_use_openai_call_without_final_screenshot_fails_closed() {
             }],
         },
     };
-    let error = execute_native_calls(NativeProvider::OpenAi, &mut control, vec![call], Duration::from_secs(5))
-        .await
-        .unwrap_err();
+    let error = execute_native_calls(
+        NativeProvider::OpenAi,
+        &mut control,
+        vec![call],
+        Duration::from_secs(5),
+        ComputerTurnProgress {
+            emitter: None,
+            item_id: "test-item",
+            call_id: "test-call",
+        },
+    )
+    .await
+    .unwrap_err();
     assert!(error.to_string().contains("final screenshot"), "unexpected error: {error:#}");
     let Err(refused) = control
         .execute_batch("call_2", &[Action::Screenshot], Duration::from_secs(1))

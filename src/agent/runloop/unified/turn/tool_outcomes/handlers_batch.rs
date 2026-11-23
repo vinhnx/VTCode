@@ -703,7 +703,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     // this side of the core/binary boundary. Everything downstream (batch
     // tracking, circuit, repetition, result handling) stays shared.
     let pipeline_outcome = if tool_name == super::computer_use::TOOL_NAME {
-        super::computer_use::tool_call::handle_computer_use_tool_call(ctx, &args_val).await?
+        super::computer_use::tool_call::handle_computer_use_tool_call(ctx, &args_val, &tool_call_id).await?
     } else {
         let ctrl_c_state = ctx.ctrl_c_state;
         let ctrl_c_notify = ctx.ctrl_c_notify;

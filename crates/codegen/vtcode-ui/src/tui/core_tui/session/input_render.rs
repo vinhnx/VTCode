@@ -2,6 +2,7 @@ use super::text_utils::display_width;
 use super::*;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::UnicodeWidthStr;
 
@@ -258,6 +259,47 @@ impl Session {
         }
     }
 
+    /// Whether a computer-use turn is active right now. Reads the runloop's
+    /// footer status through the shared prefix predicate, so the accent can
+    /// never disagree with the status text about what is running.
+    pub(crate) fn computer_use_running(&self) -> bool {
+        self.status_left_text()
+            .is_some_and(vtcode_commons::tool_headlines::status_is_computer_use_running)
+    }
+
+    /// Gold running badge for the input border, mirroring the header's
+    /// premium treatment. Present only while a turn runs; the border itself
+    /// (accent style via the shared input branch) carries the running state.
+    pub(crate) fn computer_use_running_input_title(&self) -> Option<Line<'static>> {
+        self.computer_use_running().then(|| {
+            Line::from(Span::styled(
+                " COMPUTER USE ".to_string(),
+                header::ultrafast_badge_style(
+                    vtcode_commons::color_policy::current_color_output_policy().enabled,
+                    crate::theme::is_safe_colors_only(),
+                    crate::theme::is_bold_bright_mode(),
+                ),
+            ))
+            .right_aligned()
+        })
+    }
+
+    /// Premium badge for the input status line while the master switch is on.
+    /// Presence follows the header's enabled signal exactly, so the pill
+    /// appears when CUA activates and vanishes when it turns off.
+    pub(super) fn computer_use_pill(&self) -> Option<(String, Style)> {
+        self.header_computer_use_short_value().map(|_| {
+            (
+                "COMPUTER USE".to_string(),
+                header::ultrafast_badge_style(
+                    vtcode_commons::color_policy::current_color_output_policy().enabled,
+                    crate::theme::is_safe_colors_only(),
+                    crate::theme::is_bold_bright_mode(),
+                ),
+            )
+        })
+    }
+
     #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(super) fn build_input_status_line(&self, width: u16) -> Option<InputStatusLine> {
         if width == 0 {
@@ -348,17 +390,35 @@ impl Session {
             style
         };
         // Allocate persistent regions first. Mode has first claim, then the
-        // configured right side, then context, then optional activity/hints.
+        // computer-use pill while the switch is on, then the configured
+        // right side, then context, then optional activity/hints.
         let mut right_spans = Vec::new();
         if let Some((label, style)) = mode_pill {
             right_spans =
                 truncate_line_with_ellipsis_if_overflow(Line::from(Span::styled(label, style)), usize::from(width))
                     .spans;
         }
-        let mode_width = Line::from(right_spans.clone()).width() as u16;
+        if let Some((label, style)) = self.computer_use_pill() {
+            let used = Line::from(right_spans.clone()).width() as u16;
+            let separator = u16::from(used > 0);
+            let budget = width.saturating_sub(used.saturating_add(separator));
+            if budget > 0 {
+                if separator > 0 {
+                    right_spans.push(Span::raw(" "));
+                }
+                right_spans.extend(
+                    truncate_line_with_ellipsis_if_overflow(
+                        Line::from(Span::styled(label, style)),
+                        usize::from(budget),
+                    )
+                    .spans,
+                );
+            }
+        }
+        let pinned_width = Line::from(right_spans.clone()).width() as u16;
         if let Some(value) = right {
-            let separator = u16::from(mode_width > 0);
-            let budget = width.saturating_sub(mode_width.saturating_add(separator));
+            let separator = u16::from(pinned_width > 0);
+            let budget = width.saturating_sub(pinned_width.saturating_add(separator));
             if budget > 0 {
                 if separator > 0 {
                     right_spans.push(Span::raw(" "));

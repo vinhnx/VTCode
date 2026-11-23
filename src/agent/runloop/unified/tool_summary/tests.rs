@@ -161,6 +161,23 @@ fn prepare_summary_data_hides_output_caps_on_ordinary_tools() {
 }
 
 #[test]
+fn describe_tool_action_phrases_computer_use_task_and_batch() {
+    // Task gist wins; approval-shaped payloads phrase count/kinds instead
+    // of degrading to the generic "Use Computer Use" fallback.
+    let (headline, used) = describe_tool_action(tool_names::COMPUTER_USE, &json!({"task": "take a screenshot"}), None);
+    assert_eq!(headline, "Computer use: take a screenshot");
+    assert!(used.contains("task"));
+    let (headline, used) = describe_tool_action(
+        tool_names::COMPUTER_USE,
+        &json!({"action_count": 2, "action_kinds": ["click", "type"]}),
+        None,
+    );
+    assert_eq!(headline, "Computer use: 2 actions (click, type)");
+    assert!(used.contains("action_count"));
+    assert!(used.contains("action_kinds"));
+}
+
+#[test]
 fn describe_tool_action_labels_pty_session_readers() {
     let args = json!({ "session_id": "run-abc" });
     for (tool, label) in [
