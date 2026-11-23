@@ -247,6 +247,38 @@ fn recommended_actions_highlight(actions: &[String]) -> Option<InlineHeaderHighl
     Some(InlineHeaderHighlight { title: "Suggested Next Actions".to_string(), lines })
 }
 
+/// Welcome hint shown while bundled skills are neither allowed nor declined.
+///
+/// Covers entry points that never see a consent surface (`vtcode init`,
+/// non-interactive first runs, pre-existing workspaces on fresh machines):
+/// with no answer recorded and no pre-consent cache, one muted line points
+/// at `/config`. Granted, declined, and grandfathered setups stay silent,
+/// as do workspaces whose configuration cannot be loaded.
+pub(crate) fn bundled_skills_consent_highlight(workspace: &Path) -> Option<InlineHeaderHighlight> {
+    let manager = vtcode_core::config::loader::ConfigManager::load_from_workspace(workspace).ok()?;
+    if vtcode_core::config::consent::bundled_skills_answer(&manager)
+        != vtcode_core::config::consent::ConsentAnswer::Unasked
+    {
+        return None;
+    }
+    if vtcode_core::skills::system::bundled_skills_grandfathered() {
+        return None;
+    }
+    Some(InlineHeaderHighlight {
+        title: "Bundled Skills".to_string(),
+        lines: vec![
+            "Not installed (no consent recorded). Allow anytime in /config (skills.bundled.enabled).".to_string(),
+        ],
+    })
+}
+
+/// Append the consent hint when one applies. Mirrors the update-notice shape.
+pub(crate) fn append_bundled_skills_consent_highlight(highlights: &mut Vec<InlineHeaderHighlight>, workspace: &Path) {
+    if let Some(highlight) = bundled_skills_consent_highlight(workspace) {
+        highlights.push(highlight);
+    }
+}
+
 fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     let limit = ui_constants::WELCOME_SLASH_COMMAND_LIMIT;
     if limit == 0 {

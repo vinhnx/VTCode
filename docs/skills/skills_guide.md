@@ -165,6 +165,8 @@ configuration; MCP servers are never installed automatically.
   bundled set report how to enable them.
 - Re-enable anytime in `/config` (`skills.bundled.enabled`), your user `vtcode.toml`, or by re-running setup.
   The change applies to new sessions.
+- CLI sessions surface a one-line welcome hint while no answer is recorded, covering entry points that bypass
+  both wizards (`vtcode init`, non-interactive first runs, pre-existing workspaces on fresh machines).
 
 ## Notes
 

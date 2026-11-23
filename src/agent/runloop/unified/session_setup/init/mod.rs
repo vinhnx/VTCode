@@ -435,6 +435,13 @@ pub(crate) async fn hydrate_session_runtime(
     if session_state.session_bootstrap.release_highlights.is_none() {
         session_state.session_bootstrap.release_highlights = load_release_highlights_for_startup().await;
     }
+    // Consent hint for entry points that bypass both wizards. Runs here
+    // (post-paint hydration, where config reads are allowed) rather than on
+    // the critical path; answered and grandfathered setups stay silent.
+    crate::agent::runloop::welcome::append_bundled_skills_consent_highlight(
+        &mut session_state.session_bootstrap.header_highlights,
+        &config.workspace,
+    );
 
     // Finish deferred approval-cache setup off the paint path: create the
     // directory and load persisted patterns before the first model turn so

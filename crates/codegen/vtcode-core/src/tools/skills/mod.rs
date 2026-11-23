@@ -278,12 +278,10 @@ fn build_skill_response(skill: &Skill, activation_status: &str) -> Value {
     })
 }
 
-fn default_vtcode_home_dir() -> anyhow::Result<PathBuf> {
-    crate::skills::system::bundled_skills_home().map_err(anyhow::Error::from)
-}
-
 fn effective_codex_home(explicit_home: Option<&Path>) -> anyhow::Result<PathBuf> {
-    explicit_home.map(Path::to_path_buf).map_or_else(default_vtcode_home_dir, Ok)
+    explicit_home
+        .map(Path::to_path_buf)
+        .map_or_else(|| crate::skills::system::bundled_skills_home().map_err(anyhow::Error::from), Ok)
 }
 
 fn find_project_root(path: &Path) -> Option<PathBuf> {

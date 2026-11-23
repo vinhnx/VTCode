@@ -259,3 +259,64 @@ async fn test_prepare_session_bootstrap_does_not_surface_acp_trust_in_terminal_s
 
     assert!(bootstrap.acp_workspace_trust.is_none());
 }
+
+fn with_consent_harness<R>(
+    workspace_toml: Option<&str>,
+    with_legacy_cache: bool,
+    action: impl FnOnce(&std::path::Path) -> R,
+) -> R {
+    let root = tempdir().expect("hermetic root");
+    let data = root.path().join("data");
+    let codex = root.path().join("codex");
+    let workspace = root.path().join("workspace");
+    for dir in [&data, &codex, &workspace] {
+        fs::create_dir_all(dir).expect("hermetic dir");
+    }
+    if let Some(content) = workspace_toml {
+        fs::write(workspace.join("vtcode.toml"), content).expect("workspace config");
+    }
+    if with_legacy_cache {
+        vtcode_core::skills::system::install_system_skills(&codex).expect("legacy cache");
+    }
+    let guard = vtcode_commons::env_lock::lock();
+    let previous_data = std::env::var_os("VTCODE_DATA");
+    let previous_codex = std::env::var_os("CODEX_HOME");
+    guard.set_var("VTCODE_DATA", &data);
+    guard.set_var("CODEX_HOME", &codex);
+
+    let static_paths = vtcode_commons::reference::StaticWorkspacePaths::new(&workspace, workspace.join(".vtcode"));
+    let provider = vtcode_config::defaults::WorkspacePathsDefaults::new(std::sync::Arc::new(static_paths))
+        .with_home_paths(Vec::new());
+    let previous_provider = vtcode_config::defaults::install_config_defaults_provider(std::sync::Arc::new(provider));
+    let outcome = action(workspace.as_path());
+    let _restored = vtcode_config::defaults::install_config_defaults_provider(previous_provider);
+    guard.restore_var("VTCODE_DATA", previous_data.as_deref());
+    guard.restore_var("CODEX_HOME", previous_codex.as_deref());
+    outcome
+}
+
+#[test]
+#[serial_test::serial]
+fn consent_hint_shows_only_while_unasked_without_cache() {
+    use super::welcome::bundled_skills_consent_highlight;
+
+    let shown = with_consent_harness(None, false, bundled_skills_consent_highlight);
+    let highlight = shown.expect("unasked setup must show the hint");
+    assert_eq!(highlight.title, "Bundled Skills");
+    assert!(
+        highlight.lines.iter().any(|line| line.contains("/config")),
+        "hint must name the recovery path: {lines:?}",
+        lines = highlight.lines
+    );
+
+    for answered in [
+        Some("[skills.bundled]\nenabled = true\n"),
+        Some("[skills.bundled]\nenabled = false\n"),
+    ] {
+        let hidden = with_consent_harness(answered, false, bundled_skills_consent_highlight);
+        assert!(hidden.is_none(), "answered setup must stay silent");
+    }
+
+    let grandfathered = with_consent_harness(None, true, bundled_skills_consent_highlight);
+    assert!(grandfathered.is_none(), "grandfathered setup must stay silent");
+}
