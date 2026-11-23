@@ -31,13 +31,11 @@ pub fn choose_handling_line(object: &str) -> String {
 
 /// Truncate modal body text to `max_chars` characters, appending `…` only when
 /// truncation actually happened so shortened text never reads as complete.
+///
+/// Delegates to the canonical [`crate::formatting::truncate_within`] so modal
+/// text and every other hard-budget surface share one truncation contract.
 pub fn truncate_modal_text(text: &str, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
-    truncated.push('…');
-    truncated
+    crate::formatting::truncate_within(text, max_chars, "…")
 }
 
 #[cfg(test)]
@@ -78,5 +76,19 @@ mod tests {
         assert_eq!(truncate_modal_text("short", 10), "short");
         assert_eq!(truncate_modal_text("exactly-ten", 11), "exactly-ten");
         assert_eq!(truncate_modal_text("over the limit text", 10), "over the …");
+    }
+
+    #[test]
+    fn truncate_modal_text_matches_the_canonical_truncate_within_at_every_boundary() {
+        // Guards against the local helper drifting from the shared contract.
+        for text in ["", "a", "short", "over the limit text", "あいうえお"] {
+            for max_chars in 0..=12 {
+                assert_eq!(
+                    truncate_modal_text(text, max_chars),
+                    crate::formatting::truncate_within(text, max_chars, "…"),
+                    "text {text:?} at max_chars {max_chars}"
+                );
+            }
+        }
     }
 }

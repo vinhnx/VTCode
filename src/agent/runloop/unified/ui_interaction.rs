@@ -454,16 +454,7 @@ fn summarize_setting_sources(workspace: &Path) -> String {
 }
 
 fn truncate_status_value(value: &str, max_len: usize) -> String {
-    if value.chars().count() <= max_len {
-        return value.to_string();
-    }
-
-    let mut truncated = String::new();
-    for ch in value.chars().take(max_len.saturating_sub(3)) {
-        truncated.push(ch);
-    }
-    truncated.push_str("...");
-    truncated
+    vtcode_commons::formatting::truncate_within(value, max_len, "...")
 }
 
 pub(crate) struct PlaceholderGuard {
