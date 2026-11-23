@@ -157,16 +157,6 @@ pub trait NativePluginTrait: Send + Sync + std::fmt::Debug {
 
 /// A loaded native plugin
 pub struct NativePlugin {
-    /// Loaded plugin library handle.
-    ///
-    /// # Lifetime invariant
-    ///
-    /// `_library` outlives `self`. `execute_fn` is a raw function pointer copied
-    /// out of this library and is only valid while `_library` remains loaded.
-    /// `NativePlugin` intentionally has no `Drop`: cleanup is delegated to
-    /// `Library`'s own `Drop` (`dlclose`), which runs after `self` is dropped,
-    /// guaranteeing the function pointer is never used after the library unloads.
-    _library: Library,
     /// Plugin metadata
     metadata: PluginMetadata,
     /// Path to the plugin
@@ -179,6 +169,17 @@ pub struct NativePlugin {
     execution_lock: Mutex<()>,
     /// Optimized thread-safety flag from metadata.
     thread_safe: bool,
+    /// Loaded plugin library handle.
+    ///
+    /// # Lifetime invariant
+    ///
+    /// `execute_fn` and `free_string_fn` are raw function pointers copied out
+    /// of this library and are only valid while it remains loaded. This field
+    /// is declared last on purpose: Rust drops struct fields in declaration
+    /// order, so `Library`'s `Drop` (`dlclose`) runs after every other field
+    /// is gone. `NativePlugin` has no `Drop`, so no field destructor can call
+    /// into a library that has already unloaded. Keep this field last.
+    _library: Library,
 }
 
 fn ensure_non_null_c_string_ptr(ptr: *const c_char, context: &'static str) -> Result<NonNull<c_char>> {
