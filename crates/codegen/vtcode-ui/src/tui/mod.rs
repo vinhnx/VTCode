@@ -9,11 +9,6 @@
 //! The migrated implementation source lives in `src/core_tui/`.
 //! Public API is exported directly from this crate.
 
-#[expect(
-    dead_code,
-    reason = "Intentional compatibility, platform, test, or API-shape suppression."
-)]
-mod cache;
 mod config;
 pub(crate) mod frame_metrics;
 mod options;

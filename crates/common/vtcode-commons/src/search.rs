@@ -94,7 +94,12 @@ pub fn fuzzy_match(query: &str, candidate: &str) -> bool {
 }
 
 /// Returns true when the characters from `needle` can be found in order within
-/// `haystack` (kept for backward compatibility).
+/// `haystack`.
+///
+/// Kept for source compatibility with the published crate. New code should use
+/// [`fuzzy_match`] or [`FuzzyQuery`], which share the canonical nucleo-matcher
+/// behavior used by every other fuzzy-search surface.
+#[deprecated(note = "use vtcode_commons::search::fuzzy_match or FuzzyQuery")]
 pub fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
     if needle.is_empty() {
         return true;
@@ -140,6 +145,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        deprecated,
+        reason = "This test pins the behavior of the deprecated compatibility shim itself."
+    )]
     fn fuzzy_subsequence_requires_in_order_match() {
         assert!(fuzzy_subsequence("abc", "a_b_c"));
         assert!(!fuzzy_subsequence("abc", "acb"));
