@@ -52,6 +52,7 @@ pub mod api_keys;
 pub mod auth;
 pub mod codex;
 pub mod computer_use;
+pub mod consent;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -88,6 +89,12 @@ pub use acp::{
 };
 pub use api_keys::ApiKeySources;
 pub use computer_use::ComputerUseConfig;
+pub use consent::{
+    BUNDLED_SKILLS_SETTING_PATH, CONSENT_ALLOW_DESCRIPTION, CONSENT_ALLOW_LABEL, CONSENT_BODY_REVERSIBLE,
+    CONSENT_BODY_WHAT, CONSENT_DECLINE_DESCRIPTION, CONSENT_DECLINE_LABEL, CONSENT_MCP_DISCLOSURE, CONSENT_QUESTION,
+    CONSENT_REOPEN_HINT, CONSENT_TITLE, ConsentAnswer, bundled_skill_missing_hint, bundled_skills_answer,
+    bundled_skills_install_permitted, install_location_description,
+};
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AnthropicSpeed,

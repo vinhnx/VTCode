@@ -83,10 +83,21 @@ fn evict_cache<K, V>(
 }
 
 impl SkillsManager {
+    /// Create a manager with bundled skills unconditionally enabled.
+    ///
+    /// Prefer [`Self::new_with_bundled_skills_enabled`] with
+    /// [`crate::skills::bundled_skills_install_permitted_for_workspace`]:
+    /// production call sites must gate on ask-first consent, not default on.
     pub fn new(codex_home: PathBuf) -> Self {
         Self::new_with_bundled_skills_enabled(codex_home, true)
     }
 
+    /// Create a manager with an explicit bundled-skills permission.
+    ///
+    /// The flag is the consent-gated permission (see
+    /// [`crate::skills::bundled_skills_install_permitted_for_workspace`]),
+    /// not the raw config value: `false` skips the install, excludes the
+    /// system discovery root, and removes our own cache directory.
     pub fn new_with_bundled_skills_enabled(codex_home: PathBuf, bundled_skills_enabled: bool) -> Self {
         let manager = Self {
             codex_home,

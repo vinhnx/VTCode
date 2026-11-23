@@ -198,6 +198,17 @@ impl SkillDiscovery {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
+            // Mirror the loader walk exactly: hidden, build-output, and
+            // non-UTF-8 directories are never skill containers. Without this
+            // the managed `.system` cache leaks in as user skills and
+            // survives consent decline.
+            let file_name = match path.file_name().and_then(|name| name.to_str()) {
+                Some(name) => name,
+                None => continue,
+            };
+            if file_name.starts_with('.') || crate::skills::locations::discovery_dir_skipped(file_name) {
+                continue;
+            }
 
             if entry_is_dir(&entry) {
                 stats.directories_scanned += 1;
@@ -341,12 +352,10 @@ impl SkillDiscovery {
     }
 }
 
-fn default_codex_home() -> PathBuf {
-    std::env::var_os("CODEX_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
-        .unwrap_or_else(|| PathBuf::from(".codex"))
+fn default_codex_home() -> Option<PathBuf> {
+    // Unified VT Code home; `None` when unresolvable so callers skip the
+    // system root instead of inventing a relative directory.
+    crate::skills::system::bundled_skills_home().ok()
 }
 
 fn default_skill_paths(workspace_root: &Path) -> Vec<PathBuf> {
@@ -375,7 +384,9 @@ fn default_skill_paths(workspace_root: &Path) -> Vec<PathBuf> {
     }
     #[cfg(unix)]
     paths.push(PathBuf::from("/etc/codex/skills"));
-    paths.push(crate::skills::system::system_cache_root_dir(&default_codex_home()));
+    if let Some(home) = default_codex_home() {
+        paths.push(crate::skills::system::system_cache_root_dir(&home));
+    }
     paths
 }
 

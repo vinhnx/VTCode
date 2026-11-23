@@ -14,14 +14,69 @@ const SYSTEM_SKILLS_MARKER_FILENAME: &str = ".codex-system-skills.marker";
 /// v2: Updated skills with Codex-compatible patterns (XML wrapping, workflows, scripts).
 const SYSTEM_SKILLS_MARKER_SALT: &str = "v2";
 
+/// Names of the skills embedded in [`SYSTEM_SKILLS_DIR`].
+///
+/// Kept as an explicit list (pinned against the embedded directory by test)
+/// so decline-path errors can name bundled skills without touching the disk.
+#[must_use]
+pub fn bundled_skill_names() -> &'static [&'static str] {
+    &["cmd-review", "skill-creator", "skill-installer"]
+}
+
 /// Returns the on-disk cache location for embedded system skills.
 ///
-/// This is typically located at `CODEX_HOME/skills/.system`.
+/// This is typically located at `<home>/skills/.system`, where `home` is the
+/// unified [`bundled_skills_home`] in production or a caller-supplied
+/// override (hermetic tests, benchmarks).
 pub fn system_cache_root_dir(codex_home: &Path) -> PathBuf {
     codex_home.join(SKILLS_DIR_NAME).join(SYSTEM_SKILLS_DIR_NAME)
 }
 
-/// Installs embedded system skills into `CODEX_HOME/skills/.system`.
+/// Resolve the unified home directory for bundled system skills.
+///
+/// This is always VT Code's own data directory — never another tool's home.
+/// Resolution failure means installs are impossible, so callers must fail
+/// closed (skip the install and the system discovery root) instead of
+/// falling back to a relative directory.
+pub fn bundled_skills_home() -> Result<PathBuf, SystemSkillsError> {
+    let paths = vtcode_commons::VtCodePaths::resolve()
+        .map_err(|source| SystemSkillsError::io("resolve the bundled skills home", anyhow_to_io(source)))?;
+    Ok(paths.data_dir().to_path_buf())
+}
+
+/// Whether a bundled-skills cache marker exists under `home`.
+///
+/// Presence (not fingerprint match) is the grandfather signal: any marker
+/// proves a previous release installed here, including older embedded sets.
+#[must_use]
+pub fn has_bundled_skills_cache(home: &Path) -> bool {
+    system_cache_root_dir(home).join(SYSTEM_SKILLS_MARKER_FILENAME).is_file()
+}
+
+/// Whether a pre-consent cache exists in the legacy `~/.codex` location.
+///
+/// Read-only grandfather probe. VT Code never writes to or deletes from
+/// another tool's home directory; a marker here only permits refreshing
+/// VT Code's own unified cache without re-asking.
+#[must_use]
+pub fn legacy_bundled_skills_cache_present() -> bool {
+    let legacy_home = std::env::var_os("CODEX_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")));
+    legacy_home.is_some_and(|home| has_bundled_skills_cache(&home))
+}
+
+/// Whether a pre-consent install grandfathers bundled-skills refreshes.
+///
+/// True when our own unified cache or the legacy `~/.codex` cache carries a
+/// marker from a previous release. Fail-closed: resolution errors mean no.
+#[must_use]
+pub fn bundled_skills_grandfathered() -> bool {
+    bundled_skills_home().is_ok_and(|home| has_bundled_skills_cache(&home)) || legacy_bundled_skills_cache_present()
+}
+
+/// Installs embedded system skills into `<home>/skills/.system`.
 ///
 /// Clears any existing system skills directory first and then writes the embedded
 /// skills directory into place.
@@ -29,7 +84,12 @@ pub fn system_cache_root_dir(codex_home: &Path) -> PathBuf {
 /// To avoid doing unnecessary work on every startup, a marker file is written
 /// with a fingerprint of the embedded directory. When the marker matches, the
 /// install is skipped.
+///
+/// Callers must gate this on consent (`vtcode_config::consent`). Relative
+/// homes are refused outright so a misconfigured override can never scatter
+/// a cache into the current working directory.
 pub fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkillsError> {
+    require_absolute_home(codex_home)?;
     let skills_root_dir = codex_home.join(SKILLS_DIR_NAME);
     ensure_dir_exists_sync(&skills_root_dir)
         .map_err(|source| SystemSkillsError::io("create skills root dir", anyhow_to_io(source)))?;
@@ -54,7 +114,18 @@ pub fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkillsError>
 }
 
 pub fn uninstall_system_skills(codex_home: &Path) {
+    if require_absolute_home(codex_home).is_err() {
+        return;
+    }
     let _ = fs::remove_dir_all(system_cache_root_dir(codex_home));
+}
+
+fn require_absolute_home(codex_home: &Path) -> Result<(), SystemSkillsError> {
+    if codex_home.is_absolute() {
+        Ok(())
+    } else {
+        Err(SystemSkillsError::NonAbsoluteHome { home: codex_home.to_path_buf() })
+    }
 }
 
 fn anyhow_to_io(err: anyhow::Error) -> std::io::Error {
@@ -143,6 +214,8 @@ fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsErro
 
 #[derive(Debug, Error)]
 pub enum SystemSkillsError {
+    #[error("refusing to manage system skills under relative home {}", home.display())]
+    NonAbsoluteHome { home: PathBuf },
     #[error("io error while {action}: {source}")]
     Io {
         action: &'static str,
@@ -165,7 +238,74 @@ impl SystemSkillsError {
 
 #[cfg(test)]
 mod tests {
-    use super::{SYSTEM_SKILLS_MARKER_SALT, embedded_system_skills_fingerprint, stable_manifest_fingerprint};
+    use super::{
+        SYSTEM_SKILLS_DIR, SYSTEM_SKILLS_MARKER_SALT, bundled_skill_names, bundled_skills_grandfathered,
+        embedded_system_skills_fingerprint, has_bundled_skills_cache, install_system_skills,
+        legacy_bundled_skills_cache_present, stable_manifest_fingerprint, system_cache_root_dir,
+        uninstall_system_skills,
+    };
+    use serial_test::serial;
+
+    #[test]
+    fn bundled_skill_names_match_embedded_samples() {
+        let mut embedded: Vec<String> = SYSTEM_SKILLS_DIR
+            .entries()
+            .iter()
+            .filter_map(|entry| match entry {
+                include_dir::DirEntry::Dir(dir) => {
+                    dir.path().file_name().and_then(|name| name.to_str()).map(str::to_string)
+                }
+                include_dir::DirEntry::File(_) => None,
+            })
+            .collect();
+        embedded.sort_unstable();
+        let mut named: Vec<String> = bundled_skill_names().iter().map(ToString::to_string).collect();
+        named.sort_unstable();
+        assert_eq!(named, embedded);
+    }
+
+    #[test]
+    fn install_and_uninstall_refuse_relative_homes() {
+        let relative = std::path::PathBuf::from("relative-skills-home");
+        let error = install_system_skills(&relative).expect_err("relative install must fail");
+        assert!(error.to_string().contains("relative home"), "error: {error}");
+        assert!(!system_cache_root_dir(&relative).exists(), "refused install must not create anything");
+        // Uninstall is best-effort by design; the guard makes it a silent no-op.
+        uninstall_system_skills(&relative);
+        uninstall_system_skills(std::path::Path::new(""));
+    }
+
+    #[test]
+    fn cache_presence_tracks_install_lifecycle() {
+        let home = tempfile::TempDir::new().expect("temp home");
+        assert!(!has_bundled_skills_cache(home.path()));
+        install_system_skills(home.path()).expect("install");
+        assert!(has_bundled_skills_cache(home.path()));
+        uninstall_system_skills(home.path());
+        assert!(!has_bundled_skills_cache(home.path()));
+    }
+
+    #[test]
+    #[serial]
+    fn grandfather_detects_legacy_codex_marker() {
+        let legacy = tempfile::TempDir::new().expect("legacy home");
+        let guard = vtcode_commons::env_lock::lock();
+        let previous = std::env::var_os("CODEX_HOME");
+        guard.set_var("CODEX_HOME", legacy.path());
+        // A hermetic VTCODE_DATA keeps the unified-home probe hermetic too.
+        let data = tempfile::TempDir::new().expect("data dir");
+        let previous_data = std::env::var_os("VTCODE_DATA");
+        guard.set_var("VTCODE_DATA", data.path());
+
+        assert!(!legacy_bundled_skills_cache_present());
+        assert!(!bundled_skills_grandfathered());
+        install_system_skills(legacy.path()).expect("legacy install");
+        assert!(legacy_bundled_skills_cache_present());
+        assert!(bundled_skills_grandfathered());
+
+        guard.restore_var("CODEX_HOME", previous.as_deref());
+        guard.restore_var("VTCODE_DATA", previous_data.as_deref());
+    }
 
     #[test]
     fn stable_manifest_fingerprint_matches_known_digest() {

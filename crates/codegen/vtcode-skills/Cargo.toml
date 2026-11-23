@@ -16,6 +16,7 @@ keywords = ["vt", "skills", "agent", "plugins", "discovery"]
 anyhow.workspace = true
 base64.workspace = true
 chrono.workspace = true
+dirs.workspace = true
 hashbrown.workspace = true
 include_dir = "0.7"
 libloading.workspace = true

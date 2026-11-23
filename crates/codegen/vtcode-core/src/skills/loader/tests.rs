@@ -258,7 +258,10 @@ fn full_discovery_loads_skill_with_renamed_directory() {
 #[tokio::test]
 async fn enhanced_loader_discovers_and_loads_built_in_command_skills() {
     let temp_dir = TempDir::new().expect("temp dir");
-    let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+    // Pinned home keeps the test hermetic: built-ins merge in memory, so no
+    // consent grant is needed and no install is attempted.
+    let mut loader =
+        EnhancedSkillLoader::with_codex_home(temp_dir.path().to_path_buf(), temp_dir.path().join("codex-home"));
 
     let discovery = loader.discover_all_skills().await.expect("discover skills");
     assert!(
@@ -276,6 +279,7 @@ async fn enhanced_loader_discovers_and_loads_built_in_command_skills() {
 async fn enhanced_loader_discovers_and_loads_bundled_command_skills() {
     let workspace = TempDir::new().expect("workspace");
     let codex_home = TempDir::new().expect("codex home");
+    grant_bundled_skills(workspace.path());
     install_system_skills(codex_home.path()).expect("install bundled system skills");
     let cmd_review_dir = system_cache_root_dir(codex_home.path()).join("cmd-review");
     assert!(
@@ -285,7 +289,7 @@ async fn enhanced_loader_discovers_and_loads_bundled_command_skills() {
     );
     let (manifest, _) = crate::skills::manifest::parse_skill_file(&cmd_review_dir).expect("parse cmd-review");
     assert_eq!(manifest.name, "cmd-review");
-    let config = discovery_config_for_codex_home(workspace.path(), codex_home.path());
+    let config = discovery_config_for_codex_home(workspace.path(), codex_home.path(), true);
     assert!(
         config
             .skill_paths
@@ -345,6 +349,7 @@ async fn enhanced_loader_does_not_open_repository_native_plugins() {
 async fn enhanced_loader_discovers_every_command_skill() {
     let workspace = TempDir::new().expect("workspace");
     let codex_home = TempDir::new().expect("codex home");
+    grant_bundled_skills(workspace.path());
     let mut loader =
         EnhancedSkillLoader::with_codex_home(workspace.path().to_path_buf(), codex_home.path().to_path_buf());
 
@@ -445,6 +450,40 @@ fn write_skill(dir: &Path, name: &str, description: &str) {
         format!("---\nname: {name}\ndescription: {description}\n---\n\nUse this skill.\n"),
     )
     .expect("write SKILL.md");
+}
+
+fn grant_bundled_skills(workspace: &Path) {
+    fs::write(workspace.join("vtcode.toml"), "[skills.bundled]\nenabled = true\n").expect("grant bundled skills");
+}
+
+fn decline_bundled_skills(workspace: &Path) {
+    fs::write(workspace.join("vtcode.toml"), "[skills.bundled]\nenabled = false\n").expect("decline bundled skills");
+}
+
+#[tokio::test]
+async fn declined_bundled_skills_stay_absent_with_actionable_error() {
+    let workspace = TempDir::new().expect("workspace");
+    let codex_home = TempDir::new().expect("codex home");
+    decline_bundled_skills(workspace.path());
+    // A stale pre-decline cache must not leak into discovery.
+    install_system_skills(codex_home.path()).expect("install stale cache");
+    let mut loader =
+        EnhancedSkillLoader::with_codex_home(workspace.path().to_path_buf(), codex_home.path().to_path_buf());
+
+    let discovery = loader.discover_all_skills().await.expect("discover skills");
+    assert!(
+        discovery
+            .skills
+            .iter()
+            .all(|skill_ctx| skill_ctx.manifest().name != "cmd-review"),
+        "declined bundled skills must stay undiscovered"
+    );
+
+    let error = loader.get_skill("cmd-review").await.expect_err("cmd-review must not load");
+    assert!(
+        error.to_string().contains("skills.bundled.enabled"),
+        "decline error must name the recovery path, got: {error}"
+    );
 }
 
 fn write_codex_skill_config(home_dir: &Path, contents: &str) {
@@ -786,4 +825,76 @@ fn dedup_drops_same_file_discovered_twice() {
     dedup_and_sort(&mut outcome);
 
     assert_eq!(outcome.skills.len(), 1, "same canonical path must collapse to one entry");
+}
+
+#[tokio::test]
+#[serial]
+async fn unasked_bundled_skills_create_nothing_under_home() {
+    // Ask-first: with no consent answer in any layer and no pre-existing
+    // cache, skill discovery must neither install bundled skills nor surface
+    // them — and VT Code must keep working.
+    let root = TempDir::new().expect("hermetic root");
+    let data = root.path().join("data");
+    let codex = root.path().join("codex");
+    let workspace = root.path().join("workspace");
+    for dir in [&data, &codex, &workspace] {
+        fs::create_dir_all(dir).expect("hermetic dir");
+    }
+    // Snapshot the real homes so the test also catches writes that escape
+    // the hermetic redirects (only asserted when absent beforehand).
+    let real_data_cache = vtcode_commons::VtCodePaths::resolve()
+        .map(|paths| paths.data_dir().join("skills").join(".system"))
+        .ok();
+    let real_codex_cache = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+        .map(|home| home.join("skills").join(".system"));
+    let real_data_absent = real_data_cache.as_ref().is_some_and(|path| !path.exists());
+    let real_codex_absent = real_codex_cache.as_ref().is_some_and(|path| !path.exists());
+
+    let guard = vtcode_commons::env_lock::lock();
+    let previous_data = std::env::var_os("VTCODE_DATA");
+    let previous_codex = std::env::var_os("CODEX_HOME");
+    guard.set_var("VTCODE_DATA", &data);
+    guard.set_var("CODEX_HOME", &codex);
+
+    // No user layers: the consent key is unset everywhere reachable.
+    let static_paths = vtcode_commons::reference::StaticWorkspacePaths::new(&workspace, workspace.join(".vtcode"));
+    let provider = crate::config::defaults::WorkspacePathsDefaults::new(std::sync::Arc::new(static_paths))
+        .with_home_paths(Vec::new());
+    let previous_provider = crate::config::install_config_defaults_provider(std::sync::Arc::new(provider));
+    let mut loader = EnhancedSkillLoader::new(workspace.clone());
+    let discovered = loader.discover_all_skills().await;
+    let _restored = crate::config::install_config_defaults_provider(previous_provider);
+    let discovered = discovered.expect("discovery works without consent");
+
+    // The managed cache must stay invisible even where it already exists
+    // (regression guard for the dot-directory descent leak).
+    let real_system_root = real_data_cache.clone();
+    for skill in &discovered.skills {
+        let path = skill.path();
+        assert!(
+            !path.starts_with(&data) && !path.starts_with(&codex),
+            "unasked discovery must not surface home-installed system skills: {}",
+            path.display()
+        );
+        if let Some(root) = &real_system_root {
+            assert!(
+                !path.starts_with(root),
+                "unasked discovery must not surface the real system cache: {}",
+                path.display()
+            );
+        }
+    }
+    assert!(!data.join("skills").exists(), "unasked discovery must not write the unified skills cache");
+    assert!(!codex.join("skills").exists(), "discovery must never write the legacy codex home");
+    if real_data_absent && let Some(path) = &real_data_cache {
+        assert!(!path.exists(), "discovery escaped to the real data dir: {}", path.display());
+    }
+    if real_codex_absent && let Some(path) = &real_codex_cache {
+        assert!(!path.exists(), "discovery escaped to the real codex home: {}", path.display());
+    }
+
+    guard.restore_var("VTCODE_DATA", previous_data.as_deref());
+    guard.restore_var("CODEX_HOME", previous_codex.as_deref());
 }

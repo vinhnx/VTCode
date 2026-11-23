@@ -92,10 +92,20 @@ pub async fn handle_skills_ref_list(path: Option<&Path>) -> Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     let mut discovery = SkillDiscovery::new();
-    let result = discovery
+    let mut result = discovery
         .discover_all(&workspace_root)
         .await
         .context("Failed to discover skills")?;
+
+    // Ask-first: without consent the managed cache stays undiscovered even
+    // when a stale copy is still on disk. Listing is read-only, so an
+    // unresolvable home simply skips the filter.
+    if !vtcode_core::skills::bundled_skills_install_permitted_for_workspace(&workspace_root)
+        && let Ok(home) = vtcode_core::skills::system::bundled_skills_home()
+    {
+        let system_root = vtcode_core::skills::system::system_cache_root_dir(&home);
+        result.skills.retain(|skill| !skill.path().starts_with(&system_root));
+    }
 
     println!("Discovered {} skills:\n", result.skills.len() + result.tools.len());
 

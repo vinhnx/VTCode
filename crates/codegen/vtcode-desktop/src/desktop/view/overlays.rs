@@ -584,6 +584,9 @@ impl DesktopView {
         } else if self.full_access_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_full_access_confirm(window, cx);
+        } else if self.skills_consent_open {
+            self.disarm_double_escape();
+            self.dismiss_skills_consent(window, cx);
         } else if self.file_rename.is_some() {
             self.disarm_double_escape();
             self.cancel_file_rename(window, cx);

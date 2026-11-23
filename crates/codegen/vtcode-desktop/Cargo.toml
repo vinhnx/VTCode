@@ -45,6 +45,7 @@ tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-mult
 url = { workspace = true }
 vtcode-commons = { workspace = true }
 vtcode-bash-runner = { workspace = true, default-features = false }
+vtcode-config = { workspace = true }
 vtcode-desktop-protocol = { workspace = true }
 vtcode-exec-events = { workspace = true }
 vtcode-ui = { workspace = true }
@@ -54,5 +55,4 @@ gpui-kit = { version = "=0.10.0", features = ["test-support"] }
 image = { workspace = true }
 tempfile = { workspace = true }
 vtcode-computer-use = { workspace = true }
-vtcode-config = { workspace = true }
 

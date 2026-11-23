@@ -464,6 +464,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn review_without_consent_reports_recovery_instead_of_crashing() {
+        let temp = tempdir().expect("tempdir");
+        // Workspace decline wins over any real user layer, so the denial is
+        // deterministic without environment isolation.
+        std::fs::write(temp.path().join("vtcode.toml"), "[skills.bundled]\nenabled = false\n")
+            .expect("decline bundled skills");
+
+        let outcome = handle_skill_command(
+            SkillCommandAction::Use {
+                name: "cmd-review".to_string(),
+                input: String::new(),
+            },
+            temp.path().to_path_buf(),
+        )
+        .await
+        .expect("use outcome");
+
+        match outcome {
+            SkillCommandOutcome::Error { message } => {
+                assert!(message.contains("cmd-review"), "message: {message}");
+                assert!(message.contains("skills.bundled.enabled"), "message: {message}");
+            }
+            other => panic!("declined /review must degrade to an error, got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn built_in_command_skill_info_reports_metadata() {
         let temp = tempdir().expect("tempdir");
 

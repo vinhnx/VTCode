@@ -508,6 +508,9 @@ impl Render for DesktopView {
         if self.running_confirm.is_some() {
             body = body.child(self.render_running_confirm(cx));
         }
+        if self.skills_consent_open {
+            body = body.child(self.render_skills_consent(cx));
+        }
         // Rename paints above the preview: it can repoint a previewing file.
         if self.file_rename.is_some() {
             body = body.child(self.render_file_rename(cx));

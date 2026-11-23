@@ -1,4 +1,7 @@
 use super::*;
+use vtcode_core::config::consent::{ConsentAnswer, bundled_skills_answer};
+use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::skills::system::bundled_skills_grandfathered;
 
 pub(super) fn listing_matches_workspace(listing: &SessionListing, workspace: &Path) -> bool {
     let Some(listing_workspace) = session_workspace_path(listing) else {
@@ -13,6 +16,28 @@ pub(super) fn workspace_label(workspace: &Path) -> String {
         .and_then(|part| part.to_str())
         .unwrap_or("workspace")
         .to_string()
+}
+
+/// Ask-first consent state for bundled system skills, for the Desktop card.
+///
+/// Mirrors the install gate exactly: an explicit answer wins, otherwise a
+/// pre-consent cache grandfathers refreshes. `None` when the configuration
+/// cannot be loaded; the client then stays silent and the server gate fails
+/// closed on its own.
+fn bundled_skills_consent(workspace: &Path) -> Option<protocol::BundledSkillsConsent> {
+    let manager = ConfigManager::load_from_workspace(workspace).ok()?;
+    let answer = bundled_skills_answer(&manager);
+    Some(match answer {
+        ConsentAnswer::Granted => protocol::BundledSkillsConsent::Granted,
+        ConsentAnswer::Declined => protocol::BundledSkillsConsent::Declined,
+        ConsentAnswer::Unasked => {
+            if bundled_skills_grandfathered() {
+                protocol::BundledSkillsConsent::Grandfathered
+            } else {
+                protocol::BundledSkillsConsent::Unasked
+            }
+        }
+    })
 }
 
 /// Credentials resolved when a `config/select` override was applied. A provider
@@ -184,6 +209,7 @@ pub(super) async fn configuration_snapshot(
         options.mode.as_deref().unwrap_or(&context.startup.config.default_primary_agent),
     );
     Ok(ConfigurationSnapshot {
+        bundled_skills_consent: bundled_skills_consent(&context.workspace),
         session_options: Some(protocol::SessionOptionsSnapshot {
             permission_mode: if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
                 protocol::PermissionMode::FullAccess

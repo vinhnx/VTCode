@@ -69,6 +69,7 @@ pub use vtcode_skills::versioning::{
 // Staying sub-modules (depend on vtcode-core internals)
 // ---------------------------------------------------------------------------
 pub mod cli_bridge;
+pub mod consent;
 pub mod discovery;
 pub mod executor;
 pub mod loader;
@@ -79,6 +80,7 @@ pub mod validation;
 
 // Re-export stayed-module public API
 pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_tools};
+pub use consent::bundled_skills_install_permitted_for_workspace;
 pub use discovery::{DiscoveryConfig, DiscoveryResult, DiscoveryStats, ProgressiveSkillLoader, SkillDiscovery};
 pub use executor::{execute_skill_with_sub_llm, filter_tools_for_skill};
 pub use loader::{

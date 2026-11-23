@@ -835,6 +835,7 @@ mod settings_navigation;
 mod settings_panes;
 mod settings_spacing;
 mod shortcuts_editor;
+mod skills_consent;
 mod slash_options;
 mod startup_interactions;
 mod steer_result;

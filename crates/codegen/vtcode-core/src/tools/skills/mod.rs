@@ -1,4 +1,3 @@
-use crate::config::ConfigManager;
 use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
@@ -280,9 +279,7 @@ fn build_skill_response(skill: &Skill, activation_status: &str) -> Value {
 }
 
 fn default_vtcode_home_dir() -> anyhow::Result<PathBuf> {
-    VtCodePaths::resolve()
-        .map(|paths| paths.data_dir().to_path_buf())
-        .context("could not resolve VT Code data directory for skill discovery")
+    crate::skills::system::bundled_skills_home().map_err(anyhow::Error::from)
 }
 
 fn effective_codex_home(explicit_home: Option<&Path>) -> anyhow::Result<PathBuf> {
@@ -314,12 +311,10 @@ fn build_skill_loader_config(
 }
 
 fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> SkillLoadOutcome {
-    let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace_root)
-        .map(|manager| manager.config().skills.bundled.enabled)
-        .unwrap_or(true);
-    let manager = SkillsManager::new_with_bundled_skills_enabled(codex_home.to_path_buf(), bundled_skills_enabled);
+    let bundled_skills_permitted = crate::skills::bundled_skills_install_permitted_for_workspace(workspace_root);
+    let manager = SkillsManager::new_with_bundled_skills_enabled(codex_home.to_path_buf(), bundled_skills_permitted);
     manager.ensure_system_skills_installed();
-    let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_enabled);
+    let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_permitted);
 
     #[cfg(test)]
     let mut discovery = crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);

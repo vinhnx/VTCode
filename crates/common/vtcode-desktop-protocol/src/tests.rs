@@ -431,6 +431,7 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
     assert_eq!(snapshot.context_window, None);
     assert_eq!(snapshot.shared_ui, None);
     assert_eq!(snapshot.secret_store, None);
+    assert_eq!(snapshot.bundled_skills_consent, None);
 
     // Shared UI preferences without the style projection (older services)
     // fall back to the balanced default.
@@ -466,9 +467,11 @@ fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> 
         shared_ui: None,
         session_options: None,
         secret_store: None,
+        bundled_skills_consent: Some(BundledSkillsConsent::Unasked),
     })?;
     assert_eq!(value["sandbox"], "Ask before protected actions");
     assert_eq!(value["contextWindow"], 131_072);
+    assert_eq!(value["bundledSkillsConsent"], "unasked");
 
     let submit: TurnSubmitParams = serde_json::from_value(serde_json::json!({
         "sessionId": "s",

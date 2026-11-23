@@ -46,23 +46,32 @@ pub struct EnhancedSkillLoader {
     workspace_root: PathBuf,
     codex_home: PathBuf,
     discovery: SkillDiscovery,
+    include_bundled_system_skills: bool,
 }
 
 fn default_codex_home() -> PathBuf {
-    std::env::var_os("CODEX_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
-        .unwrap_or_else(|| PathBuf::from(".codex"))
+    // Unified VT Code home, never another tool's directory. An unresolvable
+    // home yields an empty path that install/uninstall refuse and discovery
+    // skips (callers force `include_bundled_system_skills` off with it).
+    crate::skills::system::bundled_skills_home().unwrap_or_default()
 }
 
-pub(crate) fn discovery_config_for_codex_home(workspace_root: &Path, codex_home: &Path) -> DiscoveryConfig {
+/// Whether `home` came from a successful unified-home resolution.
+fn home_is_usable(home: &Path) -> bool {
+    !home.as_os_str().is_empty() && home.is_absolute()
+}
+
+pub(crate) fn discovery_config_for_codex_home(
+    workspace_root: &Path,
+    codex_home: &Path,
+    include_bundled_system_skills: bool,
+) -> DiscoveryConfig {
     let home_dir = dirs::home_dir();
     let loader_config = SkillLoaderConfig {
         codex_home: codex_home.to_path_buf(),
         cwd: workspace_root.to_path_buf(),
         project_root: find_git_root(workspace_root),
-        include_bundled_system_skills: true,
+        include_bundled_system_skills,
     };
     let roots = skill_roots_with_home_dir(&loader_config, home_dir.as_deref());
 
@@ -82,20 +91,51 @@ pub(crate) fn discovery_config_for_codex_home(workspace_root: &Path, codex_home:
 }
 
 impl EnhancedSkillLoader {
-    /// Create a new enhanced loader for workspace
+    /// Create a new enhanced loader for workspace.
+    ///
+    /// Bundled system skills resolve to the unified VT Code home and are
+    /// installed/discovered only when ask-first consent permits.
     pub fn new(workspace_root: PathBuf) -> Self {
+        let permitted = crate::skills::bundled_skills_install_permitted_for_workspace(&workspace_root);
         let codex_home = default_codex_home();
-        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
-        Self { workspace_root, codex_home, discovery }
+        let include_bundled_system_skills = permitted && home_is_usable(&codex_home);
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
+            &workspace_root,
+            &codex_home,
+            include_bundled_system_skills,
+        ));
+        Self {
+            workspace_root,
+            codex_home,
+            discovery,
+            include_bundled_system_skills,
+        }
     }
 
-    /// Create a loader pinned to a specific VT Code home directory.
+    /// Create a loader pinned to a specific home directory.
+    ///
+    /// The override changes the install/discovery location (hermetic tests,
+    /// benchmarks) but never the permission: consent is still consulted.
     pub fn with_codex_home(workspace_root: PathBuf, codex_home: PathBuf) -> Self {
-        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
-        Self { workspace_root, codex_home, discovery }
+        let permitted = crate::skills::bundled_skills_install_permitted_for_workspace(&workspace_root);
+        let include_bundled_system_skills = permitted && home_is_usable(&codex_home);
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
+            &workspace_root,
+            &codex_home,
+            include_bundled_system_skills,
+        ));
+        Self {
+            workspace_root,
+            codex_home,
+            discovery,
+            include_bundled_system_skills,
+        }
     }
 
     fn ensure_system_skills_installed(&self) {
+        if !self.include_bundled_system_skills {
+            return;
+        }
         if let Err(err) = install_system_skills(&self.codex_home) {
             tracing::warn!("enhanced skill loader failed to install bundled system skills: {err}");
         }
@@ -145,6 +185,9 @@ impl EnhancedSkillLoader {
         // lookup. Opening a dynamic library executes arbitrary native code
         // before this loader can inspect its metadata, so native loading must
         // remain an explicit, separately-gated operation.
+        if crate::skills::system::bundled_skill_names().contains(&name) {
+            return Err(anyhow::anyhow!(crate::config::consent::bundled_skill_missing_hint(name)));
+        }
         Err(skill_ops::skill_not_found_error(name))
     }
 
@@ -191,7 +234,7 @@ fn infer_scope_from_skill_path(path: &Path, workspace_root: &Path) -> SkillScope
     if path.starts_with(Path::new("/etc/codex/skills")) {
         return SkillScope::Admin;
     }
-    if path.starts_with(system_cache_root_dir(&default_codex_home())) {
+    if crate::skills::system::bundled_skills_home().is_ok_and(|home| path.starts_with(system_cache_root_dir(&home))) {
         return SkillScope::System;
     }
     if let Some(home) = dirs::home_dir()

@@ -1,4 +1,3 @@
-use crate::config::ConfigManager;
 use crate::config::types::CapabilityLevel;
 use crate::skills::command_skills::is_model_catalog_eligible;
 use crate::skills::manager::SkillsManager;
@@ -160,9 +159,7 @@ impl PromptContext {
             return;
         }
 
-        let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
-            .map(|manager| manager.config().skills.bundled.enabled)
-            .unwrap_or(true);
+        let bundled_skills_enabled = crate::skills::bundled_skills_install_permitted_for_workspace(workspace);
         let manager = SkillsManager::new_with_bundled_skills_enabled(home_dir.to_path_buf(), bundled_skills_enabled);
         let outcome = manager.skills_metadata_lightweight(workspace);
         self.add_skill_metadata_entries(
@@ -206,9 +203,7 @@ impl PromptContext {
 }
 
 fn collect_available_skill_metadata(workspace: &Path, home_dir: &Path) -> Vec<SkillMetadata> {
-    let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
-        .map(|manager| manager.config().skills.bundled.enabled)
-        .unwrap_or(true);
+    let bundled_skills_enabled = crate::skills::bundled_skills_install_permitted_for_workspace(workspace);
     let manager = SkillsManager::new_with_bundled_skills_enabled(home_dir.to_path_buf(), bundled_skills_enabled);
     manager
         .skills_metadata_lightweight(workspace)
@@ -219,10 +214,9 @@ fn collect_available_skill_metadata(workspace: &Path, home_dir: &Path) -> Vec<Sk
 }
 
 fn default_codex_home_dir() -> Option<PathBuf> {
-    std::env::var_os("CODEX_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
+    // Unified VT Code home; `None` when unresolvable so callers skip bundled
+    // skills instead of writing to another tool's directory.
+    crate::skills::system::bundled_skills_home().ok()
 }
 
 #[cfg(test)]
@@ -272,6 +266,8 @@ mod tests {
     fn load_available_skills_discovers_repo_and_system_skills() {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir(workspace.path().join(".git")).expect("create git dir");
+        fs::write(workspace.path().join("vtcode.toml"), "[skills.bundled]\nenabled = true\n")
+            .expect("grant bundled skills");
         write_skill(&workspace.path().join(".agents/skills/repo-skill"), "repo-skill", "Repo-local skill");
 
         let home = TempDir::new().expect("home tempdir");

@@ -621,3 +621,9 @@ list_files = true
 # Native Claude fast mode uses premium pricing. Switching speeds invalidates prompt-cache reuse.
 # [provider.anthropic]
 # speed = "fast"  # standard or fast; unset uses standard, incompatible routes keep the preference dormant
+
+# Bundled skills (cmd-review, skill-creator, skill-installer) install to the
+# VT Code data directory only after the consent wizard records an answer.
+# Uncomment to answer without the wizard; declines keep VT Code working.
+# [skills.bundled]
+# enabled = true

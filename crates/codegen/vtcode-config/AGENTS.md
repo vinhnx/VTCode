@@ -7,7 +7,7 @@
 
 - `loader/` ConfigManager, ConfigBuilder, layers (`manager/` loading/security/repair, `manager/persistence.rs` saves, `config.rs`, `bootstrap.rs`, `toml_patch.rs` generic comment-preserving TOML updates) | `core/` AgentConfig and nested configs (`agent/`, `provider_override.rs`, `anthropic_speed.rs`).
 - `constants/` models, env vars, URLs, tools, limits, `ui.rs` | `models/` ModelId + Provider | `types/` | `defaults/` | `schema.rs` (feature-gated JSON Schema).
-- `api_keys.rs` + `api_keys/credential_resolution.rs` | `mcp/`, `webmcp.rs`, `acp.rs`, `hooks.rs`, `subagents/`, `network_allowlist.rs`, `accessibility.rs`.
+- `api_keys.rs` + `api_keys/credential_resolution.rs` | `mcp/`, `webmcp.rs`, `acp.rs`, `hooks.rs`, `subagents/`, `network_allowlist.rs`, `accessibility.rs` | `consent.rs` ask-first model (answer enum, gate predicate, shared wizard copy).
 
 ## Rules
 
@@ -33,6 +33,7 @@ Enum values `/config` cycles come from quoted `"..."` strings after `Options:` i
 
 ## Gotchas
 
+- `skills.bundled.enabled` defaults false (ask-first): unset means never-asked, not declined — install decisions use `has_explicit_dotted_key`/`bundled_skills_answer`, never the raw bool.
 - Changing token-efficiency or timeout defaults requires updating `docs/config/config_field_reference.md` and the guard-rail tests.
 - `accessibility.rs` Windows FFI is never compile-checked on other hosts, so keep its `#[expect(unsafe_code, ...)]` and `// SAFETY:` attached.
 - `ModelId::generation_sort_key()` orders newest generation first from numeric digit runs; both pickers rely on it, so keep `generation()` values numeric-prefixed.

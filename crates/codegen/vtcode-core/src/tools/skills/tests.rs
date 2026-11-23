@@ -13,6 +13,14 @@ fn temp_codex_home(workspace: &Path) -> PathBuf {
     codex_home
 }
 
+fn grant_bundled_skills(workspace: &Path) {
+    fs::write(workspace.join("vtcode.toml"), "[skills.bundled]\nenabled = true\n").expect("grant bundled skills");
+}
+
+fn decline_bundled_skills(workspace: &Path) {
+    fs::write(workspace.join("vtcode.toml"), "[skills.bundled]\nenabled = false\n").expect("decline bundled skills");
+}
+
 #[tokio::test]
 async fn load_skill_requires_explicit_approval() {
     let temp_dir = TempDir::new().expect("temp dir");
@@ -120,6 +128,9 @@ Use `/rust-skills`.
 async fn traditional_skill_registration_exposes_native_cgp_factory() {
     let temp_dir = TempDir::new().expect("temp dir");
     write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+    // Declined consent keeps the test hermetic (no home install) and proves
+    // workspace skills load without bundled skills.
+    decline_bundled_skills(temp_dir.path());
 
     let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
     let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
@@ -135,6 +146,7 @@ async fn traditional_skill_registration_exposes_native_cgp_factory() {
 async fn traditional_skill_native_factory_preserves_registration_metadata() {
     let temp_dir = TempDir::new().expect("temp dir");
     write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+    decline_bundled_skills(temp_dir.path());
 
     let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
     let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
@@ -159,6 +171,7 @@ async fn traditional_skill_native_factory_preserves_registration_metadata() {
 async fn traditional_skill_registration_schema_includes_empty_properties() {
     let temp_dir = TempDir::new().expect("temp dir");
     write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+    decline_bundled_skills(temp_dir.path());
 
     let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
     let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
@@ -178,6 +191,7 @@ async fn traditional_skill_registration_schema_includes_empty_properties() {
 async fn skill_activation_lifecycle_tracks_metrics() {
     let temp_dir = TempDir::new().expect("temp dir");
     write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+    decline_bundled_skills(temp_dir.path());
 
     let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
     let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
@@ -382,6 +396,7 @@ async fn deactivate_skill_unregisters_tool() {
     let temp_dir = TempDir::new().expect("temp dir");
     let skill_name = DEMO_SKILL_TOOL_NAME;
     write_skill_fixture(temp_dir.path(), skill_name);
+    decline_bundled_skills(temp_dir.path());
 
     let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
     let active_tools = Arc::new(RwLock::new(Vec::new()));
@@ -416,6 +431,7 @@ async fn deactivate_skill_unregisters_tool() {
 #[tokio::test]
 async fn list_skills_discovers_bundled_skill_creator_from_vtcode_home() {
     let temp_dir = TempDir::new().expect("temp dir");
+    grant_bundled_skills(temp_dir.path());
     let active_skills = Arc::new(RwLock::new(HashMap::new()));
     let tool = ListSkillsTool::with_codex_home(
         temp_dir.path().to_path_buf(),
@@ -437,6 +453,7 @@ async fn list_skills_discovers_bundled_skill_creator_from_vtcode_home() {
 #[tokio::test]
 async fn load_skill_activates_bundled_skill_creator_from_vtcode_home() {
     let temp_dir = TempDir::new().expect("temp dir");
+    grant_bundled_skills(temp_dir.path());
     let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
     let active_skills = Arc::new(RwLock::new(HashMap::new()));
     let runtime = SkillToolSessionRuntime::new(

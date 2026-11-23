@@ -24,7 +24,8 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub struct BundledSkillsConfig {
-    /// Enable bundled skills shipped with VT Code.
+    /// Install and enable bundled skills shipped with VT Code. Asked once via
+    /// the consent wizard; while unset nothing is installed.
     #[serde(default = "default_bundled_skills_enabled")]
     pub enabled: bool,
 }
@@ -116,7 +117,10 @@ fn default_render_mode() -> SkillsRenderMode {
 }
 
 fn default_bundled_skills_enabled() -> bool {
-    true
+    // Ask-first: an unset key means "never asked", and installs stay forbidden
+    // until the CLI wizard or Desktop card records an explicit answer (or a
+    // pre-consent cache grandfathers the install). See `crate::consent`.
+    false
 }
 
 fn default_prompt_format() -> PromptFormat {
@@ -146,7 +150,8 @@ mod tests {
     #[test]
     fn test_default_skills_config() {
         let config = SkillsConfig::default();
-        assert!(config.bundled.enabled);
+        // Ask-first: unset stays disabled until the consent wizard records an answer.
+        assert!(!config.bundled.enabled);
         assert_eq!(config.render_mode, SkillsRenderMode::Lean);
         assert_eq!(config.prompt_format, PromptFormat::Xml);
         assert_eq!(config.max_skills_in_prompt, 10);

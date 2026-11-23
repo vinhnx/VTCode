@@ -7,6 +7,7 @@
 pub mod acp;
 pub mod api;
 pub mod api_keys;
+pub mod consent;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -29,6 +30,10 @@ pub use api::{
     ConfigWriteRequest, ConfigWriteResponse, ConfigWriteStrategy, ConfigWriteTarget, OverrideMetadata,
 };
 pub use api_keys::ApiKeySources;
+pub use consent::{
+    BUNDLED_SKILLS_SETTING_PATH, ConsentAnswer, bundled_skill_missing_hint, bundled_skills_answer,
+    bundled_skills_install_permitted, install_location_description,
+};
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AutoPermissionConfig,

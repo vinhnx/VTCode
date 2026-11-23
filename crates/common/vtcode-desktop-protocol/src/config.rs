@@ -34,6 +34,23 @@ pub struct ConfigurationSnapshot {
     /// Effective options for the next runtime session, absent on older helpers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_options: Option<SessionOptionsSnapshot>,
+    /// Ask-first consent state for bundled system skills, absent on older services.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundled_skills_consent: Option<BundledSkillsConsent>,
+}
+
+/// Ask-first consent state for installing bundled system skills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BundledSkillsConsent {
+    /// No answer recorded and no pre-consent cache: the client should ask.
+    Unasked,
+    /// No answer recorded but a pre-consent cache exists: installs continue.
+    Grandfathered,
+    /// The user explicitly allowed the install.
+    Granted,
+    /// The user explicitly declined; nothing is installed.
+    Declined,
 }
 
 /// Writable configuration layer understood by the CLI config service.

@@ -110,9 +110,17 @@ impl DesktopView {
             BackendEvent::Response { method, result: Some(_), error: None }
                 if method == protocol::method::UPDATE_STATUS
         );
+        let config_discover_refresh = matches!(
+            &event,
+            BackendEvent::Response { method, result: Some(_), error: None }
+                if method == protocol::method::CONFIG_DISCOVER
+        );
         self.handle_backend_event(event, cx);
         if update_status_refresh {
             self.maybe_autoshow_release_notes(window, cx);
+        }
+        if config_discover_refresh {
+            self.maybe_open_skills_consent(window, cx);
         }
         if let Some(text) = self.pending_composer_restore.take() {
             self.replace_composer_text(text, window, cx);

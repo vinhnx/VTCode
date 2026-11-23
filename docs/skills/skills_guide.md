@@ -9,7 +9,7 @@ VT Code discovers skills in this order:
 1. Nearest ancestor `.agents/skills` from the current working directory up to the git repository root
 2. `~/.agents/skills`
 3. `/etc/codex/skills`
-4. Bundled system skills
+4. Bundled system skills (only after consent; see below)
 
 If multiple skills share the same name, the nearest repository skill wins, then user, then admin, then system.
 
@@ -147,10 +147,24 @@ VT Code also exposes the interactive slash-command surface as skills.
 - The `/status` or `/review` slash command remains the primary interactive alias.
 - Built-in session/UI commands are surfaced as built-in command skills.
 - Prompt-oriented slash commands are shipped as bundled system skills in the release binary and installed under the
-  system skill cache at runtime.
+  system skill cache at runtime once consent is granted.
 - Command skills are intentionally excluded from the default prompt-side skill index to avoid spending context on
   slash-command metadata that is already exposed elsewhere in the harness.
 - Built-in command skills support `info` and `use`, but not `load`.
+
+## Bundled Skills Consent
+
+VT Code ships three bundled skills (`cmd-review`, `skill-creator`, `skill-installer`) inside the binary and
+extracts them to `<data-dir>/skills/.system` only after you allow it. The CLI first-run wizard and the Desktop
+consent card ask the same question once and record the answer as `skills.bundled.enabled` in your user
+configuration; MCP servers are never installed automatically.
+
+- While the key is unset, nothing is installed. Caches written by releases before ask-first consent keep
+  refreshing without re-asking.
+- Declining (or disabling later) removes the cache. VT Code keeps working; skill features that need the
+  bundled set report how to enable them.
+- Re-enable anytime in `/config` (`skills.bundled.enabled`), your user `vtcode.toml`, or by re-running setup.
+  The change applies to new sessions.
 
 ## Notes
 

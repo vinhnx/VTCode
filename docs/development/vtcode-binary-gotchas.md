@@ -261,3 +261,10 @@ Blocked handoffs copy session `events.jsonl` / ATIF into `{archive}-forensics/` 
 missing sources do not fail the handoff) and write `retention-pin.json` under the session directory so ordinary session
 retention cannot evict forensics while the blocker is unresolved. Resolving the archive unpins only when no other
 unresolved archive still references that session.
+
+## First-run consent answers live in the user layer
+
+The bundled-skills consent answer is home-scoped, so the first-run wizard persists it via `ConfigService::write`
+to the user target, never the workspace file (sparse saves would otherwise omit or lock the key). The wizard asks
+only while `skills.bundled.enabled` is unset in every enabled layer; non-interactive runs leave it unset and the
+install gate fails closed.

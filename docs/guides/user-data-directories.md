@@ -141,6 +141,12 @@ Workspace-local state is intentionally unchanged:
 `.agents`, `.codex`, `.claude`, `CODEX_HOME`, and system skill directories are external compatibility surfaces. VT Code
 may read them, but migration does not move or reclassify their contents.
 
+Bundled system skills live in VT Code's own data directory (`skills/.system`) and are installed only after the
+consent wizard records an answer (`skills.bundled.enabled` in the user configuration). `~/.codex` is never
+written to: it is only probed for a pre-consent cache marker (which grandfathers refreshes of VT Code's own
+cache) and read for Codex auth/config interop. A leftover `~/.codex/skills/.system` from an older release is
+inert and safe to delete.
+
 ## Permissions and troubleshooting
 
 New user directories are created privately (`0700` on Unix). Runtime and auth directories are private, and auth files

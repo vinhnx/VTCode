@@ -112,11 +112,14 @@ pub(super) fn print_skill_ready(name: &str) {
 pub(super) fn print_skill_config(workspace: &Path) {
     println!("Skill Configuration\n");
     println!("Workspace: {}", workspace.display());
+    let system_root = vtcode_commons::VtCodePaths::resolve()
+        .map(|paths| paths.data_dir().join("skills").join(".system").display().to_string())
+        .unwrap_or_else(|_| "<vtcode-data-dir>/skills/.system".to_string());
     println!("\nSkill Search Paths (by precedence):");
     println!("  • $CWD/.agents/skills/ ... repo-root/.agents/skills");
     println!("  • ~/.agents/skills/");
     println!("  • /etc/codex/skills/");
-    println!("  • $CODEX_HOME/skills/.system/");
+    println!("  • {system_root} (bundled skills; installed only after consent)");
 
     println!("\nSkill Directory Structure:");
     println!("  my-skill/");
@@ -127,5 +130,5 @@ pub(super) fn print_skill_config(workspace: &Path) {
 
     println!("\nEnvironment Variables:");
     println!("  • HOME - Used to locate user skill directories");
-    println!("  • CODEX_HOME - Used for bundled system skills cache");
+    println!("  • VTCODE_DATA - Overrides the data dir holding the bundled system skills cache");
 }

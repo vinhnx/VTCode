@@ -210,6 +210,37 @@ impl ConfigManager {
             .any(|layer| layer.config.as_table().is_some_and(|table| table.contains_key(key)))
     }
 
+    /// Return whether any enabled layer explicitly sets a dotted path.
+    ///
+    /// Borrow-only nested-table walk over raw layer TOML (raw file spelling,
+    /// e.g. `skills.bundled.enabled`), used to distinguish "never asked"
+    /// from an explicit answer for ask-first consent state.
+    pub fn has_explicit_dotted_key(&self, path: &str) -> bool {
+        let mut segments = path.split('.');
+        let Some(first) = segments.next() else {
+            return false;
+        };
+        if first.is_empty() {
+            return false;
+        }
+        let rest: Vec<&str> = segments.collect();
+        if rest.iter().any(|segment| segment.is_empty()) {
+            return false;
+        }
+        self.layer_stack
+            .layers()
+            .iter()
+            .filter(|layer| layer.is_enabled())
+            .filter_map(|layer| layer.config.as_table())
+            .any(|table| {
+                let mut current = table.get(first);
+                for segment in &rest {
+                    current = current.and_then(toml::Value::as_table).and_then(|table| table.get(*segment));
+                }
+                current.is_some()
+            })
+    }
+
     /// Get session duration from agent config
     pub fn session_duration(&self) -> std::time::Duration {
         std::time::Duration::from_secs(60 * 60) // Default 1 hour

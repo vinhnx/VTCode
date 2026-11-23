@@ -10,16 +10,18 @@ use vtcode_core::config::constants::{defaults, llm_generation, tool_limits};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::config::{ConfigService, ConfigWriteRequest, ConfigWriteStrategy, ConfigWriteTarget};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, update_workspace_trust};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::first_run_prompts::{
-    default_model_for_provider, prompt_api_key_interactive, prompt_lightweight_model, prompt_model,
-    prompt_persistent_memory, prompt_provider, prompt_reasoning_effort, prompt_trust,
-    resolve_initial_persistent_memory_enabled, resolve_initial_provider,
+    default_model_for_provider, prompt_api_key_interactive, prompt_bundled_skills_consent, prompt_lightweight_model,
+    prompt_model, prompt_persistent_memory, prompt_provider, prompt_reasoning_effort, prompt_trust,
+    resolve_bundled_skills_answer, resolve_initial_persistent_memory_enabled, resolve_initial_provider,
 };
+use vtcode_config::consent::BUNDLED_SKILLS_SETTING_PATH;
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
 pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, config: &mut VTCodeConfig) -> Result<bool> {
@@ -98,7 +100,10 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
     let discovered = discover_available_providers_with_mode(storage_mode);
     render_discovery_summary(&mut renderer, &discovered)?;
 
-    let (provider, model, lightweight_model, reasoning, persistent_memory, trust) = match mode {
+    // Ask-first consent is recorded once in the user layer; later workspaces reuse it.
+    let prior_consent = resolve_bundled_skills_answer(workspace);
+
+    let (provider, model, lightweight_model, reasoning, persistent_memory, trust, consent) = match mode {
         SetupMode::Interactive => {
             renderer.line(
                     MessageStyle::Status,
@@ -134,7 +139,23 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, lightweight_model, reasoning, persistent_memory, trust)
+            let consent = match prior_consent {
+                Some(allowed) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Bundled skills: already {}.", if allowed { "allowed" } else { "declined" }),
+                    )?;
+                    renderer.line(MessageStyle::Info, "")?;
+                    allowed
+                }
+                None => {
+                    let allowed = prompt_bundled_skills_consent(&mut renderer)?;
+                    renderer.line(MessageStyle::Info, "")?;
+                    allowed
+                }
+            };
+
+            (provider, model, lightweight_model, reasoning, persistent_memory, trust, Some(consent))
         }
         SetupMode::NonInteractive { full_auto } => {
             renderer.line(
@@ -165,9 +186,19 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
             )?;
             renderer.line(MessageStyle::Info, &api_key_hint(provider, storage_mode))?;
             renderer.line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
+            match prior_consent {
+                Some(allowed) => renderer.line(
+                    MessageStyle::Info,
+                    &format!("Bundled skills: already {}.", if allowed { "allowed" } else { "declined" }),
+                )?,
+                None => renderer.line(
+                    MessageStyle::Info,
+                    "Bundled skills: not asked (non-interactive) — staying uninstalled until you allow them.",
+                )?,
+            }
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, lightweight_model, reasoning, persistent_memory, trust)
+            (provider, model, lightweight_model, reasoning, persistent_memory, trust, prior_consent)
         }
     };
 
@@ -191,6 +222,22 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
 
     update_model_preference(&provider_key, &model).await.ok();
 
+    // Consent is home-scoped, so a fresh answer goes to the user layer (not
+    // the workspace file). Pre-existing answers are never rewritten here.
+    if prior_consent.is_none()
+        && let Some(allowed) = consent
+    {
+        ConfigService::write(ConfigWriteRequest {
+            workspace: workspace.to_path_buf(),
+            target: ConfigWriteTarget::User,
+            path: BUNDLED_SKILLS_SETTING_PATH.to_string(),
+            value: toml::Value::Boolean(allowed),
+            strategy: ConfigWriteStrategy::Replace,
+            expected_layer_version: None,
+        })
+        .with_context(|| "Failed to persist bundled-skills consent to the user configuration")?;
+    }
+
     update_workspace_trust(workspace, trust)
         .await
         .with_context(|| format!("Failed to persist workspace trust level for {}", workspace.display()))?;
@@ -205,6 +252,7 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
         persistent_memory,
         trust,
         storage_mode,
+        consent,
     )?;
     renderer.line(
         MessageStyle::Status,
@@ -244,6 +292,7 @@ fn render_setup_summary(
     persistent_memory_enabled: bool,
     trust: WorkspaceTrustLevel,
     storage_mode: AuthCredentialsStoreMode,
+    bundled_skills_consent: Option<bool>,
 ) -> Result<()> {
     for (style, line) in setup_summary_lines(
         provider,
@@ -253,6 +302,7 @@ fn render_setup_summary(
         persistent_memory_enabled,
         trust,
         storage_mode,
+        bundled_skills_consent,
     ) {
         renderer.line(style, &line)?;
     }
@@ -268,8 +318,9 @@ fn setup_summary_lines(
     persistent_memory_enabled: bool,
     trust: WorkspaceTrustLevel,
     storage_mode: AuthCredentialsStoreMode,
+    bundled_skills_consent: Option<bool>,
 ) -> Vec<(MessageStyle, String)> {
-    let mut lines = Vec::with_capacity(12);
+    let mut lines = Vec::with_capacity(16);
     lines.push((
         MessageStyle::Status,
         format!(
@@ -290,6 +341,8 @@ fn setup_summary_lines(
         ),
     ));
     lines.push((MessageStyle::Status, format!("Auth: {}", api_key_hint(provider, storage_mode))));
+    lines.push((MessageStyle::Info, format!("Bundled skills: {}", consent_label(bundled_skills_consent))));
+    lines.push((MessageStyle::Info, vtcode_config::consent::CONSENT_MCP_DISCLOSURE.to_string()));
     lines.push((MessageStyle::Status, "What's available now:".to_string()));
     lines.extend(
         capability_highlight_lines(persistent_memory_enabled)
@@ -424,6 +477,14 @@ fn trust_label(level: WorkspaceTrustLevel) -> &'static str {
     }
 }
 
+fn consent_label(consent: Option<bool>) -> &'static str {
+    match consent {
+        Some(true) => "allowed",
+        Some(false) => "declined (VT Code works without them; re-enable in /config)",
+        None => "not asked — staying uninstalled until allowed",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,6 +547,7 @@ mod tests {
             false,
             WorkspaceTrustLevel::ToolsPolicy,
             AuthCredentialsStoreMode::default(),
+            Some(true),
         );
         let rendered = lines.into_iter().map(|(_style, line)| line).collect::<Vec<_>>().join("\n");
 
@@ -498,5 +560,37 @@ mod tests {
         assert!(rendered.contains("Granular permissions"));
         assert!(!rendered.contains("Startup mode"));
         assert!(!rendered.contains("permission mode"));
+    }
+
+    fn summary_with_consent(consent: Option<bool>) -> String {
+        setup_summary_lines(
+            Provider::OpenAI,
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            false,
+            WorkspaceTrustLevel::ToolsPolicy,
+            AuthCredentialsStoreMode::default(),
+            consent,
+        )
+        .into_iter()
+        .map(|(_style, line)| line)
+        .collect::<Vec<_>>()
+        .join("\n")
+    }
+
+    #[test]
+    fn setup_summary_reports_consent_state_and_mcp_disclosure() {
+        let allowed = summary_with_consent(Some(true));
+        assert!(allowed.contains("Bundled skills: allowed"), "summary: {allowed}");
+        assert!(allowed.contains("never installed automatically"), "summary: {allowed}");
+
+        let declined = summary_with_consent(Some(false));
+        assert!(declined.contains("Bundled skills: declined"), "summary: {declined}");
+        assert!(declined.contains("re-enable in /config"), "summary: {declined}");
+
+        let unasked = summary_with_consent(None);
+        assert!(unasked.contains("Bundled skills: not asked"), "summary: {unasked}");
+        assert!(unasked.contains("staying uninstalled"), "summary: {unasked}");
     }
 }

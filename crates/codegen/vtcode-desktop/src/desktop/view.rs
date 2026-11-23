@@ -177,6 +177,7 @@ mod settings_vtcode;
 mod shared_preferences;
 mod shortcuts;
 mod shortcuts_render;
+mod skills_consent;
 mod storage;
 mod submit;
 mod swipe_navigation_overlay;
@@ -567,6 +568,9 @@ struct DesktopView {
     pending_permission_choice: Option<protocol::PermissionMode>,
     full_access_confirm: Option<FullAccessConfirmState>,
     full_access_focus: FocusHandle,
+    skills_consent_open: bool,
+    skills_consent_seen: bool,
+    skills_consent_focus: FocusHandle,
     running_confirm: Option<RunningSwitch>,
     running_confirm_focus: FocusHandle,
     armed_running_switch: Option<RunningSwitch>,

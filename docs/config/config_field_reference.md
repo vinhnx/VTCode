@@ -765,7 +765,7 @@ python3 scripts/generate_config_field_reference.py
 | `security.integrity_checks` | `boolean` | no | `true` | Enable runtime integrity tagging for critical paths. |
 | `security.require_write_tool_for_claims` | `boolean` | no | `true` | Require a successful write tool before accepting claims like "I've updated the file" as applied. When true, such claims are treated as proposals unless a write tool executed successfully. |
 | `security.zero_trust_mode` | `boolean` | no | `true` | Enable zero-trust checks between components. |
-| `skills.bundled.enabled` | `boolean` | no | `true` | Enable bundled skills shipped with VT Code. |
+| `skills.bundled.enabled` | `boolean` | no | `false` | Install and enable bundled skills shipped with VT Code. Asked once via the consent wizard; while unset nothing is installed. |
 | `skills.enable-auto-trigger` | `boolean` | no | `true` | Enable auto-trigger on $skill-name mentions |
 | `skills.enable-description-matching` | `boolean` | no | `true` | Enable description-based keyword matching for auto-trigger |
 | `skills.max-skills-in-prompt` | `integer` | no | `10` | Maximum number of skills to show in system prompt |
