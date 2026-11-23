@@ -8,13 +8,13 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
         - 'dtolnay/rust-toolchain@stable'
         - 'mozilla-actions/sccache-action@v0.0.11'
-        - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        - 'swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266'
         - 'taiki-e/install-action@v2.90.5'
     '.github/workflows/ci.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'dtolnay/rust-toolchain@stable'
-        - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        - 'swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266'
         - 'taiki-e/install-action@v2.90.5'
     '.github/workflows/deny.yml':
         - 'actions/checkout@v7.0.1'
@@ -26,13 +26,13 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'dtolnay/rust-toolchain@stable'
-        - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        - 'swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266'
         - 'taiki-e/install-action@v2.90.5'
     '.github/workflows/hotpath-benchmark.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
         - 'dtolnay/rust-toolchain@stable'
-        - 'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        - 'swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266'
     '.github/workflows/hotpath-relay.yml': []
     '.github/workflows/verify-lockfile.yml':
         - 'actions/checkout@v7.0.1'
@@ -95,9 +95,9 @@ dependencies:
         commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'
         owner_id: 108928776
         repo_id: 512644635
-    'swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31':
+    'swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266':
         ref: 'master'
-        commit: 'sha1-c8037a86dde8214a8310e9f54a8fc61ab362aa31'
+        commit: 'sha1-eedcf2fb1c22f010a0eb66b92f378c110977f266'
         owner_id: 580492
         repo_id: 298565987
     'taiki-e/install-action@v2.90.5':

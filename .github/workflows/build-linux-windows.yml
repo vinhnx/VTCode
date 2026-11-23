@@ -106,7 +106,7 @@ jobs:
       # cache (full match: false) and recompiles its whole dependency tree.
       # Namespace per target so each job owns its own cache entry and saves win.
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           key: ${{ matrix.target }}
 
@@ -290,7 +290,7 @@ jobs:
       # cache (full match: false) and recompiles its whole dependency tree.
       # Namespace per target so each job owns its own cache entry and saves win.
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           key: ${{ matrix.target }}
 
@@ -442,7 +442,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           key: x86_64-pc-windows-msvc
 
