@@ -668,4 +668,31 @@ async fn computer_use_openai_call_without_final_screenshot_fails_closed() {
     assert!(refused.to_string().contains("has ended"), "unexpected refusal: {refused:#}");
 }
 
+#[test]
+fn requested_task_uses_last_user_message_even_with_parts_content() {
+    // The task may arrive as Parts rather than a plain Text message. The
+    // reviewer's evidence must be the most recent user message, not an older
+    // Text message that happens to be easier to match.
+    let request = LLMRequest {
+        model: "test-model".into(),
+        messages: vec![
+            vtcode_core::llm::provider::Message {
+                role: vtcode_core::llm::provider::MessageRole::User,
+                content: vtcode_core::llm::provider::MessageContent::Text("older task".into()),
+                ..Default::default()
+            },
+            vtcode_core::llm::provider::Message {
+                role: vtcode_core::llm::provider::MessageRole::User,
+                content: vtcode_core::llm::provider::MessageContent::parts(vec![
+                    vtcode_core::llm::provider::ContentPart::text("current task".into()),
+                ]),
+                ..Default::default()
+            },
+        ]
+        .into(),
+        ..Default::default()
+    };
+    assert_eq!(requested_task(&request), "current task");
+}
+
 mod live;

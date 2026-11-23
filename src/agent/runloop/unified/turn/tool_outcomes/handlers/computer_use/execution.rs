@@ -269,12 +269,8 @@ fn requested_task(request: &LLMRequest) -> String {
         .messages
         .iter()
         .rev()
-        .find_map(|message| match (&message.role, &message.content) {
-            (vtcode_core::llm::provider::MessageRole::User, vtcode_core::llm::provider::MessageContent::Text(text)) => {
-                Some(text.clone())
-            }
-            _ => None,
-        })
+        .find(|message| message.role == vtcode_core::llm::provider::MessageRole::User)
+        .map(|message| message.content.as_text().into_owned())
         .unwrap_or_default()
 }
 
