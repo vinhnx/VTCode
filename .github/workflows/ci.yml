@@ -99,7 +99,7 @@ jobs:
           components: clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           key: clippy
 
@@ -130,7 +130,7 @@ jobs:
           toolchain: 1.100.0
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           key: tests
 
@@ -241,7 +241,7 @@ jobs:
           toolchain: 1.100.0
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2
         with:
           # Cross-OS matrix jobs must not share a cache key (docs/development/ci-cd.md).
           key: platform-smoke-${{ matrix.os }}
