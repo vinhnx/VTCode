@@ -559,11 +559,24 @@ impl DesktopView {
             .when(models || quick_model || inline_completion, |panel| {
                 panel.rounded_xl().bg(colors.popover).overflow_hidden()
             })
-            .on_mouse_down_out(move |_, window, cx| {
+            .on_mouse_down_out(move |event, window, cx| {
                 let _updated = weak.update(cx, |view, cx| {
-                    if view.palette_is_current(palette_id) {
-                        view.close_palette(window, cx);
+                    if !view.palette_is_current(palette_id) {
+                        return;
                     }
+                    // A click on this popup's own trigger CTA must stay a
+                    // toggle. Closing on mouse-down here would let the
+                    // trigger's click re-open the palette on mouse-up, so
+                    // leave the dismissal to the trigger's own action (the
+                    // same-kind openers already call `toggle_palette_kind`).
+                    if view
+                        .composer_pill_bounds
+                        .for_kind(&view.palette_kind)
+                        .is_some_and(|bounds| bounds.contains(&event.position))
+                    {
+                        return;
+                    }
+                    view.close_palette(window, cx);
                 });
             })
             .on_action(|_: &gpui_kit::base::actions::Cancel, _, cx| cx.stop_propagation())

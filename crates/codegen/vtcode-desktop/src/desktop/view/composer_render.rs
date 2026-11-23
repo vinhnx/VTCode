@@ -9,6 +9,7 @@ use gpui_kit::base::ElementExt as _;
 /// entry for the open palette kind.
 #[derive(Clone, Copy, Default)]
 pub(in crate::desktop::view) struct ComposerPillBounds {
+    attach: Option<gpui_kit::Bounds<Pixels>>,
     model: Option<gpui_kit::Bounds<Pixels>>,
     effort: Option<gpui_kit::Bounds<Pixels>>,
     mode: Option<gpui_kit::Bounds<Pixels>>,
@@ -18,6 +19,7 @@ pub(in crate::desktop::view) struct ComposerPillBounds {
 /// Identifies a composer trigger pill for bounds capture.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::desktop::view) enum ComposerPill {
+    Attach,
     Model,
     Effort,
     Mode,
@@ -27,11 +29,17 @@ pub(in crate::desktop::view) enum ComposerPill {
 impl ComposerPillBounds {
     fn set(&mut self, pill: ComposerPill, bounds: gpui_kit::Bounds<Pixels>) {
         match pill {
+            ComposerPill::Attach => self.attach = Some(bounds),
             ComposerPill::Model => self.model = Some(bounds),
             ComposerPill::Effort => self.effort = Some(bounds),
             ComposerPill::Mode => self.mode = Some(bounds),
             ComposerPill::Policy => self.policy = Some(bounds),
         }
+    }
+
+    /// Bounds of the attachment trigger, whose picker is not a palette kind.
+    pub(in crate::desktop::view) fn attach(&self) -> Option<gpui_kit::Bounds<Pixels>> {
+        self.attach
     }
 
     /// Bounds for the open palette kind, when that kind is pill-owned.
@@ -317,7 +325,7 @@ impl DesktopView {
                     .gap_1()
                     .min_w_0()
                     .fade_in("composer-secondary-fade", cx.theme())
-                    .child(self.render_attach_button(cx))
+                    .child(self.composer_trigger_pill(ComposerPill::Attach, self.render_attach_button(cx), cx))
                     .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
                     .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx)),
             );
@@ -338,9 +346,9 @@ impl DesktopView {
                 ),
             )
             .child(self.composer_trigger_pill(ComposerPill::Effort, self.render_effort_button(cx), cx));
-        // Running cluster: every action is a quiet ghost button — no filled
-        // pill bodies anywhere in the composer, so the frequent stop stays
-        // legible without owning a competing accent fill. Force-cancel is a
+        // Running cluster: the main action owns the one filled primary pill
+        // in the composer while the option triggers stay quiet ghosts, so
+        // the next action is unmistakable in every mode. Force-cancel is a
         // ghost that appears only once a stop is outstanding and the turn
         // still runs — the stuck-process moment, when hammering the exec
         // kill without re-sending the turn cancel is actually useful. Every
@@ -350,11 +358,11 @@ impl DesktopView {
         // surfaces (sidebar/tab strip) rather than the composer, which
         // keeps the run cluster to its moment-relevant choices. Glyphs
         // stay minimal bare strokes (no enclosing container shapes): the
-        // cancel button uses a plain square — the universal stop mark —
-        // while its neighbor uses an X. The buttons stay on the Medium
-        // tier for their icon: Kit derives an icon-only button's glyph
-        // from its own size tier (Large paints a 24px icon, Medium 16px,
-        // same 32px frame) and its `ButtonIcon` wrapper overwrites any
+        // filled cancel button uses a plain square — the universal stop
+        // mark — while its ghost neighbor uses an X. The buttons stay on
+        // the Medium tier for their icon: Kit derives an icon-only button's
+        // glyph from its own size tier (Large paints a 24px icon, Medium
+        // 16px, same 32px frame) and its `ButtonIcon` wrapper overwrites any
         // size set on the inner `Icon`. A non-empty draft swaps the stop
         // out for the queue commit: the send look (ArrowUp) with queue
         // copy, since Enter would queue behind the turn from this state.
@@ -373,8 +381,9 @@ impl DesktopView {
             });
             if draft_ready {
                 model_actions = model_actions.child(
-                    desktop_ghost_button("queue-prompt")
+                    desktop_primary_button("queue-prompt")
                         .desktop_disabled(!can_queue)
+                        .rounded(cx.theme().radius_full())
                         .accessibility_label(rust_i18n::t!("app.composer.queue").to_string())
                         .tooltip(rust_i18n::t!("app.composer.queue_tooltip").to_string())
                         .icon(IconName::ArrowUp)
@@ -382,7 +391,8 @@ impl DesktopView {
                 );
             } else {
                 model_actions = model_actions.child(
-                    desktop_ghost_button("cancel-turn")
+                    desktop_primary_button("cancel-turn")
+                        .rounded(cx.theme().radius_full())
                         .tooltip_with_action(
                             rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                             &CancelRun,
@@ -395,8 +405,9 @@ impl DesktopView {
             }
         } else {
             model_actions = model_actions.child(
-                desktop_ghost_button("send-prompt")
+                desktop_primary_button("send-prompt")
                     .desktop_disabled(!can_submit)
+                    .rounded(cx.theme().radius_full())
                     .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
                     .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)

@@ -133,6 +133,11 @@ pub struct CommandState {
     matched: Vec<MatchedItem>,
     selected_index: Option<usize>,
     preserve_no_selection: bool,
+    /// A host-requested selection that arrived before the model was installed.
+    /// GPUI runs `on_next_frame` callbacks before the frame's draw, so a
+    /// palette that selects its current item on open would otherwise call
+    /// `set_selected_index` against an empty `matched` list and lose it.
+    pending_selection_index: Option<IndexPath>,
     loading: bool,
     pending_scroll: Option<usize>,
     /// The placeholder last written to the query input, so that `render` only
@@ -165,6 +170,7 @@ impl CommandState {
             matched: Vec::new(),
             selected_index: None,
             preserve_no_selection: false,
+            pending_selection_index: None,
             loading: false,
             pending_scroll: None,
             applied_placeholder: SharedString::default(),
@@ -223,6 +229,23 @@ impl CommandState {
         } else {
             self.reset_selection();
         }
+
+        // A selection requested before the first install now has a model to
+        // resolve against. Apply it once (take, not clone) so later model
+        // reinstalls preserve it without re-scrolling. This is the path a
+        // palette takes when its host calls `set_selected_index` from an
+        // `on_next_frame` callback: GPUI runs those before the frame's draw.
+        if let Some(requested) = self.pending_selection_index.take() {
+            let matched_ix = self
+                .matched
+                .iter()
+                .position(|matched| matched.index_path == requested && !matched.disabled);
+            self.selected_index = matched_ix;
+            self.preserve_no_selection = matched_ix.is_none();
+            self.pending_scroll = matched_ix
+                .and_then(|matched_ix| self.matched.get(matched_ix))
+                .map(|matched| matched.row_ix);
+        }
     }
 
     /// The current search query.
@@ -267,13 +290,25 @@ impl CommandState {
     /// highlight with `None`.
     ///
     /// A path that is currently filtered out or disabled clears the
-    /// highlight. A visible selection is scrolled into view.
+    /// highlight. A visible selection is scrolled into view. A selection
+    /// requested before the model is installed is remembered and applied by
+    /// `install_model` as soon as the rows exist.
     pub fn set_selected_index(
         &mut self,
         index: Option<IndexPath>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.model.entries.is_empty() {
+            // GPUI runs the host's `on_next_frame` callback before the first
+            // draw, when there are no matches yet. Remember the request for
+            // `install_model` instead of dropping it; `None` clears it.
+            self.pending_selection_index = index;
+            self.preserve_no_selection = index.is_none();
+            cx.notify();
+            return;
+        }
+
         let matched_ix = index.and_then(|index| {
             self.matched
                 .iter()

@@ -38,7 +38,7 @@ Use the shared builders in `view/components.rs` for push buttons.
 | Ghost | `desktop_ghost_button` | Quiet toolbar, inline, and navigation actions, such as transcript copy, expand, and tab close. Use `desktop_dismiss_button` for an X with a shared accessible name and tooltip. |
 
 - Use semibold for Primary and Danger labels, medium for Secondary, and regular weight for quiet Ghost actions.
-- The composer is the one deliberate exception to the Primary rule: attach, model, effort, mode, policy, and send/cancel/queue are all `desktop_ghost_button` — quiet text buttons with hover state only and no filled pill bodies. Keep their accessible names, tooltips, sizes, and action wiring when touching that row.
+- The composer's option triggers (attach, model, effort, mode, policy) are `desktop_ghost_button` — quiet text buttons with hover state only and no filled pill bodies — while the single main action (send / queue / cancel-turn) is a `desktop_primary_button` with a full radius, so the next action stays unmistakable on every composer row. Keep their accessible names, tooltips, sizes, and action wiring when touching that row.
 - Use one Primary per action group. In About, Install Update takes priority when a release is offered. In Shortcuts, Save takes priority while a draft is being edited.
 - Apply `desktop_disabled` to push buttons to set the disabled cursor and clear instance shadows. Kit supplies hover, press, disabled, and focus paint.
 - Use `desktop_ghost_button` with `desktop_selected` for persistent choices with selected-state paint. Keep Kit tabs, toggles, switches, and native dialogs in their own components.

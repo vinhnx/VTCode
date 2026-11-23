@@ -238,8 +238,19 @@ impl DesktopView {
                         // press outside the popover closes it. The close is
                         // idempotent and the listener unmounts with the panel,
                         // so no staleness guard is needed.
-                        .on_mouse_down_out(move |_, window, cx| {
+                        .on_mouse_down_out(move |event, window, cx| {
                             let _updated = weak.update(cx, |view, cx| {
+                                // Let the attach CTA own its own toggle. A
+                                // capture-phase close here would be followed
+                                // by the CTA's click re-opening the picker,
+                                // so a second click would never dismiss it.
+                                if view
+                                    .composer_pill_bounds
+                                    .attach()
+                                    .is_some_and(|bounds| bounds.contains(&event.position))
+                                {
+                                    return;
+                                }
                                 view.close_attachment_picker(window, cx);
                             });
                         })

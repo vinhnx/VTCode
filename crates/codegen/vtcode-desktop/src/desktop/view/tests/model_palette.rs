@@ -212,3 +212,124 @@ fn model_palette_preserves_catalog_generation_order_within_group(cx: &mut TestAp
     })
     .unwrap();
 }
+
+/// Opening the full "Choose a model" panel must leave the active route
+/// selected and scrolled into view. With a long catalog the current row can
+/// sit well below the fold, so a bare list with no selection leaves the user
+/// guessing which model is active (the original bug).
+#[gpui_kit::test]
+fn opening_the_full_model_palette_selects_and_reveals_the_current_model(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 520., 700.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    settle_fade_animations(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            let mut config = runtime_options_config();
+            // Frontier labs lead the picker; the active route lives in a
+            // later group, past the first screenful of rows.
+            config.provider = "mycorp".into();
+            config.model = "corp-current".into();
+            view.configuration = Some(config);
+            view.models = (0..40)
+                .map(|rank| catalog_model("openai", &format!("gpt-catalog-{rank}")))
+                .chain(std::iter::once(catalog_model("mycorp", "corp-current")))
+                .collect();
+            view.sidebar_open = false;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_model_palette(window, cx));
+        // Headless windows never run `on_next_frame`. GPUI runs those callbacks
+        // before the frame's draw, so call the focus hook before the first
+        // render to reproduce the production ordering (the CommandState has
+        // no model yet at that point).
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.render_frame(cx);
+
+        let current = super::super::PaletteAction::SelectModel {
+            provider: "mycorp".into(),
+            model: "corp-current".into(),
+        };
+        let expected = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .enumerate()
+            .find_map(|(section, (_, entries))| {
+                entries
+                    .iter()
+                    .position(|entry| entry.action == current)
+                    .map(|row| gpui_kit::component::IndexPath::new(row).section(section))
+            });
+        let state = view.read(cx).palette.clone().expect("model palette is open");
+        assert_eq!(
+            state.read_with(cx, |state, _| state.selected_index()),
+            expected,
+            "the active model must be the highlighted row"
+        );
+        assert!(
+            window.try_find(palette_action_id(&current)).is_some(),
+            "the active model row must be scrolled into view"
+        );
+    })
+    .unwrap();
+}
+
+/// Clicking a composer CTA while its own popup is up must dismiss that popup
+/// instead of opening it again. The palette's click-away handler runs first
+/// (capture phase), so it has to leave presses inside the owning trigger's
+/// recorded bounds to the trigger's toggle action.
+#[gpui_kit::test]
+fn clicking_an_open_composer_cta_dismisses_its_panel(cx: &mut TestAppContext) {
+    use super::super::PaletteKind;
+
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    settle_fade_animations(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+
+        for (trigger, kind) in [
+            ("pick-model", PaletteKind::Models),
+            ("composer-effort", PaletteKind::ModelOptions),
+            ("composer-policy", PaletteKind::Permissions),
+        ] {
+            window.click(trigger, cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_some(), "{trigger} must open its popup");
+            assert!(view.read(cx).palette_open_for(&[kind]), "{trigger} must own the open popup");
+
+            window.click(trigger, cx);
+            window.render_frame(cx);
+            assert!(
+                view.read(cx).palette.is_none(),
+                "{trigger} must dismiss its popup on a second click, not reopen it"
+            );
+        }
+
+        // The attach picker is a separate popover with its own click-away
+        // handler; its trigger must toggle it the same way.
+        view.update(cx, |view, _| {
+            view.workspace = Some(PathBuf::from("/workspace"));
+        });
+        window.render_frame(cx);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).attachment_picker.is_some(), "attach opens the picker");
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert!(
+            view.read(cx).attachment_picker.is_none(),
+            "a second attach click must dismiss the picker, not reopen it"
+        );
+    })
+    .unwrap();
+}
