@@ -128,6 +128,26 @@ class ScanFileTests(unittest.TestCase):
             ["unsafe fn needs a # Safety contract doc"],
         )
 
+    def test_plain_comment_safety_mention_is_not_a_contract(self):
+        # A non-doc comment is invisible to rustdoc and clippy's missing_safety_doc.
+        content = (
+            '#[allow(unsafe_code, reason = "ffi")]\n'
+            "// # Safety: trusted caller.\n"
+            "unsafe fn probe() {}\n"
+        )
+        self.assert_reasons(
+            self.scan("src/lib.rs", content),
+            ["unsafe fn needs a # Safety contract doc"],
+        )
+
+    def test_multiline_block_doc_safety_section_satisfies_rule_d(self):
+        content = (
+            '#[allow(unsafe_code, reason = "ffi")]\n'
+            "/**\n * # Safety: caller upholds the ABI contract.\n */\n"
+            "unsafe fn probe() {}\n"
+        )
+        self.assertEqual(self.scan("src/lib.rs", content), [])
+
     def test_safety_doc_above_unsafe_fn_satisfies_rule_d(self):
         content = (
             '#[allow(unsafe_code, reason = "ffi")]\n'

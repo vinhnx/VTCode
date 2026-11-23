@@ -115,6 +115,7 @@ unsafe extern "C" fn test_execute_with_delay(_input: *const c_char) -> *const c_
 /// Boundary adversarial inputs: a conforming plugin must never return null,
 /// invalid UTF-8, or malformed JSON, but the bridge must fail closed (and still
 /// release the buffer) rather than introducing a crash of its own.
+///
 /// # Safety
 ///
 /// The loader calls this through the plugin ABI with a nul-terminated input
@@ -152,8 +153,9 @@ unsafe extern "C" fn test_execute_malformed_json(_input: *const c_char) -> *cons
 ///
 /// The loader calls this through the plugin ABI with a nul-terminated input
 /// pointer valid for the call; it is ignored. The returned pointer is an owned
-/// `CString::into_raw` buffer that the loader releases with the matching free
-/// symbol.
+/// `CString::into_raw` buffer; the loader releases it with a matching free
+/// symbol only when one was exported (one boundary test deliberately exports
+/// none, so the buffer is intentionally leaked there).
 #[allow(unsafe_code, reason = "test-only C ABI shim for the plugin loader")]
 unsafe extern "C" fn test_execute_valid(_input: *const c_char) -> *const c_char {
     CString::new(r#"{"success":true,"output":{},"error":null,"files":[]}"#)

@@ -17,10 +17,10 @@ tracked `.rs` file, whether or not it compiles here:
 * every type-position `unsafe` (e.g. `type Cb = unsafe extern "C" fn()`) must be
   preceded by a contract doc comment (`///`), and
 * every `unsafe fn` definition (including `unsafe extern "C" fn` ABI shims) must
-  carry a `# Safety` section — clippy's `missing_safety_doc` only fires for public
-  items on the compiling host, so this closes the same gap for cfg-gated and
-  test-only code. Unlike the other rules, this one applies to tests, benches and
-  examples too.
+  carry a `# Safety` section in a doc comment — clippy's `missing_safety_doc` only
+  fires for public items on the compiling host, so this closes the same gap for
+  cfg-gated and test-only code. Unlike the other rules, this one applies to tests,
+  benches and examples too.
 
 The first two rules mirror clippy and are intentionally *more permissive* — a
 marker anywhere in the preceding window counts, and `unsafe extern` blocks and
@@ -63,7 +63,9 @@ TYPE_CONTRACT_DOC_RE = re.compile(r"^\s*(?:///|/\*\*)")
 # name after `fn`, so type-position signatures (`type F = unsafe extern "C" fn()`)
 # and `unsafe extern { fn foo(); }` blocks do not match — those have their own rules.
 UNSAFE_FN_DEF_RE = re.compile(r'\bunsafe\s+(?:extern\s+"[^"]+"\s+)?fn\s+\w+')
-SAFETY_DOC_RE = re.compile(r"(?i)#\s*safety\b")
+# The `# Safety` header must live in a rustdoc comment (`///`, `/**` or a `*`
+# continuation line), not a plain comment or a string literal.
+SAFETY_DOC_LINE_RE = re.compile(r"^\s*(?:///|/\*\*|\*)\s*.*#\s*safety\b", re.I)
 MARKER_WINDOW = 12
 
 VENDORED_PREFIXES = ("fuzz/", "target/", "patches/")
@@ -339,12 +341,14 @@ def scan_file(path: Path, rules: list[AllowRule]) -> list[Finding]:
     # Rule D: every `unsafe fn` definition states its caller contract. Clippy's
     # `missing_safety_doc` only sees public items on the compiling host; FFI ABI
     # shims are private and often cfg/test-only. Applies to every scanned file.
+    # Require the marker in a doc comment: a plain `// # Safety` is not a rustdoc
+    # section and would leave the contract invisible to both rustdoc and clippy.
     for idx, raw_line in enumerate(lines):
         if not UNSAFE_FN_DEF_RE.search(code_only(raw_line)):
             continue
         line_no = idx + 1
         window = lines[max(0, idx - MARKER_WINDOW) : idx]
-        if any(SAFETY_DOC_RE.search(candidate) for candidate in window):
+        if any(SAFETY_DOC_LINE_RE.search(candidate) for candidate in window):
             continue
         if is_allowlisted(rel_path, line_no, rules):
             continue
