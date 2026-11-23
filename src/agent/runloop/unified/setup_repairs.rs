@@ -57,8 +57,32 @@ pub struct SetupRepair {
     pub subtitle: String,
     pub search_value: String,
     pub kind: SetupRepairKind,
-    /// Destructive repairs render with danger styling and an extra confirm.
+    /// Destructive repairs render with danger styling and an explicit apply step.
     pub destructive: bool,
+    /// What applying would change. Only direct repairs carry one; routed
+    /// repairs resolve interactively in their own UI.
+    pub preview: SetupRepairPreview,
+}
+
+/// Preview of a repair's config changes, shown for confirmation before apply.
+#[derive(Debug, Clone, Default)]
+pub struct SetupRepairPreview {
+    /// Where the change lands, human-readable (empty when not applicable).
+    pub target_display: String,
+    /// Per-key old → new values.
+    pub changes: Vec<RepairPreviewChange>,
+    /// Files a scaffold would create (missing files only).
+    pub creates: Vec<String>,
+    /// Extra context (backups, reversibility).
+    pub note: Option<String>,
+}
+
+/// One key change inside a preview.
+#[derive(Debug, Clone)]
+pub struct RepairPreviewChange {
+    pub path: String,
+    pub old: String,
+    pub new: String,
 }
 
 /// Detect applicable setup repairs for `workspace`.
@@ -77,7 +101,11 @@ pub fn compute_setup_repairs(workspace: &Path) -> Vec<SetupRepair> {
         && workspace_file_state(&workspace_file) == WorkspaceFileState::Present
         && workspace_config_is_broken(&workspace_file)
     {
-        return vec![reset_invalid_config_repair()];
+        // No manager is loadable here by definition; the reset preview only
+        // needs the workspace.
+        let mut repair = reset_invalid_config_repair();
+        repair.preview = reset_preview(workspace);
+        return vec![repair];
     }
 
     let Ok(manager) = ConfigManager::load_from_workspace(workspace) else {
@@ -96,7 +124,151 @@ pub fn compute_setup_repairs(workspace: &Path) -> Vec<SetupRepair> {
     repairs.extend(provider_model_repairs(&manager));
     repairs.extend(secret_repairs(&manager));
     repairs.extend(consent_repairs(&manager));
+    let effective = toml::Value::try_from(manager.config()).ok();
+    for repair in &mut repairs {
+        repair.preview = build_preview(workspace, &manager, effective.as_ref(), repair);
+    }
     repairs
+}
+
+/// Build what-applying-would-change for confirmation surfaces. Pure reads;
+/// path resolution failures degrade to generic labels rather than failing.
+fn build_preview(
+    workspace: &Path,
+    manager: &ConfigManager,
+    effective: Option<&toml::Value>,
+    repair: &SetupRepair,
+) -> SetupRepairPreview {
+    match &repair.kind {
+        SetupRepairKind::SetConfig { edits } => {
+            let target = edits.first().map(|edit| edit.target);
+            debug_assert!(
+                edits.iter().all(|edit| Some(edit.target) == target),
+                "multi-target repairs need per-edit target display"
+            );
+            let target_display = target
+                .map(|target| {
+                    let label = match target {
+                        ConfigWriteTarget::Workspace => "workspace",
+                        ConfigWriteTarget::User => "user",
+                        ConfigWriteTarget::Project => "project",
+                    };
+                    // Never guess a path: an unresolvable target shows the
+                    // layer only, rather than a file that may be wrong.
+                    ConfigService::resolve_target_path(workspace, &target)
+                        .map(|path| {
+                            format!(
+                                "{} ({label})",
+                                crate::agent::runloop::unified::settings_interactive::short_display_path(
+                                    &path, workspace
+                                )
+                            )
+                        })
+                        .unwrap_or_else(|_| format!("({label} configuration)"))
+                })
+                .unwrap_or_default();
+            let changes = edits
+                .iter()
+                .map(|edit| RepairPreviewChange {
+                    path: edit.path.clone(),
+                    old: effective_old_value(manager, effective, &edit.path),
+                    new: toml_value_display(&edit.value),
+                })
+                .collect();
+            SetupRepairPreview {
+                target_display,
+                changes,
+                creates: Vec::new(),
+                note: None,
+            }
+        }
+        SetupRepairKind::ScaffoldWorkspaceConfig => scaffold_preview(workspace),
+        SetupRepairKind::ResetWorkspaceConfigWithBackup => reset_preview(workspace),
+        SetupRepairKind::OpenModelPicker | SetupRepairKind::GuidedSecret { .. } => SetupRepairPreview::default(),
+    }
+}
+
+/// Effective old value for a dotted key: `(unset)` when no layer sets it.
+fn effective_old_value(manager: &ConfigManager, effective: Option<&toml::Value>, path: &str) -> String {
+    if !manager.has_explicit_dotted_key(path) {
+        return "(unset)".to_string();
+    }
+    effective
+        .and_then(|root| {
+            let mut current = root;
+            for segment in path.split('.') {
+                current = current.as_table()?.get(segment)?;
+            }
+            Some(toml_value_display(current))
+        })
+        .unwrap_or_else(|| "(current value unavailable)".to_string())
+}
+
+fn toml_value_display(value: &toml::Value) -> String {
+    let text = if let Some(text) = value.as_str() {
+        text.to_string()
+    } else {
+        value.to_string()
+    };
+    // Previews render in terminals, reports, and desktop UI: never leak a
+    // secret-shaped value, even if a future repair previews a sensitive key.
+    vtcode_commons::sanitizer::redact_secrets(text)
+}
+
+/// Render a repair's preview as terminal lines, shared by the preview modal
+/// and the headless report section.
+#[must_use]
+pub fn preview_lines(repair: &SetupRepair) -> Vec<String> {
+    let mut lines = Vec::new();
+    if !repair.preview.target_display.is_empty() {
+        lines.push(format!("In {}", repair.preview.target_display));
+    }
+    for change in &repair.preview.changes {
+        lines.push(format!("`{}`: {} → {}", change.path, change.old, change.new));
+    }
+    for create in &repair.preview.creates {
+        lines.push(format!("+ creates `{create}`"));
+    }
+    if let Some(note) = repair.preview.note.as_deref() {
+        lines.push(note.to_string());
+    }
+    lines
+}
+
+fn scaffold_preview(workspace: &Path) -> SetupRepairPreview {
+    let candidates = [
+        workspace.join("vtcode.toml"),
+        workspace.join(".gitignore"),
+        workspace.join(".vtcode/README.md"),
+    ];
+    let creates = candidates
+        .iter()
+        .filter(|path| !path.exists())
+        .map(|path| crate::agent::runloop::unified::settings_interactive::short_display_path(path, workspace))
+        .collect();
+    SetupRepairPreview {
+        target_display: String::new(),
+        changes: Vec::new(),
+        creates,
+        note: Some("Existing files are left untouched.".to_string()),
+    }
+}
+
+fn reset_preview(workspace: &Path) -> SetupRepairPreview {
+    let lines = std::fs::read_to_string(workspace_file(workspace))
+        .map(|content| content.lines().count())
+        .unwrap_or(0);
+    SetupRepairPreview {
+        target_display: crate::agent::runloop::unified::settings_interactive::short_display_path(
+            &workspace_file(workspace),
+            workspace,
+        ),
+        changes: Vec::new(),
+        creates: Vec::new(),
+        note: Some(format!(
+            "Current file is unparseable ({lines} lines). Original is backed up alongside vtcode.toml first."
+        )),
+    }
 }
 
 /// Whether `provider_key` has a usable credential by the same rule the
@@ -198,6 +370,7 @@ fn reset_invalid_config_repair() -> SetupRepair {
         search_value: "repair reset broken invalid config toml backup".to_string(),
         kind: SetupRepairKind::ResetWorkspaceConfigWithBackup,
         destructive: true,
+        preview: SetupRepairPreview::default(),
     }
 }
 
@@ -209,6 +382,7 @@ fn scaffold_workspace_config_repair() -> SetupRepair {
         search_value: "repair scaffold create workspace config init".to_string(),
         kind: SetupRepairKind::ScaffoldWorkspaceConfig,
         destructive: false,
+        preview: SetupRepairPreview::default(),
     }
 }
 
@@ -240,6 +414,7 @@ fn provider_model_repairs(manager: &ConfigManager) -> Vec<SetupRepair> {
         search_value: "repair provider model picker invalid unknown choose".to_string(),
         kind: SetupRepairKind::OpenModelPicker,
         destructive: false,
+        preview: SetupRepairPreview::default(),
     }])
 }
 
@@ -299,6 +474,7 @@ fn guided_secret_repair(provider_label: &str, env_var: &str) -> SetupRepair {
             env_var: env_var.to_string(),
         },
         destructive: false,
+        preview: SetupRepairPreview::default(),
     }
 }
 
@@ -323,6 +499,7 @@ fn consent_repairs(manager: &ConfigManager) -> Vec<SetupRepair> {
                 }]),
             },
             destructive: false,
+            preview: SetupRepairPreview::default(),
         },
         SetupRepair {
             id: REPAIR_DECLINE_BUNDLED_SKILLS,
@@ -337,6 +514,7 @@ fn consent_repairs(manager: &ConfigManager) -> Vec<SetupRepair> {
                 }]),
             },
             destructive: false,
+            preview: SetupRepairPreview::default(),
         },
     ])
 }

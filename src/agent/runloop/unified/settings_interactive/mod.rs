@@ -428,7 +428,7 @@ fn format_permission_summary(config: &VTCodeConfig) -> String {
 
 /// Render `path` compactly for the settings header: relative to the workspace
 /// when inside it, else tilde-abbreviated under the home directory, else as-is.
-fn short_display_path(path: &Path, workspace: &Path) -> String {
+pub(crate) fn short_display_path(path: &Path, workspace: &Path) -> String {
     if let Ok(relative) = path.strip_prefix(workspace) {
         if !relative.as_os_str().is_empty() {
             return relative.display().to_string();

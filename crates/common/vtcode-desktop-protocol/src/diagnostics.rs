@@ -18,8 +18,41 @@ pub struct DiagnosticsRepair {
     pub subtitle: String,
     /// How the client carries the repair out.
     pub kind: DiagnosticsRepairKind,
-    /// Destructive repairs need an extra client-side confirm step.
+    /// Destructive repairs render danger styling and preselect cancel.
     pub destructive: bool,
+    /// What applying would change. Empty for routed repairs; absent on older services.
+    #[serde(default)]
+    pub preview: DiagnosticsPreview,
+}
+
+/// Preview of a repair's config changes, shown for confirmation before apply.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticsPreview {
+    /// Where the change lands, human-readable.
+    #[serde(default)]
+    pub target_display: String,
+    /// Per-key old → new values.
+    #[serde(default)]
+    pub changes: Vec<DiagnosticsPreviewChange>,
+    /// Files a scaffold would create (missing files only).
+    #[serde(default)]
+    pub creates: Vec<String>,
+    /// Extra context (backups, reversibility).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// One key change inside a preview.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticsPreviewChange {
+    /// Dotted setting path.
+    pub path: String,
+    /// Current effective value, or `(unset)`.
+    pub old: String,
+    /// Value that would be written.
+    pub new: String,
 }
 
 /// How the client carries a repair out.

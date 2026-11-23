@@ -51,6 +51,12 @@ impl DesktopView {
             self.config_write_pending = false;
             self.config_editor_error = Some(error.clone());
         }
+        if method == protocol::method::DIAGNOSTICS_CHECKUP || method == protocol::method::DIAGNOSTICS_APPLY {
+            // Surface in the group and re-enable its buttons; fall through
+            // for the generic banner and transition-gate continuation.
+            self.diagnostics_pending = false;
+            self.diagnostics_notice = Some(error.clone());
+        }
         if method == protocol::method::CONFIG_SECRET_STORE {
             // Form-scoped: the inline error carries it; the
             // generic banner would duplicate it away from the field.

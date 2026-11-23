@@ -22,7 +22,7 @@ const CHECKUP_ACTION_PREFIX: &str = "checkup.action.";
 const CHECKUP_ACTION_BACK: &str = "checkup.action.back";
 const CHECKUP_ACTION_OPTIMIZE_PREFIX: &str = "checkup.optimize.";
 const CHECKUP_ACTION_REPAIR_PREFIX: &str = "checkup.repair.";
-const CHECKUP_ACTION_REPAIR_CONFIRM_APPLY: &str = "checkup.repair.confirm.apply";
+const CHECKUP_ACTION_REPAIR_APPLY: &str = "checkup.repair.apply";
 
 /// Identifies an applicable `/doctor` optimization the user can apply.
 ///
@@ -312,7 +312,7 @@ pub(crate) async fn handle_apply_setup_repair(
         | repairs::SetupRepairKind::ResetWorkspaceConfigWithBackup => {}
     }
 
-    if repair.destructive && !confirm_destructive_repair(&mut ctx, &repair).await? {
+    if !confirm_repair_with_preview(&mut ctx, &repair).await? {
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -335,37 +335,42 @@ pub(crate) async fn handle_apply_setup_repair(
     Ok(SlashCommandControl::Continue)
 }
 
-/// Extra confirm step for destructive repairs (config reset). Anything else
-/// applies on selection, matching the optimization UX.
-async fn confirm_destructive_repair(ctx: &mut SlashCommandContext<'_>, repair: &repairs::SetupRepair) -> Result<bool> {
+/// Preview-then-confirm for every direct repair: the modal shows exactly what
+/// would change (target file, old → new values, created files, backups) and
+/// applies only on an explicit Apply. Destructive repairs render danger
+/// styling and preselect Back instead of Apply.
+async fn confirm_repair_with_preview(ctx: &mut SlashCommandContext<'_>, repair: &repairs::SetupRepair) -> Result<bool> {
+    let mut lines = Vec::from([format!("{} — {}", repair.title, repair.subtitle)]);
+    lines.extend(repairs::preview_lines(repair));
+    let (apply_tone, apply_badge) = if repair.destructive {
+        (Tone::Danger, Some("Destructive".to_string()))
+    } else {
+        (Tone::Accent, None)
+    };
+    let back = || InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string());
+    let apply = || InlineListSelection::ConfigAction(CHECKUP_ACTION_REPAIR_APPLY.to_string());
     ctx.renderer.show_list_modal(
-        "Confirm repair",
-        Vec::from([format!("{} — {}", repair.title, repair.subtitle)]),
+        "Preview repair",
+        lines,
         Vec::from([
             ui_list::action(
                 format!("Apply: {}", repair.title),
-                "Back up first, then apply (recommended)".to_string(),
-                Some("Destructive".to_string()),
-                Tone::Danger,
-                Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_REPAIR_CONFIRM_APPLY.to_string())),
+                "Apply exactly what is previewed above".to_string(),
+                apply_badge,
+                apply_tone,
+                Some(apply()),
             )
-            .with_search_value("repair confirm apply yes".to_string()),
-            ui_list::action(
-                "Back",
-                "Close without applying".to_string(),
-                None,
-                Tone::Neutral,
-                Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
-            )
-            .with_search_value("back close cancel".to_string()),
+            .with_search_value("repair preview apply yes".to_string()),
+            ui_list::action("Back", "Close without applying".to_string(), None, Tone::Neutral, Some(back()))
+                .with_search_value("back close cancel".to_string()),
         ]),
-        Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
+        Some(if repair.destructive { back() } else { apply() }),
         None,
     );
     let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
         return Ok(false);
     };
-    Ok(matches!(selection, InlineListSelection::ConfigAction(action) if action == CHECKUP_ACTION_REPAIR_CONFIRM_APPLY))
+    Ok(matches!(selection, InlineListSelection::ConfigAction(action) if action == CHECKUP_ACTION_REPAIR_APPLY))
 }
 
 async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()> {

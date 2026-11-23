@@ -918,12 +918,29 @@ fn diagnostics_repairs_round_trip_with_wire_names() {
         subtitle: "Back it up and write fresh defaults.".to_string(),
         kind: DiagnosticsRepairKind::Apply,
         destructive: true,
+        preview: DiagnosticsPreview {
+            target_display: "vtcode.toml (workspace)".to_string(),
+            changes: Vec::new(),
+            creates: Vec::new(),
+            note: Some("Backed up first.".to_string()),
+        },
     };
     let value = serde_json::to_value(&repair).unwrap();
     assert_eq!(value["id"], "reset_invalid_config");
     assert_eq!(value["kind"], "apply");
     assert_eq!(value["destructive"], true);
+    assert_eq!(value["preview"]["targetDisplay"], "vtcode.toml (workspace)");
     assert_eq!(serde_json::from_value::<DiagnosticsRepair>(value).unwrap(), repair);
+
+    // Older services omit the preview: it must default, not fail to decode.
+    let legacy = serde_json::json!({
+        "id": "allow_bundled_skills",
+        "title": "Allow",
+        "subtitle": "Install.",
+        "kind": "apply",
+        "destructive": false,
+    });
+    assert_eq!(serde_json::from_value::<DiagnosticsRepair>(legacy).unwrap().preview, DiagnosticsPreview::default());
 
     let picker = DiagnosticsRepair {
         id: "pick_provider_model".to_string(),
@@ -931,6 +948,7 @@ fn diagnostics_repairs_round_trip_with_wire_names() {
         subtitle: "Unknown provider.".to_string(),
         kind: DiagnosticsRepairKind::ModelPicker,
         destructive: false,
+        preview: DiagnosticsPreview::default(),
     };
     assert_eq!(serde_json::to_value(&picker).unwrap()["kind"], "model_picker");
 

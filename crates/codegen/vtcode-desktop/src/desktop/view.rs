@@ -571,7 +571,7 @@ struct DesktopView {
     full_access_focus: FocusHandle,
     diagnostics_repairs: Option<Vec<protocol::DiagnosticsRepair>>,
     diagnostics_pending: bool,
-    diagnostics_armed: Option<String>,
+    diagnostics_expanded: Option<String>,
     diagnostics_notice: Option<String>,
     skills_consent_open: bool,
     skills_consent_seen: bool,

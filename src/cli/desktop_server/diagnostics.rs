@@ -24,6 +24,21 @@ pub(super) fn checkup(workspace: &Path) -> protocol::DiagnosticsCheckupResult {
                 subtitle: repair.subtitle,
                 kind,
                 destructive: repair.destructive,
+                preview: protocol::DiagnosticsPreview {
+                    target_display: repair.preview.target_display,
+                    changes: repair
+                        .preview
+                        .changes
+                        .into_iter()
+                        .map(|change| protocol::DiagnosticsPreviewChange {
+                            path: change.path,
+                            old: change.old,
+                            new: change.new,
+                        })
+                        .collect(),
+                    creates: repair.preview.creates,
+                    note: repair.preview.note,
+                },
             }
         })
         .collect();

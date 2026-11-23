@@ -64,6 +64,12 @@ fn checkup_maps_broken_config_to_destructive_reset() {
     assert_eq!(repair.id, "reset_invalid_config");
     assert_eq!(repair.kind, DiagnosticsRepairKind::Apply);
     assert!(repair.destructive);
+    assert!(repair.preview.target_display.contains("vtcode.toml"), "preview: {:?}", repair.preview);
+    assert!(
+        repair.preview.note.as_deref().unwrap_or_default().contains("backed up"),
+        "preview: {:?}",
+        repair.preview
+    );
 }
 
 #[test]

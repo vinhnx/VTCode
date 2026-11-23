@@ -453,6 +453,9 @@ fn render_setup_repair_section(renderer: &mut AnsiRenderer, workspace: &std::pat
     for repair in &repairs {
         let marker = if repair.destructive { "[!]" } else { "[+]" };
         renderer.line(MessageStyle::Info, &format!("{marker} {} — {}", repair.title, repair.subtitle))?;
+        for line in super::setup_repairs::preview_lines(repair) {
+            renderer.line(MessageStyle::Info, &format!("    {line}"))?;
+        }
     }
     if renderer.supports_inline_ui() {
         renderer.line(MessageStyle::Info, "Run `/doctor` (no flags) to apply these from the repairs menu.")?;

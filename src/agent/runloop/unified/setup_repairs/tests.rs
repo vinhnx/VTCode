@@ -372,6 +372,141 @@ fn apply_consent_write_round_trips_through_reload() {
 }
 
 #[test]
+#[serial_test::serial]
+fn consent_preview_shows_target_and_old_new_values() {
+    let harness = RepairHarness::new(None, UserLayer::Empty);
+    let repairs = compute_setup_repairs(&harness.workspace);
+    let allow = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_ALLOW_BUNDLED_SKILLS)
+        .expect("allow");
+    assert!(allow.preview.target_display.contains("(user)"), "target: {}", allow.preview.target_display);
+    assert_eq!(allow.preview.changes.len(), 1);
+    assert_eq!(allow.preview.changes[0].path, "skills.bundled.enabled");
+    assert_eq!(allow.preview.changes[0].old, "(unset)");
+    assert_eq!(allow.preview.changes[0].new, "true");
+
+    // An explicitly declined key previews its real old value, not "(unset)".
+    let harness = RepairHarness::new(Some("[skills.bundled]\nenabled = false\n"), UserLayer::Empty);
+    let manager = harness.manager();
+    let repair = SetupRepair {
+        id: REPAIR_ALLOW_BUNDLED_SKILLS,
+        title: String::new(),
+        subtitle: String::new(),
+        search_value: String::new(),
+        kind: SetupRepairKind::SetConfig {
+            edits: Vec::from([RepairConfigEdit {
+                target: ConfigWriteTarget::User,
+                path: vtcode_config::consent::BUNDLED_SKILLS_SETTING_PATH.to_string(),
+                value: toml::Value::Boolean(true),
+            }]),
+        },
+        destructive: false,
+        preview: SetupRepairPreview::default(),
+    };
+    let preview =
+        build_preview(&harness.workspace, &manager, toml::Value::try_from(manager.config()).ok().as_ref(), &repair);
+    assert_eq!(preview.changes[0].old, "false");
+    assert_eq!(preview.changes[0].new, "true");
+}
+
+#[test]
+#[serial_test::serial]
+fn scaffold_preview_lists_only_missing_files() {
+    let harness = RepairHarness::new(None, UserLayer::Absent);
+    std::fs::write(harness.workspace.join(".gitignore"), "*.log\n").expect("existing gitignore");
+    let repairs = compute_setup_repairs(&harness.workspace);
+    let scaffold = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_SCAFFOLD_WORKSPACE_CONFIG)
+        .expect("scaffold");
+    assert!(
+        scaffold.preview.creates.iter().any(|file| file.contains("vtcode.toml")),
+        "creates: {:?}",
+        scaffold.preview.creates
+    );
+    assert!(
+        !scaffold.preview.creates.iter().any(|file| file.contains("gitignore")),
+        "existing files must not be listed: {:?}",
+        scaffold.preview.creates
+    );
+    assert!(scaffold.preview.note.as_deref().unwrap_or_default().contains("untouched"));
+}
+
+#[test]
+#[serial_test::serial]
+fn reset_preview_names_target_and_backup() {
+    let harness = RepairHarness::new(Some("[agent\nprovider = oops\nline-three"), UserLayer::Empty);
+    let repairs = compute_setup_repairs(&harness.workspace);
+    let reset = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_RESET_INVALID_CONFIG)
+        .expect("reset");
+    assert!(reset.preview.target_display.contains("vtcode.toml"), "target: {}", reset.preview.target_display);
+    let note = reset.preview.note.as_deref().unwrap_or_default();
+    assert!(note.contains("3 lines"), "note: {note}");
+    assert!(note.contains("backed up"), "note: {note}");
+}
+
+#[test]
+#[serial_test::serial]
+fn routed_repairs_carry_no_preview() {
+    let harness = RepairHarness::new(Some("[agent]\nprovider = \"nope-not-a-provider\"\n"), UserLayer::Empty);
+    let repairs = compute_setup_repairs(&harness.workspace);
+    let picker = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_PICK_PROVIDER_MODEL)
+        .expect("picker repair");
+    assert!(picker.preview.changes.is_empty());
+    assert!(picker.preview.creates.is_empty());
+    assert!(picker.preview.note.is_none());
+    assert!(picker.preview.target_display.is_empty());
+}
+
+#[test]
+#[serial_test::serial]
+fn preview_lines_render_target_changes_and_notes() {
+    let harness = RepairHarness::new(None, UserLayer::Empty);
+    let repairs = compute_setup_repairs(&harness.workspace);
+    let allow = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_ALLOW_BUNDLED_SKILLS)
+        .expect("allow");
+    let lines = preview_lines(allow);
+    assert!(lines.iter().any(|line| line.contains("(user)")), "lines: {lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("skills.bundled.enabled") && line.contains("(unset)") && line.contains("true")),
+        "lines: {lines:?}"
+    );
+
+    let bare = RepairHarness::new(None, UserLayer::Absent);
+    let repairs = compute_setup_repairs(&bare.workspace);
+    let scaffold = repairs
+        .iter()
+        .find(|repair| repair.id == REPAIR_SCAFFOLD_WORKSPACE_CONFIG)
+        .expect("scaffold");
+    let lines = preview_lines(scaffold);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("creates") && line.contains("vtcode.toml")),
+        "lines: {lines:?}"
+    );
+    assert!(lines.iter().any(|line| line.contains("untouched")), "lines: {lines:?}");
+}
+
+#[test]
+fn preview_display_redacts_secret_shaped_values() {
+    assert_eq!(toml_value_display(&toml::Value::Boolean(true)), "true");
+    assert_eq!(toml_value_display(&toml::Value::String("plain".to_string())), "plain");
+    let redacted = toml_value_display(&toml::Value::String("sk-abcdefghijklmnopqrst".to_string()));
+    assert!(!redacted.contains("sk-abcdefghijklmnopqrst"), "display: {redacted}");
+    assert!(redacted.contains("REDACTED"), "display: {redacted}");
+}
+
+#[test]
 fn apply_guided_secret_bails_with_routing_guidance() {
     let repairs = Vec::from([guided_secret_repair("openai", "OPENAI_API_KEY")]);
     let guided = repairs.iter().find(|repair| repair.id == REPAIR_ADD_SECRET).expect("guided");

@@ -510,7 +510,7 @@ impl DesktopView {
             full_access_focus: cx.focus_handle(),
             diagnostics_repairs: None,
             diagnostics_pending: false,
-            diagnostics_armed: None,
+            diagnostics_expanded: None,
             diagnostics_notice: None,
             skills_consent_open: false,
             skills_consent_seen: false,
