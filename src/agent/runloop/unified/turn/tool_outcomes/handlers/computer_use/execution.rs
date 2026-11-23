@@ -383,10 +383,17 @@ pub(crate) async fn propose_computer_turn(
     )
     .await;
     record_review_usage(&mut *runtime.stats, provider.name(), &review);
-    if matches!(review.verdict, BatchReviewVerdict::Halt) {
+    // An enabled review is the only semantic injection screen: the human
+    // approves action kinds, not payloads. If it could not conclude, refuse
+    // the batch instead of letting an unscreened one reach the target.
+    if !matches!(review.verdict, BatchReviewVerdict::Proceed) {
         // Terminal evidence without a start event: the turn halted before
         // approval, so nothing launched, but the refusal itself is audit
         // material and must reach durable events.
+        let kind = match &review.verdict {
+            BatchReviewVerdict::Unreviewed { reason: "cancelled" } => ComputerTurnOutcomeKind::Cancelled,
+            _ => ComputerTurnOutcomeKind::ReviewHalted,
+        };
         let item_id = format!("computer_use:{}", summary.call_ids.first().map_or("turn", String::as_str));
         let redacted = RedactedTurnSummary {
             target_kind: target.kind(),
@@ -399,7 +406,6 @@ pub(crate) async fn propose_computer_turn(
             teardown_trigger: "review",
             teardown: TeardownOutcome::NotLaunched,
         };
-        let kind = ComputerTurnOutcomeKind::ReviewHalted;
         emit_computer_turn_completed(
             runtime.emitter,
             &item_id,

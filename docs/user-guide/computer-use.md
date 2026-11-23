@@ -56,8 +56,10 @@ and `settings/computer-use` deeplink. Docker must be available for the browser t
   denies all still apply, and the approval justification defeats approval caching so
   automation settings cannot silently wave a batch through.
 - Optional Decisions review (`computer_use.decisions_review`, OpenAI routes only) screens
-  each proposed batch for prompt injection and task drift before the human approval; a
-  review outage proceeds with a warning because your approval remains the primary control.
+  each proposed batch for prompt injection and task drift before the human approval. A
+  suspect batch **or a review that cannot conclude** (timeout, request failure, or no
+  answer) halts the turn: the approval shows action kinds, not payloads, so an unscreened
+  batch is never executed.
 
 ## Limits and troubleshooting
 

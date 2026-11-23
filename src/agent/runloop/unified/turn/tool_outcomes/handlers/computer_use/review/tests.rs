@@ -119,7 +119,7 @@ async fn computer_use_review_suspect_halts() {
 }
 
 #[tokio::test]
-async fn computer_use_review_degrades_loudly_without_halting() {
+async fn computer_use_review_reports_unreviewed_reason() {
     for (choice, error, expected) in [
         (None, false, "inconclusive"),
         (Some("MAYBE"), false, "inconclusive"),

@@ -343,6 +343,50 @@ async fn computer_use_review_judges_the_requested_task_not_model_prose() {
     );
 }
 
+#[tokio::test]
+async fn computer_use_turn_unreviewed_batch_halts_before_approval() {
+    fn one_action() -> Result<NativeResponse, LLMError> {
+        let mut response = ScriptedProvider::canned().unwrap();
+        response.native_calls = vec![anthropic_click(2, "c1", 19, 3)];
+        Ok(response)
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("events.jsonl");
+    let emitter = HarnessEventEmitter::new(path.clone()).unwrap();
+    let stop = CtrlCState::new();
+    let notify = Notify::new();
+    let mut stats = SessionStats::default();
+    let mut config = config();
+    config.decisions_review = true;
+    // No choice => inconclusive, not an explicit SUSPECT verdict. An enabled
+    // review that cannot conclude must still keep the batch off the target.
+    let provider = ScriptedProvider {
+        native: one_action,
+        decisions: true,
+        choice: None,
+        ..provider()
+    };
+    let outcome = run_computer_turn(
+        &provider,
+        request(),
+        &config,
+        &mut ComputerTurnRuntime {
+            stop: &stop,
+            notify: &notify,
+            stats: &mut stats,
+            emitter: Some(&emitter),
+        },
+        |_| async { panic!("approval must not run for an unreviewed batch") },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(outcome.kind, ComputerTurnOutcomeKind::ReviewHalted));
+    assert_eq!(*provider.decisions_calls.lock().unwrap(), 1);
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(raw.contains("review unreviewed (inconclusive)"), "{raw}");
+    assert!(!raw.contains("item.started"), "{raw}");
+}
+
 #[test]
 fn computer_use_summary_message_names_the_review_state() {
     let summary = |review| RedactedTurnSummary {

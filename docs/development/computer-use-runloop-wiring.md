@@ -56,10 +56,11 @@ Reuse the tool permission flow, not a parallel prompt system:
   runner owns the handle, never a subagent scope.
 - When `computer_use.decisions_review` is set, each proposed batch is
   screened by OpenAI Decisions (task text plus action kinds/counts,
-  never screenshots or typed values) before execution: `SUSPECT` halts
-  the turn, while review outages degrade to proceed-with-warning
-  because the human approval remains the primary control. OpenAI
-  routes only.
+  never screenshots or typed values) before execution. `SUSPECT` and
+  any `Unreviewed` outcome (timeout, request failure, inconclusive,
+  cancellation) both end the turn before approval: the human sees only
+  action kinds, so the review is the sole semantic injection screen and
+  must fail closed. OpenAI routes only.
 
 ## Execution
 

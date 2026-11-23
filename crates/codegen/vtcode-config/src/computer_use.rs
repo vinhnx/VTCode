@@ -35,9 +35,11 @@ pub struct ComputerUseConfig {
     #[serde(default = "default_max_actions_per_turn")]
     pub max_actions_per_turn: usize,
     /// Ask OpenAI Decisions to review each proposed batch for prompt
-    /// injection and task drift before execution. Only OpenAI providers
-    /// whose route supports Decisions are reviewed; anything else
-    /// proceeds on the human turn approval alone. Uses OpenAI API billing.
+    /// injection and task drift before execution. A suspect batch or a review
+    /// that cannot conclude (timeout, request failure, inconclusive answer)
+    /// halts the turn; only OpenAI providers whose route supports Decisions
+    /// are reviewed, and anything else proceeds on human approval alone.
+    /// Uses OpenAI API billing.
     #[serde(default)]
     pub decisions_review: bool,
 }

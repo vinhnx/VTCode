@@ -3,11 +3,12 @@
 //! Inside a human-approved turn, each batch can be screened for
 //! prompt-injection and task drift before execution. This answers the vendor
 //! guidance to check consequential actions without prompting the human per
-//! action: `SUSPECT` halts the turn, while review outages degrade to
-//! proceed-with-warning because the human turn approval remains the primary
-//! control. Evidence carries action kinds and counts only, never payloads,
-//! and review history is per batch (cross-batch drift detection is future
-//! work).
+//! action. When review is enabled, `SUSPECT` and any inability to conclude
+//! (timeout, request failure, inconclusive answer) both halt the turn: the
+//! human approves action kinds, not payloads, so the review is the only
+//! semantic injection screen and must fail closed. Evidence carries action
+//! kinds and counts only, never payloads, and review history is per batch
+//! (cross-batch drift detection is future work).
 
 use std::time::Duration;
 
@@ -44,7 +45,8 @@ const CHOICE_SUSPECT: &str = "SUSPECT";
 pub(crate) enum BatchReviewVerdict {
     /// Execute the batch.
     Proceed,
-    /// Execute, but the review did not conclude; the dispatcher records why.
+    /// The review did not conclude; the dispatcher halts the turn and records
+    /// why. Never produced when review is disabled or unsupported.
     Unreviewed {
         /// Short machine-stable reason: `timed out`, `request failed`,
         /// `inconclusive`, or `cancelled`. A disabled or unsupported review

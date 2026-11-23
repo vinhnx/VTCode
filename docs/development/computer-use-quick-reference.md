@@ -52,6 +52,8 @@ accumulate SSE into the same `NativeResponse` the non-streaming parser produces
 **Approval.** `request_target_approval` routes through the standard permission flow with
 redacted routing-only args; the justification always prompts and defeats caching/auto-approval.
 Denial, or any new control sequence after resume, starts over — no lease reuse, no replay.
+With `decisions_review` set, `SUSPECT` *and* any `Unreviewed` verdict (timeout, request
+failure, inconclusive) end the turn before approval — an enabled review fails closed.
 
 **Execution.** `run_computer_turn` launches the hardened container, executes decoded
 natives via `execute_decoded_call`/`execute_decoded` against the turn-scoped `TurnControl`,
