@@ -126,6 +126,12 @@ impl DesktopView {
         snapshot_bool(self.cli_config_settings.as_deref(), COMPUTER_USE_ENABLED_PATH)
     }
 
+    /// Whether the Decisions review switch is on. The review can only screen
+    /// batches while the master switch is on too, so the badge pairs both.
+    pub(super) fn computer_use_decisions_review(&self) -> bool {
+        snapshot_bool(self.cli_config_settings.as_deref(), COMPUTER_USE_DECISIONS_PATH)
+    }
+
     /// Whether a computer-use turn is streaming right now: any running tool
     /// row owned by the computer-use tool. Drives the composer's running
     /// accent; the enabled switch alone drives the badge.
@@ -154,27 +160,53 @@ impl DesktopView {
         self.save_cli_config_value(COMPUTER_USE_ENABLED_PATH.to_string(), Value::Bool(enabled), cx);
     }
 
-    /// Premium computer-use badge above the composer input, mounted only
-    /// while the master switch is on. Shares the settings title's pill idiom
-    /// (primary fill, Computer glyph) and reuses its locale keys, so no
-    /// translation churn; the running accent lives on the input frame below.
-    pub(super) fn computer_use_composer_badge(cx: &App) -> AnyElement {
-        let label = rust_i18n::t!("app.settings.computer_use.group").to_string();
-        let state = rust_i18n::t!("app.settings.computer_use.status_on").to_string();
-        div()
-            .w_full()
-            .flex()
-            .items_center()
-            .pb_1()
-            .child(status_pill(
-                "computer-use-composer-badge",
-                rust_i18n::t!("app.settings.computer_use.status_aria", state = state).to_string(),
-                label,
-                true,
-                Some(IconName::Computer),
-                &cx.theme().colors,
-            ))
-            .into_any_element()
+    /// Premium computer-use badges above the composer input, mounted only
+    /// while the master switch is on. Real buttons (not static pills) so the
+    /// pair carries hover, focus, keyboard activation, and tooltips; each
+    /// opens the Computer Use settings tab — the same destination as the
+    /// `settings/computer-use` deeplink. The Computer badge wears the brand
+    /// fill; the Decisions badge (shown only while the review switch is on)
+    /// wears the success fill. Labels reuse settings locale keys; the new
+    /// action phrases are English literals, since full native-quality
+    /// translations cannot ship for them in this change.
+    pub(super) fn computer_use_composer_badges(&self, cx: &mut Context<Self>) -> AnyElement {
+        let radius = cx.theme().radius_full();
+        let computer = Button::new("computer-use-composer-badge")
+            .primary()
+            .small()
+            .rounded(radius)
+            .icon(IconName::Computer)
+            .label(rust_i18n::t!("app.settings.computer_use.group").to_string())
+            .tooltip("Open Computer Use settings".to_string())
+            .accessibility_label("Open Computer Use settings".to_string())
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.run_palette_action(
+                    PaletteAction::SelectSettingsTab(settings::SettingsTab::ComputerUse),
+                    window,
+                    cx,
+                );
+            }));
+        let mut row = div().w_full().flex().flex_wrap().items_center().gap_2().pb_1().child(computer);
+        if self.computer_use_decisions_review() {
+            row = row.child(
+                Button::new("computer-use-decisions-badge")
+                    .success()
+                    .small()
+                    .rounded(radius)
+                    .icon(IconName::ShieldCheck)
+                    .label(rust_i18n::t!("app.settings.computer_use.decisions").to_string())
+                    .tooltip("Decisions review is on. Open Computer Use settings.".to_string())
+                    .accessibility_label("Decisions review is on. Open Computer Use settings.".to_string())
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.run_palette_action(
+                            PaletteAction::SelectSettingsTab(settings::SettingsTab::ComputerUse),
+                            window,
+                            cx,
+                        );
+                    })),
+            );
+        }
+        row.into_any_element()
     }
 
     pub(super) fn set_computer_use_decisions_review(&mut self, enabled: bool, cx: &mut Context<Self>) {

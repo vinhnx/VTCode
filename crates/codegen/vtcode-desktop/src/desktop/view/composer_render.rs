@@ -568,7 +568,7 @@ impl DesktopView {
                             .w_full()
                             .min_w_0()
                             .when(self.computer_use_enabled(), |frame| {
-                                frame.child(Self::computer_use_composer_badge(cx))
+                                frame.child(self.computer_use_composer_badges(cx))
                             })
                             .when(self.computer_use_running(), |frame| {
                                 frame

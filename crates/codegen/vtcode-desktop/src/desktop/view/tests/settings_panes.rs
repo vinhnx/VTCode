@@ -1,4 +1,5 @@
 use super::*;
+use crate::desktop::view::settings::SettingsTab;
 
 /// Settings with the configuration page open: asymmetric group names ("Tools"
 /// vs "Model & Provider") so alignment assertions compare a short label
@@ -315,7 +316,7 @@ fn settings_page_title_tracks_the_selected_tab(cx: &mut TestAppContext) {
         let title = window.find("settings-page-title");
         assert_eq!(title.role(), Some(gpui_kit::Role::Heading));
         assert_eq!(title.label(), Some("Appearance"));
-        select_settings_category(window, super::super::settings::SettingsTab::ABOUT_INDEX, cx);
+        select_settings_category(window, SettingsTab::ABOUT_INDEX, cx);
         window.render_frame(cx);
         assert_eq!(window.find("settings-page-title").label(), Some("About"));
     })
@@ -438,12 +439,18 @@ fn computer_use_configure_lands_on_the_browser_target_setting(cx: &mut TestAppCo
 }
 
 fn computer_use_snapshot(enabled: bool) -> std::rc::Rc<vtcode_desktop_protocol::ConfigSettingsSnapshot> {
+    computer_use_snapshot_with_review(enabled, false)
+}
+
+fn computer_use_snapshot_with_review(
+    enabled: bool,
+    decisions: bool,
+) -> std::rc::Rc<vtcode_desktop_protocol::ConfigSettingsSnapshot> {
     std::rc::Rc::new(vtcode_desktop_protocol::ConfigSettingsSnapshot {
-        settings: vec![config_page_setting(
-            "computer_use.enabled",
-            json!(enabled),
-            "Computer Use",
-        )],
+        settings: vec![
+            config_page_setting("computer_use.enabled", json!(enabled), "Computer Use"),
+            config_page_setting("computer_use.decisions_review", json!(decisions), "Computer Use"),
+        ],
         target_versions: Vec::new(),
         omitted_sensitive: 0,
         omitted_large: 0,
@@ -454,7 +461,7 @@ fn computer_use_snapshot(enabled: bool) -> std::rc::Rc<vtcode_desktop_protocol::
 #[gpui_kit::test]
 fn computer_use_composer_badge_follows_the_master_switch(cx: &mut TestAppContext) {
     // The premium badge mounts above the input while CUA is on and unmounts
-    // when it turns off; the label reuses the settings group string.
+    // when it turns off; clicking it lands on the Computer Use settings tab.
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -462,20 +469,66 @@ fn computer_use_composer_badge_follows_the_master_switch(cx: &mut TestAppContext
         });
         window.render_frame(cx);
         assert!(window.try_find("computer-use-composer-badge").is_none());
+        assert!(window.try_find("computer-use-decisions-badge").is_none());
         assert!(!view.read(cx).computer_use_enabled());
 
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(computer_use_snapshot(true));
         });
         window.render_frame(cx);
-        assert_eq!(window.find("computer-use-composer-badge").label(), Some("Computer use On"));
+        assert!(window.try_find("computer-use-composer-badge").is_some());
+        assert!(window.try_find("computer-use-decisions-badge").is_none(), "review off hides its badge");
         assert!(view.read(cx).computer_use_enabled());
+
+        window.click("computer-use-composer-badge", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.current_route(), Route::Settings);
+            assert_eq!(view.settings_tab, SettingsTab::ComputerUse);
+        });
 
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(computer_use_snapshot(false));
         });
         window.render_frame(cx);
         assert!(window.try_find("computer-use-composer-badge").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn computer_use_decisions_badge_needs_both_switches_and_opens_settings(cx: &mut TestAppContext) {
+    // The Decisions badge pairs the review switch with the master switch: it
+    // never renders while CUA is off, and it lands on the same settings tab.
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        for (enabled, decisions, computer, review) in [
+            (false, true, false, false),
+            (true, false, true, false),
+            (true, true, true, true),
+        ] {
+            view.update(cx, |view, _| {
+                view.cli_config_settings = Some(computer_use_snapshot_with_review(enabled, decisions));
+            });
+            window.render_frame(cx);
+            assert_eq!(
+                window.try_find("computer-use-composer-badge").is_some(),
+                computer,
+                "enabled={enabled} decisions={decisions}"
+            );
+            assert_eq!(
+                window.try_find("computer-use-decisions-badge").is_some(),
+                review,
+                "enabled={enabled} decisions={decisions}"
+            );
+        }
+
+        window.click("computer-use-decisions-badge", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.current_route(), Route::Settings);
+            assert_eq!(view.settings_tab, SettingsTab::ComputerUse);
+        });
     })
     .unwrap();
 }
