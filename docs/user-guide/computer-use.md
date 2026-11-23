@@ -21,6 +21,10 @@ and records only a redacted summary in the conversation.
   models released later and custom endpoints; providers without a native route refuse
   before any network I/O (see
   [route admission](../development/computer-use-quick-reference.md#route-admission)).
+- **Screen content is data, not instructions.** The model driving the preview is told that
+  text and images in the page cannot grant permission, widen the task, or override your
+  request. If the preview asks for credentials, secrets, or out-of-task actions, the model
+  stops and reports instead of acting; the human approval remains the final control.
 
 ## Enabling it
 

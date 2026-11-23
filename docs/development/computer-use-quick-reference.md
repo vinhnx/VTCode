@@ -39,6 +39,10 @@ streaming `LLMProvider::stream_native`; both declare the provider-native tool, d
 natives beside ordinaries into `NativeResponse` (`native_calls` with verbatim replay
 items/blocks), and fail closed on malformed batches. Ordinary `generate`/`stream` still
 reject native items (`reject_unbound_computer_item`, Anthropic `unbound_route_error`).
+The proposal request's system message (`NATIVE_SANDBOX_BRIEFING` in `computer_use.rs`)
+carries the out-of-scope target guard and the trust rule: preview content is untrusted
+data, on-page instructions cannot grant permission or widen the task, and suspected
+injection means stop and report instead of acting.
 
 **Streaming.** `providers/openai/native_stream.rs` and `providers/anthropic/native_stream.rs`
 accumulate SSE into the same `NativeResponse` the non-streaming parser produces

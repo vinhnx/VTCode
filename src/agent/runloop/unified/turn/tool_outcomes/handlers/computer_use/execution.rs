@@ -260,6 +260,24 @@ where
     }
 }
 
+/// The plain-words task the caller asked this turn to perform. The safety
+/// reviewer must compare proposed actions against this request, not against
+/// the acting model's own prose: a model describing benign intent is not
+/// evidence that its actions serve the user's goal.
+fn requested_task(request: &LLMRequest) -> String {
+    request
+        .messages
+        .iter()
+        .rev()
+        .find_map(|message| match (&message.role, &message.content) {
+            (vtcode_core::llm::provider::MessageRole::User, vtcode_core::llm::provider::MessageContent::Text(text)) => {
+                Some(text.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// Run the turn through batch proposal: gates, native generation, budget,
 /// and Decisions review. Returns `Done` for every terminal-before-approval
 /// outcome; `Proceed` carries a turn with nothing launched.
@@ -270,6 +288,9 @@ pub(crate) async fn propose_computer_turn(
     runtime: &mut ComputerTurnRuntime<'_>,
 ) -> Result<ComputerTurnProposal> {
     let model = request.model.clone();
+    // Capture before `generate_native` consumes the request. This is the
+    // caller's request, not the model's self-description of what it is doing.
+    let requested_task = requested_task(&request);
     let disabled = |reason: &'static str| {
         Ok(ComputerTurnProposal::Done(ComputerTurnOutcome {
             kind: ComputerTurnOutcomeKind::Disabled { reason },
@@ -354,7 +375,7 @@ pub(crate) async fn propose_computer_turn(
     let review = review_computer_batch(
         provider,
         &ComputerBatchSummary {
-            task: response.content.clone().unwrap_or_default(),
+            task: requested_task,
             target: target.clone(),
             recipient: recipient.clone(),
             action_kinds: summary.kinds.clone(),
