@@ -13,20 +13,30 @@ pub(super) fn is_provider_auth_guidance(error: &str) -> bool {
 }
 
 /// Guidance shown while the service is connected but the active provider has
-/// no credentials. API-key providers offer an in-app Settings form (no reload
-/// needed after saving); login-flow providers still go through the Terminal.
+/// no credentials. Desktop-first ordering: the in-app path (Settings form or
+/// the provider group's Run button over the built-in terminal) leads, and the
+/// raw CLI command follows as the alternative. API-key providers offer an
+/// in-app Settings form (no reload needed after saving); login-flow providers
+/// complete setup from the Run button, then Reload CLI settings.
 pub(super) fn provider_auth_guidance(configuration: Option<&ConfigurationSnapshot>) -> String {
     let setup = configuration
         .map(|snapshot| snapshot.credential_setup_command.trim())
-        .filter(|command| !command.is_empty())
-        .unwrap_or("vtcode auth");
+        .filter(|command| !command.is_empty());
     if configuration.is_some_and(|snapshot| snapshot.secret_store.is_some()) {
         format!(
-            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{setup}`, then choose Reload CLI settings in Settings → VT Code."
+            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Save your API key in Settings → VT Code → Provider to reconnect. Terminal alternative: run `{}`, then choose Reload CLI settings in Settings → VT Code.",
+            setup.unwrap_or("vtcode auth")
+        )
+    } else if let Some(command) = setup {
+        format!(
+            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Open Settings → VT Code → Provider and choose Run to complete setup in the built-in terminal, then choose Reload CLI settings to reconnect. Terminal alternative: run `{command}` in your own terminal instead."
         )
     } else {
+        // No setup command advertised (only local providers, which never need
+        // credentials): point at the provider group without promising a Run
+        // button that is not rendered.
         format!(
-            "{PROVIDER_AUTH_GUIDANCE_PREFIX} In Terminal, run `{setup}`, then choose Reload CLI settings in Settings → VT Code to reconnect."
+            "{PROVIDER_AUTH_GUIDANCE_PREFIX} Open Settings → VT Code → Provider to continue setup, then choose Reload CLI settings to reconnect."
         )
     }
 }

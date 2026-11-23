@@ -358,6 +358,57 @@ fn login_route_providers_keep_the_terminal_copy_row(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn credential_run_button_executes_setup_in_builtin_terminal(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        feed_initialize(&view, cx);
+        feed_discover(
+            &view,
+            json!({
+                "provider": "copilot",
+                "model": "claude-opus-4-6",
+                "authenticated": false,
+                "credentialSetupCommand": "vtcode login copilot",
+            }),
+            cx,
+        );
+        open_provider_settings(&view, window, cx);
+        assert!(window.try_find("run-credential-command").is_some());
+        assert!(window.try_find("credential-setup-steps").is_some(), "steps must render with the CTA");
+        window.click("run-credential-command", cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let state = view.read(cx);
+        assert!(state.terminal_visible, "Run must show the panel");
+        assert!(state.terminal.is_some(), "Run must spawn the shell");
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let background = cx.update(|cx| cx.background_executor().clone());
+        background.advance_clock(Duration::from_millis(100));
+        cx.run_until_parked();
+        let text = cx.update(|cx| credential_grid_text(&view, cx));
+        if text.contains("vtcode login copilot") {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "shell must receive the setup command: {text:?}");
+    }
+}
+
+fn credential_grid_text(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> String {
+    view.read(cx)
+        .terminal
+        .as_ref()
+        .unwrap()
+        .display_rows()
+        .into_iter()
+        .flatten()
+        .map(|run| run.text)
+        .collect()
+}
+
+#[gpui_kit::test]
 fn auth_guidance_points_at_the_in_app_form_for_static_key_providers(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, _window, cx| {
@@ -390,8 +441,13 @@ fn auth_guidance_points_at_the_in_app_form_for_static_key_providers(cx: &mut Tes
         );
         view.update(cx, |view, _cx| {
             let error = view.error.as_deref().expect("login-route banner");
-            assert!(!error.contains("Settings → VT Code → Provider"), "{error}");
+            assert!(error.contains("Settings → VT Code → Provider"), "{error}");
+            assert!(error.contains("choose Run"), "{error}");
             assert!(error.contains("vtcode login copilot"), "{error}");
+            assert!(error.contains("Terminal alternative"), "{error}");
+            let in_app = error.find("choose Run").expect("in-app CTA position");
+            let cli = error.find("Terminal alternative").expect("CLI alternative position");
+            assert!(in_app < cli, "desktop CTA must lead the CLI recommendation: {error}");
         });
     })
     .unwrap();

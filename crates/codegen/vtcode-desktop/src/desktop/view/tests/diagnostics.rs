@@ -286,3 +286,43 @@ fn picker_repair_opens_the_model_palette(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(requests.try_recv().is_err(), "picker routing stays client-side");
 }
+
+#[gpui_kit::test]
+fn terminal_footer_button_toggles_builtin_panel(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (backend, mut requests) = connected_backend();
+    connect(&view, window, backend, cx);
+    let dir = tempfile::tempdir().unwrap();
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            view.workspace = Some(dir.path().to_path_buf());
+        });
+    })
+    .unwrap();
+    open_vtcode_settings(&view, window, cx);
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("diagnostics-terminal").is_some());
+        window.click("diagnostics-terminal", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).terminal_visible, "terminal CTA must show the panel");
+        assert!(window.try_find("terminal-panel").is_some(), "dock must mount beside Settings");
+        window.click("diagnostics-terminal", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(!view.read(cx).terminal_visible, "second click must hide the panel");
+        assert!(window.try_find("terminal-panel").is_none());
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "terminal toggle stays client-side");
+}

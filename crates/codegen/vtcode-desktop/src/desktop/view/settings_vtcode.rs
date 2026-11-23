@@ -126,33 +126,64 @@ impl DesktopView {
         let mono_font_family = theme.mono_font_family.clone();
         let muted_foreground = theme.colors.muted_foreground;
         if let Some(secret) = props.secret_store.as_ref() {
-            group = group.child(Self::render_secret_store_form_content(secret, &props.secret, view, cx));
+            group = group.child(Self::render_secret_store_form_content(secret, &props.secret, view.clone(), cx));
         }
         if props.secret_store.is_none() && !props.credential_setup_command.is_empty() {
             let command = props.credential_setup_command.clone();
+            let run_command = props.credential_setup_command.clone();
+            // English literal: the repo does not add locale keys without
+            // full native-quality translations for every locale.
+            let steps_hint = "Choose Run to complete setup in the built-in terminal, or copy the command for your own terminal — then choose Reload CLI settings to reconnect.".to_string();
             group = group.child(
                 div()
                     .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
+                    .flex_col()
+                    .gap_1()
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_xs()
-                            .font_family(mono_font_family)
-                            .text_color(muted_foreground)
-                            .truncate()
-                            .child(command.clone()),
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_xs()
+                                    .font_family(mono_font_family)
+                                    .text_color(muted_foreground)
+                                    .truncate()
+                                    .child(command.clone()),
+                            )
+                            .child({
+                                let view = view.clone();
+                                desktop_primary_button("run-credential-command")
+                                    .label(rust_i18n::t!("app.settings.connections.terminal_builtin_run").to_string())
+                                    .small()
+                                    .on_click(move |_, window: &mut Window, cx: &mut App| {
+                                        view.update(cx, |view, cx| {
+                                            view.run_command_in_terminal(&run_command, window, cx);
+                                        });
+                                    })
+                            })
+                            .child(
+                                desktop_ghost_button("copy-credential-command")
+                                    .label(rust_i18n::t!("gpui_component.Input.Copy").to_string())
+                                    .on_click(move |_, window, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                            command.to_string(),
+                                        ));
+                                        super::super::notifications::copied_to_clipboard(window, app);
+                                    }),
+                            ),
                     )
                     .child(
-                        desktop_ghost_button("copy-credential-command")
-                            .label(rust_i18n::t!("gpui_component.Input.Copy").to_string())
-                            .on_click(move |_, window, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()));
-                                super::super::notifications::copied_to_clipboard(window, app);
-                            }),
+                        div()
+                            .id("credential-setup-steps")
+                            .test_support()
+                            .text_xs()
+                            .text_color(muted_foreground)
+                            .child(steps_hint),
                     ),
             );
         }

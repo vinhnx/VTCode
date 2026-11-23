@@ -22,14 +22,16 @@ pub(super) const DIAGNOSTICS_UNCHECKED_TEXT: &str = "Run diagnostics to find bro
 pub(super) const DIAGNOSTICS_SECRET_HINT: &str = "Use the Secrets form in the provider group above.";
 pub(super) const DIAGNOSTICS_UNREADABLE_TEXT: &str =
     "Diagnostics response was unreadable. Reconnect or update the app to match versions.";
+pub(super) const DIAGNOSTICS_TERMINAL_HINT: &str = "Open the built-in terminal (⌘J) to manage CLI configs, or continue this session in the CLI from Settings → Connections.";
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(super) struct DiagnosticsSettingsProps {
     pub(super) repairs: Option<Vec<DiagnosticsRepair>>,
     pub(super) pending: bool,
     pub(super) expanded: Option<String>,
     pub(super) notice: Option<String>,
     pub(super) connected: bool,
+    pub(super) focus_handle: FocusHandle,
 }
 
 impl DiagnosticsSettingsProps {
@@ -40,6 +42,7 @@ impl DiagnosticsSettingsProps {
             expanded: view.diagnostics_expanded.clone(),
             notice: view.diagnostics_notice.clone(),
             connected: view.backend.is_some(),
+            focus_handle: view.focus_handle.clone(),
         }
     }
 }
@@ -141,6 +144,32 @@ impl DesktopView {
         if let Some(notice) = props.notice.as_ref() {
             group = group.child(div().text_sm().text_color(muted_foreground).child(notice.clone()));
         }
+        // Built-in terminal escape hatch: the panel is client-side, so the
+        // toggle stays available while disconnected. The tooltip carries the
+        // ⌘J chord via the shared action.
+        let terminal_label = rust_i18n::t!("app.navigation.terminal").to_string();
+        group = group.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(muted_foreground)
+                        .child(DIAGNOSTICS_TERMINAL_HINT),
+                )
+                .child(
+                    desktop_ghost_button("diagnostics-terminal")
+                        .label(terminal_label.clone())
+                        .icon(IconName::Terminal)
+                        .accessibility_label(terminal_label.clone())
+                        .tooltip_with_action(terminal_label, &ToggleTerminal, Some(key_context::DESKTOP))
+                        .dispatches_desktop_action(ToggleTerminal, props.focus_handle.clone()),
+                ),
+        );
         let diagnose = desktop_secondary_button("diagnostics-run")
             .label(DIAGNOSTICS_DIAGNOSE_LABEL.to_string())
             .disabled(props.pending || !props.connected)
