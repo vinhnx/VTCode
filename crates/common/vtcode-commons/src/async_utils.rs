@@ -1,4 +1,9 @@
-//! Async utility functions
+//! Async utility functions.
+//!
+//! Retry/backoff belongs to [`crate::retry::RetryPolicy`] (with the HTTP
+//! wrappers in [`crate::http`]); do not add a local retry loop here.
+//! `retry_with_backoff` is kept only as a deprecated compatibility shim for
+//! downstream users of the published crate.
 
 use anyhow::{Context, Result};
 use std::future::Future;
@@ -45,7 +50,12 @@ where
     with_timeout(fut, LONG_ASYNC_TIMEOUT, context).await
 }
 
-/// Retry an operation with exponential backoff
+/// Retry an operation with exponential backoff.
+///
+/// Kept for source compatibility with the published crate. New code should use
+/// [`crate::retry::RetryPolicy`], which classifies errors and applies bounded,
+/// jittered delays; this helper retries every error unconditionally.
+#[deprecated(note = "use vtcode_commons::retry::RetryPolicy (or http::send_with_retry for HTTP)")]
 pub async fn retry_with_backoff<F, Fut, T>(
     mut op: F,
     max_retries: usize,
