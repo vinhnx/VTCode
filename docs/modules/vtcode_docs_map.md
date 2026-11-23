@@ -331,6 +331,10 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
     "How does Confirmed findings and changes work?"
 
+- **File**: `docs/development/desktop-git-review.md`
+  - **Content**: Git Working-Tree Review
+  - **User Questions**: "What can you tell me about Git Working-Tree Review?"
+
 - **File**: `docs/development/hypothesis-revision-validation.md`
   - **Content**: Hypothesis revision validation
   - **Topics**: Acceptance, Deterministic checks, Live replay pilot

@@ -674,7 +674,7 @@ version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.cookie]]
-version = "0.18.2"
+version = "0.18.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.cookie_store]]
@@ -1127,6 +1127,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.foreign-types-shared]]
 version = "0.1.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.form_urlencoded]]
+version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.fraction]]
@@ -3904,7 +3908,7 @@ version = "0.6.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.url]]
-version = "2.5.8"
+version = "2.5.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.urlencoding]]
