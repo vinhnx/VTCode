@@ -40,21 +40,21 @@ fn test_no_file_reference() {
 
 #[test]
 fn test_npm_scoped_package_no_trigger() {
-    let input = "npx -y @openai/codex@latest";
+    let input = "bunx @openai/codex@latest";
     let result = extract_file_reference(input, 17);
     assert_eq!(result, None);
 }
 
 #[test]
 fn test_npm_scoped_package_variant() {
-    let input = "npm install @scope/package@1.0.0";
+    let input = "bun install @scope/package@1.0.0";
     let result = extract_file_reference(input, 22);
     assert_eq!(result, None);
 }
 
 #[test]
 fn test_npm_install_scoped() {
-    let input = "npm i @types/node";
+    let input = "bun add @types/node";
     let result = extract_file_reference(input, 11);
     assert_eq!(result, None);
 }
@@ -110,7 +110,7 @@ fn test_bare_identifier_config() {
 
 #[test]
 fn test_bare_identifier_rejected_in_npm() {
-    let input = "npm i @types";
+    let input = "bun add @types";
     let result = extract_file_reference(input, 12);
     assert_eq!(result, None);
 }
@@ -383,9 +383,9 @@ fn test_simple_fuzzy_match() {
 
 #[test]
 fn test_current_at_token_tracks_tokens_with_second_at() {
-    let input = "npx -y @kaeawc/auto-mobile@latest";
-    let token_start = input.find("@kaeawc").expect("scoped npm package present");
-    let version_at = input.rfind("@latest").expect("version suffix present in scoped npm package");
+    let input = "bunx @kaeawc/auto-mobile@latest";
+    let token_start = input.find("@kaeawc").expect("scoped bun package present");
+    let version_at = input.rfind("@latest").expect("version suffix present in scoped bun package");
     let test_cases = vec![
         (token_start, "Cursor at leading @"),
         (token_start + 8, "Cursor inside scoped package name"),

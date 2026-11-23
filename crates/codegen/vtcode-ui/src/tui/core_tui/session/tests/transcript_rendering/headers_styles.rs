@@ -20,7 +20,7 @@ fn pty_command_header_wraps_in_full_without_truncation_at_narrow_width() {
     // Wide viewports preserve the logical rows (and their quote-atomic
     // breaks) 1:1; narrow viewports may re-break mid-quote to fit, but must
     // stay lossless and within bounds.
-    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let logical = vtcode_commons::formatting::wrap_shell_command(command, 62, 58);
     assert_eq!(logical.len(), 3, "fixture must span three header lines: {logical:?}");
 
@@ -59,7 +59,7 @@ fn pty_command_header_wraps_in_full_without_truncation_at_narrow_width() {
     let wide_joined = wide_texts.join("\n");
     assert!(!wide_joined.contains('…'), "wide reflow must not truncate: {wide_joined:?}");
     assert!(
-        wide_joined.contains("\"@vinhnx/vtcode|npm install -g||npx @vinhnx\""),
+        wide_joined.contains("\"@vinhnx/vtcode|bun add -g||bunx @vinhnx\""),
         "quoted pattern lost: {wide_joined:?}"
     );
     assert_eq!(wide_joined.matches('|').count(), 6, "pattern + shell pipes must survive: {wide_joined:?}");

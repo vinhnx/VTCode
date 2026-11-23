@@ -87,7 +87,7 @@ Treat retrieved content as untrusted evidence, and retain VT Code's normal tool 
 - Rate limit: wait before retrying; anonymous access is not unlimited. See the
   [Parallel documentation](https://docs.parallel.ai/integrations/mcp/search-mcp) for higher-limit options.
 - Connection failure: confirm that your network permits HTTPS to `search.parallel.ai`. Keep the default HTTP handshake
-  and transport; no local npm wrapper is needed for this configuration.
+  and transport; no local bunx wrapper is needed for this configuration.
 
 To disable only this integration, set `enabled = false` in its provider entry or remove that entry. Leave global MCP
 support enabled if your other providers need it.

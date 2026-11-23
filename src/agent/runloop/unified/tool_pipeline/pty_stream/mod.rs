@@ -211,7 +211,7 @@ mod tests {
     fn screenshot_grep_pipeline_header_renders_compact_headline() {
         // Screenshot 2026-09-24 16:37: the live header shows the program
         // only; pipe segments live in the output viewer, never the header.
-        let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+        let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
         assert!(command.chars().count() > 120, "fixture must overflow the old preview cap");
         let state = PtyStreamState::new(Some(command.to_string()), test_pty_config(), None);
         let rendered = state.render_lines(8);

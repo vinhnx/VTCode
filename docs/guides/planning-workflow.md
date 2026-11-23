@@ -19,7 +19,7 @@ The footer shows `Planning...` only while a planning turn is active; a completed
 validation repair leaves the turn blocked with Plan mode still selected. Canonical step metadata uses `-> files:` and
 `-> verify:`; arrows inside action prose or quoted verification patterns remain content. List separate verification
 commands as comma-separated entries rather than
-semicolon chains. Documentation checks such as `npx markdownlint-cli2 README.md` are valid verification commands.
+semicolon chains. Documentation checks such as `bunx markdownlint-cli2 README.md` are valid verification commands.
 Markdown-only steps may use `verify: [skip Markdown lint if unavailable]` as their sole check; code or mixed-target
 steps still require an ordinary command or observable check. If the Markdown linter is unavailable, skip that optional
 check, report it as skipped, and continue with a diff and local-link review using available tools. Do not install
@@ -98,7 +98,7 @@ Shell commands in plan mode are validated against a read-only allow-list. Allowe
 - `cd` prefixes: `cd <dir> && <read-only command>` (changing directory mutates nothing)
 - read-only subcommands:
   `git status|log|diff|show|blame|ls-files|rev-parse|describe|shortlog|grep|rev-list|ls-tree|cat-file|diff-tree|merge-base|range-diff|whatchanged|count-objects|var|version|help`,
-  `cargo check|test|clippy|metadata|tree|nextest run`, `npm|pnpm|yarn test`
+  `cargo check|test|clippy|metadata|tree|nextest run`, `bun|pnpm|yarn test`
 - git repository redirects: `git -C <dir> <read-only subcommand>` (only changes which repository is read; `-c` config
   injection stays rejected)
 - git list-form subcommands: bare/flag-only `git tag`, `git branch`, `git remote`, `git reflog`, plus

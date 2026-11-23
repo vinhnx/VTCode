@@ -253,7 +253,7 @@ at least one verification step (test, type-check, or lint).
 This leads to compounding errors and brittle implementations.
 
 **Violation**: Agent declares a task complete or moves to a next major phase without executing a verification tool
-(e.g., `cargo check`, `cargo test`, `npx tsc`). **Remediation**: Run the appropriate verification command. Analyze the
+(e.g., `cargo check`, `cargo test`, `bunx tsc`). **Remediation**: Run the appropriate verification command. Analyze the
 output. If it fails, fix and re-verify. Never rely on internal reasoning as proof of correctness ("hallucination of
 verification").
 

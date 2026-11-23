@@ -364,7 +364,7 @@ docs-only prose edits stay allowed while pending and never increment the counter
 bounded autonomous recovery without manual `continue`: each in-turn text-response cap-hit (2 consecutive texts) consumes
 one of the configured in-turn attempts (default 2) that reset the streak and inject a project-aware directive naming the
 exact detected verifier (`default_verifier_for_workspace`: `Cargo.toml` → `cargo check --locked`, `go.mod` →
-`go test ./...`, `package.json` scripts → `npm test`/`npm run check`/`lint`/`build`, pytest markers → `pytest -q`,
+`go test ./...`, `package.json` scripts → `bun test`/`bun run check`/`lint`/`build`, pytest markers → `pytest -q`,
 `Makefile` → `make test`, `justfile` → `just test`; standalone or pure-`&&` chain, `max_output_tokens` for truncation;
 `[agent.harness.verification].default_verifier_override` wins when set and valid). For documentation-only work,
 recovery prefers the latest recorded failed checker for the current request, such as README Markdown lint, over the

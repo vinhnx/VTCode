@@ -370,8 +370,8 @@ mode: primary
 mcpServers:
   - playwright:
       type: stdio
-      command: npx
-      args: ["-y", "@playwright/mcp@latest"]
+      command: bunx
+      args: ["@playwright/mcp@latest"]
 ---
 ```
 

@@ -240,11 +240,11 @@ pub(crate) async fn run_checkup_diagnostics(
         };
         render_doctor_check(renderer, &mut summary, "Node.js", node_result)?;
 
-        let npm_result = match detect_command_version("npm", &["--version"]) {
-            Ok(version) => DoctorCheckOutcome::Pass(format!("npm {version}")),
+        let bun_result = match detect_command_version("bun", &["--version"]) {
+            Ok(version) => DoctorCheckOutcome::Pass(format!("Bun {version}")),
             Err(err) => DoctorCheckOutcome::Warn(err),
         };
-        render_doctor_check(renderer, &mut summary, "npm", npm_result)?;
+        render_doctor_check(renderer, &mut summary, "Bun", bun_result)?;
 
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Status, "[External Services]")?;
@@ -475,8 +475,8 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
         Some("Run `/init` to generate vtcode.toml with guided setup.".to_string())
     } else if label_lower.contains("node.js") {
         Some("Install Node.js: brew install node (macOS) or see nodejs.org".to_string())
-    } else if label_lower == "npm" {
-        Some("Install npm with Node.js or update it: npm install -g npm@latest".to_string())
+    } else if label_lower == "bun" {
+        Some("Install Bun: curl -fsSL https://bun.sh/install | bash (macOS/Linux) or see bun.sh".to_string())
     } else if label_lower.contains("mcp") && detail_lower.contains("error") {
         Some("Check MCP configuration in vtcode.toml, server availability, and timeouts.".to_string())
     } else {

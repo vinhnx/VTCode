@@ -156,8 +156,8 @@ async fn completion_verification_lint_logging_does_not_invalidate_required_evide
             "bun x --silent markdownlint-cli2@0.23.3 --fix README.md",
         ),
         (
-            "npx --yes --loglevel=error markdownlint-cli2@0.23.3 README.md",
-            "npx --yes --loglevel=error markdownlint-cli2@0.23.3 --fix README.md",
+            "bunx --silent markdownlint-cli2@0.23.3 README.md",
+            "bunx --silent markdownlint-cli2@0.23.3 --fix README.md",
         ),
     ] {
         let launch = registry.begin_completion_verifier(&args);

@@ -6,7 +6,7 @@ pub(crate) const BLIND_EDITING_THRESHOLD: usize = 6;
 /// Ends with the text of [`VERIFIER_SHELL_FORM_NOTE`] so the shell forms it
 /// describes match what the execution kernel elides; a test keeps the two in
 /// lockstep because `concat!` cannot splice a cross-crate const.
-pub(crate) const ANTI_BLIND_EDITING_DIRECTIVE: &str = "Verification is required before successful completion. Continue implementation and repairs; then run only missing checks. Run your project's build/test/lint tool with `exec_command` (e.g. `cargo check`, `go test`, `npm test`, or `pytest`), standalone or as a pure `&&` chain. Cap output with `max_output_tokens`. Pure `head`/`tail` verifier tails run standalone; static read-only filtering pipelines run with fail-closed `pipefail`. Only terminal exit 0 clears the gate; `;`, `||`, dynamic syntax, and mutating tails do not qualify.";
+pub(crate) const ANTI_BLIND_EDITING_DIRECTIVE: &str = "Verification is required before successful completion. Continue implementation and repairs; then run only missing checks. Run your project's build/test/lint tool with `exec_command` (e.g. `cargo check`, `go test`, `bun test`, or `pytest`), standalone or as a pure `&&` chain. Cap output with `max_output_tokens`. Pure `head`/`tail` verifier tails run standalone; static read-only filtering pipelines run with fail-closed `pipefail`. Only terminal exit 0 clears the gate; `;`, `||`, dynamic syntax, and mutating tails do not qualify.";
 /// Warning rendered when a pending gate's verifier result was lost (the exec
 /// session ended before the verifier's output was captured).
 pub(crate) const VERIFICATION_RESULT_LOST_WARNING: &str =

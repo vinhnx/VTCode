@@ -1,8 +1,8 @@
 use super::*;
 use serde_json::{Value, json};
 
-const LINT: &str = "npx --no-install markdownlint-cli2 README.md";
-const NEW_LINT: &str = "npx --no-install markdownlint-cli2 docs/guide.md";
+const LINT: &str = "bunx --no-install markdownlint-cli2 README.md";
+const NEW_LINT: &str = "bunx --no-install markdownlint-cli2 docs/guide.md";
 
 fn append_call(history: &mut Vec<uni::Message>, id: &str, name: &str, args: Value, output: Value) {
     history.push(uni::Message::assistant_with_tools(

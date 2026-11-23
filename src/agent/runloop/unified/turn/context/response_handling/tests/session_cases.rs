@@ -171,7 +171,7 @@ async fn session_161453_draft_reaches_repair_then_persisted_approval_request() {
                 && message.content.as_text().contains(CANONICAL_STEP_FORMAT))
     );
 
-    let repaired = "## Summary\nRefine README prose.\n\n## Implementation Steps\n1. Tighten README wording -> files: [README.md] -> verify: [npx markdownlint-cli2 README.md]\n\n## Test Cases and Validation\n- Markdown lint exits zero; review links and the contributor block.\n\n## Assumptions and Defaults\n- Preserve commands and generated content.\n";
+    let repaired = "## Summary\nRefine README prose.\n\n## Implementation Steps\n1. Tighten README wording -> files: [README.md] -> verify: [bunx markdownlint-cli2 README.md]\n\n## Test Cases and Validation\n- Markdown lint exits zero; review links and the contributor block.\n\n## Assumptions and Defaults\n- Preserve commands and generated content.\n";
     let TurnProcessingResult::TextResponse { text, proposed_plan, .. } = process_planning_candidate(&mut ctx, repaired)
     else {
         panic!("repaired plan must reach the approval gate");

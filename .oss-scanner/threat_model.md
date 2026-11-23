@@ -61,7 +61,7 @@ Key binaries: `target/debug/vtcode`. Key harnesses: `scripts/tests/`, crate `tes
 `fuzz/` targets. Fuzz targets that accept untrusted bytes are good entry points.
 
 Offline note: the scan container has NO network. Use vendored crates and local files only.
-Do not `cargo install`, `npm install`, or `curl` during audit.
+Do not `cargo install`, `bun install`, or `curl` during audit.
 
 ## How you rate severity
 

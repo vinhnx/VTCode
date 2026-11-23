@@ -177,4 +177,4 @@ Bundled `scripts/` helpers must be non-interactive and agentic-friendly:
 - `argparse` with `--help`, `--format json|text`, `--output -|FILE`, `--dry-run` for previews.
 - Structured data to stdout (JSON), diagnostics to stderr, meaningful exit codes.
 - Idempotent (`create if not exists`); PEP723 `# /// script` inline deps when needed.
-- Pin one-off `uvx`/`npx` versions; state prerequisites in `compatibility`.
+- Pin one-off `uvx`/`bunx` versions; state prerequisites in `compatibility`.

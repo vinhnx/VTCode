@@ -25,6 +25,7 @@ const LOCKFILE_COMMANDS: &[&str] = &[
     "pnpm",     // pnpm-lock.yaml
     "yarn",     // yarn.lock
     "bun",      // bun.lockb
+    "bunx",     // bun global cache lock
     "go",       // go.sum
     "gradle",   // gradle.lockfile
     "mvn",      // uses local repo locks
@@ -152,6 +153,7 @@ pub fn is_development_toolchain_command(program: &str) -> bool {
             | "yarn"
             | "pnpm"
             | "bun"
+            | "bunx"
             | "go"
             | "python"
             | "python3"

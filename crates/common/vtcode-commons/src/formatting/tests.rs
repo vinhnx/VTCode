@@ -181,13 +181,13 @@ fn wrap_shell_command_keeps_screenshot_pipeline_in_full() {
     // Screenshot 2026-09-24 16:37: the quoted grep pattern holds spaces
     // and pipes but must never split mid-quote; every pipe segment must
     // survive with no `…`, and rejoining restores the source exactly.
-    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let wrapped = wrap_shell_command(command, 62, 58);
     assert_eq!(
         wrapped,
         vec![
-            "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs |",
-            "grep -v node_modules | grep -v package-lock | grep -v",
+            "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep",
+            "-v node_modules | grep -v package-lock | grep -v",
             "\"\\.backup\"",
         ]
     );

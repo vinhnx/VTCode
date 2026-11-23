@@ -120,19 +120,20 @@ fn optional_markdown_check_requires_unavailable_condition() {
 }
 
 #[test]
-fn readme_markdown_verification_list_accepts_npx() {
-    let checks = "[npx markdownlint-cli2 README.md, python3 scripts/check_markdown_location.py, git diff -- README.md]";
+fn readme_markdown_verification_list_accepts_bunx() {
+    let checks =
+        "[bunx markdownlint-cli2 README.md, python3 scripts/check_markdown_location.py, git diff -- README.md]";
     assert!(validate_concrete_verification(checks).is_ok());
-    assert!(validate_concrete_verification("npx").is_err());
+    assert!(validate_concrete_verification("bunx").is_err());
     let plan = format!(
         "## Summary\nRefine README structure and wording.\n\n## Implementation Steps\n1. Update heading anchors and validate Markdown -> files: [README.md] -> verify: {checks}\n\n## Test Cases and Validation\nContents links resolve to their headings.\n\n## Assumptions and Defaults\nChange README.md only."
     );
     assert!(validate_plan_content(&plan).is_ready());
     let tracker = super::generate_tracker_markdown_from_plan(&plan).expect("tracker");
-    assert!(tracker.contains("verify: npx markdownlint-cli2 README.md"));
+    assert!(tracker.contains("verify: bunx markdownlint-cli2 README.md"));
     assert!(tracker.contains("verify: python3 scripts/check_markdown_location.py"));
     assert!(tracker.contains("verify: git diff -- README.md"));
-    assert!(validate_concrete_verification("[npx markdownlint-cli2 README.md, check later]").is_err());
+    assert!(validate_concrete_verification("[bunx markdownlint-cli2 README.md, check later]").is_err());
 }
 
 #[test]
@@ -274,9 +275,9 @@ fn per_item_brackets_in_verify_list_validate_as_one_plan() {
     // pair before splitting, producing the fragments `cmd_a]` and `[cmd_b`,
     // and item 2 failed as "verification item 2 must be a concrete command or
     // check", terminally rejecting an otherwise valid README plan.
-    let verify = "[npx markdownlint-cli2 README.md], [git diff -- README.md]";
+    let verify = "[bunx markdownlint-cli2 README.md], [git diff -- README.md]";
     let items = parse_bracket_list(verify);
-    assert_eq!(items, vec!["npx markdownlint-cli2 README.md", "git diff -- README.md"]);
+    assert_eq!(items, vec!["bunx markdownlint-cli2 README.md", "git diff -- README.md"]);
     for item in &items {
         assert!(validate_concrete_verification(item).is_ok(), "each per-item bracket command must validate: {item}");
     }
@@ -506,7 +507,7 @@ Out: No code, installer scripts, desktop sources, docs content, contributor list
 - Desktop and installer references resolve: grep -n 'desktop-workspace.md' README.md, grep -n 'native_installers.md' README.md
 - Preserved uncommitted installer wording visible: git diff -- README.md
 - Length stays under 1000-line ceiling: wc -l README.md
-- Markdown lint if available, otherwise report skipped: npx markdownlint-cli2 README.md
+- Markdown lint if available, otherwise report skipped: bunx markdownlint-cli2 README.md
 
 ## Assumptions and Defaults
 - Preserve existing uncommitted README.md installer and desktop asset wording in meaning.

@@ -88,12 +88,12 @@ experimental_use_rmcp_client = true
 
 [mcp.requirements]
 enforce = false
-allowed_stdio_commands = ["uvx", "npx"]
+allowed_stdio_commands = ["uvx", "bunx"]
 allowed_http_endpoints = ["https://mcp.example.com/api"]
 ```
 
 `startup_timeout_seconds` defaults to `None`, which falls back to the global `request_timeout_seconds` value. Setting it
-to `0` disables the startup timeout entirely—handy for first-run npm downloads. `tool_timeout_seconds` behaves the same
+to `0` disables the startup timeout entirely—handy for first-run bun downloads. `tool_timeout_seconds` behaves the same
 way for individual tool calls. When `mcp.requirements.enforce = true`, providers whose stdio `command` or HTTP
 `endpoint` is not allowlisted are skipped during MCP initialization.
 
@@ -407,7 +407,7 @@ documentation:
 cargo test -p vtcode-core --test mcp_context7_manual context7_list_tools_smoke -- --ignored --nocapture
 ```
 
-Expect the test to take a little longer on the first run while `npx` downloads the server bundle.
+Expect the test to take a little longer on the first run while `bunx` downloads the server bundle.
 
 ## Troubleshooting
 

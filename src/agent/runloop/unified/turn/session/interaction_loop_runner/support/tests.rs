@@ -431,7 +431,7 @@ fn append_agent_reference_metadata_adds_selected_agent_hint() {
 #[test]
 fn build_file_reference_metadata_ignores_non_file_aliases() {
     let temp_dir = TempDir::new().expect("temp dir");
-    let metadata = build_file_reference_metadata("npm i @types/node", temp_dir.path());
+    let metadata = build_file_reference_metadata("bun add @types/node", temp_dir.path());
     assert!(metadata.is_none());
 }
 

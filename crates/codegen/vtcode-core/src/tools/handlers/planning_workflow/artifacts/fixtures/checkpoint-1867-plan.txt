@@ -40,6 +40,6 @@ Out of scope:
 - "Refine structure" means reorganize and clarify the existing README (ordering, TOC, sectioning, table shape) rather than a rewrite; the product narrative, badges, demo GIF, and community/sponsorship blocks are preserved.
 - Where a documented command's exact flag spelling is ambiguous, prefer the grammar in `crates/codegen/vtcode-core/src/cli/args/*.rs` (clap definitions) over prose, since those are the shipped surface.
 - Documentation-only change: no `cargo check`/`cargo nextest` run is required, and `./scripts/check-dev.sh` is not part of the verification set for a Markdown-only edit. The Markdown and link checkers above are the gates.
-- `npx`/`node` are present in this environment, so `scripts/check_markdown.py` is expected to run; if the pinned `markdownlint-cli2@0.23.3` cannot be fetched offline, that check is reported as skipped rather than silently passed.
+- `bunx`/`node` are present in this environment, so `scripts/check_markdown.py` is expected to run; if the pinned `markdownlint-cli2@0.23.3` cannot be fetched offline, that check is reported as skipped rather than silently passed.
 - The `docs/` tree is treated as the source of truth for links; the README will not link to `docs/project/private-notes.md` (excluded from maintained Markdown) or to any file not already tracked.
 </proposed_plan>

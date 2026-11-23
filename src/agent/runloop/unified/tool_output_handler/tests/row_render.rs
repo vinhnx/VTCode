@@ -290,13 +290,13 @@ fn command_output_viewer_header_keeps_full_pipeline() {
     // normalizes quoting (double to single), so assert token completeness
     // rather than byte equality: `||` in the pattern (3 pattern pipes +
     // 3 shell pipes = 6) and the backslash-escaped `\.backup` must survive.
-    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let header = command_output_header(tools::EXEC_COMMAND, &serde_json::json!({ "command": command }), None);
     assert!(!header.contains('…'), "truncation ellipsis leaked: {header:?}");
     for fragment in [
         "grep",
         "-rn",
-        "@vinhnx/vtcode|npm install -g||npx @vinhnx",
+        "@vinhnx/vtcode|bun add -g||bunx @vinhnx",
         "docs",
         "node_modules",
         "package-lock",

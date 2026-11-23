@@ -88,8 +88,8 @@ enabled = true  # Enable MCP integration
 # List of MCP providers to use
 [[mcp.providers]]
 name = "context7"
-command = "npx"
-args = ["-y", "context7", "serve", "api"]
+command = "bunx"
+args = ["context7", "serve", "api"]
 enabled = true
 
 [[mcp.providers]]

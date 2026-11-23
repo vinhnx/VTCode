@@ -19,11 +19,11 @@ Refine `README.md` for wording, structure, and consistency while preserving all 
 3. Fix Usage section wording: tighten `/explain` bullet list, `exec` note, Sessions intro transitions -> files: [README.md] -> verify: [`rg -n "guided tour" README.md` expect no match]
 4. Consistency pass on Integrations/Documentation/Development/Contributing/Security/Community headings and lead sentences -> files: [README.md] -> verify: [`rg -n "## " README.md` count headings unchanged]
 5. Confirm no edits inside `CONTRIBUTORS:START/END` block -> files: [README.md] -> verify: [`rg -c "CONTRIBUTORS" README.md` = 2 matches]
-6. Run markdownlint to confirm zero errors -> files: [README.md] -> verify: [`npx markdownlint-cli2 README.md` exit 0]
+6. Run markdownlint to confirm zero errors -> files: [README.md] -> verify: [`bunx markdownlint-cli2 README.md` exit 0]
 
 ### Test Cases and Validation
 - All referenced doc/script paths verified to exist (done during planning; re-verify post-edit with the `ls` command from step 1).
-- `npx markdownlint-cli2 README.md` exits 0.
+- `bunx markdownlint-cli2 README.md` exits 0.
 - `wc -l README.md` count stays within ±10 lines of 425 (no structural expansion).
 - Visual spot-check of the diff: only prose lines changed, no link/badge/code-block edits.
 

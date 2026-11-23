@@ -62,7 +62,7 @@ fn piped_verifier_success_without_pending_gate_stays_silent() {
 
 #[test]
 fn masked_verifier_feedback_is_once_per_turn_without_changing_gate_or_repair_budget() {
-    let args = json!({"cmd":"npx markdownlint-cli2 README.md; echo \"lint exit: $?\""});
+    let args = json!({"cmd":"bunx markdownlint-cli2 README.md; echo \"lint exit: $?\""});
     for pending in [false, true] {
         let mut tracker = LoopTracker::with_verification_snapshot((pending, 0));
 
@@ -83,7 +83,7 @@ fn masked_verifier_feedback_is_once_per_turn_without_changing_gate_or_repair_bud
             &mut tracker,
             &success,
             tools::EXEC_COMMAND,
-            &json!({"cmd":"npx markdownlint-cli2 README.md"}),
+            &json!({"cmd":"bunx markdownlint-cli2 README.md"}),
         );
         assert!(!tracker.verification_is_pending());
         update_repetition_tracker(&mut tracker, &success, tools::EXEC_COMMAND, &args);

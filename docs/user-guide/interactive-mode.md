@@ -488,7 +488,7 @@ to observe a result synchronously.
 Common backgrounded commands include:
 
 - Build systems (e.g., webpack, vite, make)
-- Package managers (npm, yarn, pnpm)
+- Package managers (bun, yarn, pnpm)
 - Test runners (jest, pytest)
 - Development servers and other long-running processes
 
@@ -517,7 +517,7 @@ metadata remain available by reference without being reread while the response i
 Prefix input with `!` to run commands directly without agent interpretation:
 
 ```bash
-! npm test
+! bun test
 ! git status
 ! ls -la
 ```

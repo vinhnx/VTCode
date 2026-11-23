@@ -515,14 +515,14 @@ The governance gates run through both the local gate scripts and CI: `ci.yml`'s
 fast-gates job sources the same `scripts/common.sh` functions
 (`run_repo_governance_gates`) plus the structured logging and agent legibility
 lints, so local and hosted gates cannot drift. Markdown lint stays local-only
-(it needs Node.js 22+ with `npx`; run `npm install` so the pinned linter resolves
+(it needs Bun with `bunx`; run `bun install` so the pinned linter resolves
 locally). Run `./scripts/check-dev.sh` before every commit and `./scripts/check.sh`
 before a release:
 
 | Function | Checks | Runs in |
 | --- | --- | --- |
 | `run_repo_governance_gates` | file length, docs/AGENTS.md links, top-level docs placement, tracked file sizes, out-of-scope MCP provider docs | `check-dev.sh`, `check.sh` |
-| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Node.js 22+ with `npx`; run `npm install` so the pinned linter resolves locally) | `check-dev.sh --lints`, `check.sh` |
+| `run_markdown_lint_gate` | `scripts/check_markdown.py` (needs Bun with `bunx`; run `bun install` so the pinned linter resolves locally) | `check-dev.sh --lints`, `check.sh` |
 | `run_check` / `run_clippy` | compilation plus Cargo's built-in `unused_dependencies` manifest lint (warn-level, configured in root `Cargo.toml`) | `check-dev.sh`, `check.sh` |
 
 Unused dependencies are reported by Cargo 1.100's built-in `cargo::unused_dependencies` manifest

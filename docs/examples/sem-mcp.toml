@@ -6,8 +6,8 @@ enabled = true
 [[mcp.providers]]
 name = "sem"
 enabled = true
-command = "npx"
-args = ["-y", "@ataraxy-labs/sem@0.27.0", "mcp"]
+command = "bunx"
+args = ["@ataraxy-labs/sem@0.27.0", "mcp"]
 startup_timeout_ms = 60_000
 
 [mcp.providers.env]

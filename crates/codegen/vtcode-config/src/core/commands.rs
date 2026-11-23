@@ -121,6 +121,7 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "bun install",
     "bun run",
     "bun test",
+    "bunx",
     "npx",
     // Go ecosystem
     "go",
@@ -257,6 +258,7 @@ fn default_allow_glob() -> Vec<String> {
         "pnpm run *".into(),
         "bun *".into(),
         "bun run *".into(),
+        "bunx *".into(),
         "npx *".into(),
         // Go
         "go *".into(),
@@ -327,7 +329,7 @@ fn default_allow_regex() -> Vec<String> {
                 r"^(pip|pip3)\b".into(),
                 r"^virtualenv\b".into(),
                 // Node.js
-                r"^(node|npm|yarn|pnpm|bun|npx)\b".into(),
+                r"^(node|npm|yarn|pnpm|bun|bunx|npx)\b".into(),
                 // Go
                 r"^go\b".into(),
                 // C/C++

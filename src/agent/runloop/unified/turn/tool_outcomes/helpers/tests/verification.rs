@@ -82,9 +82,9 @@ fn unsafe_verifier_aliases_and_suffixes_cannot_bypass_or_clear_pending_gate() {
 #[test]
 fn markdownlint_verification_clears_only_on_truthful_success() {
     for (command, exit_code, clears_gate) in [
-        ("npx --yes markdownlint-cli2@0.23.3 README.md", 0, true),
-        ("npx --yes markdownlint-cli2@0.23.3 README.md", 1, false),
-        ("npx --yes markdownlint-cli2@0.23.3 README.md | grep error", 0, true),
+        ("bunx markdownlint-cli2@0.23.3 README.md", 0, true),
+        ("bunx markdownlint-cli2@0.23.3 README.md", 1, false),
+        ("bunx markdownlint-cli2@0.23.3 README.md | grep error", 0, true),
         ("python3 scripts/check_markdown.py", 0, true),
         ("python3 scripts/check_markdown.py", 1, false),
         ("python3 scripts/check_markdown.py --fix", 0, false),
@@ -317,7 +317,7 @@ fn lint_failure(exit_code: i64, stdout_text: &str) -> ToolPipelineOutcome {
 #[test]
 fn identical_consecutive_verifier_failures_surface_stalled_guidance() {
     let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
-    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+    let lint_args = json!({"cmd": "bunx markdownlint-cli2 README.md"});
     let first = lint_failure(1, "README.md:54 error MD060\n");
 
     update_repetition_tracker(&mut tracker, &first, tools::EXEC_COMMAND, &lint_args);
@@ -340,7 +340,7 @@ fn identical_consecutive_verifier_failures_surface_stalled_guidance() {
 #[test]
 fn changed_verifier_output_or_command_does_not_stall() {
     let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
-    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+    let lint_args = json!({"cmd": "bunx markdownlint-cli2 README.md"});
 
     // Same command, evolved findings: progress, not a stall.
     update_repetition_tracker(
@@ -364,7 +364,7 @@ fn changed_verifier_output_or_command_does_not_stall() {
         &mut tracker,
         &lint_failure(1, "README.md:54 error MD060\nREADME.md:60 error MD013\n"),
         tools::EXEC_COMMAND,
-        &json!({"cmd": "npx --yes markdownlint-cli2 README.md docs/CONTRIBUTING.md"}),
+        &json!({"cmd": "bunx markdownlint-cli2 README.md docs/CONTRIBUTING.md"}),
     );
     assert!(tracker.take_verifier_stalled_guidance().is_none(), "new command must not stall");
     assert!(tracker.take_verifier_failed_guidance().is_some());
@@ -372,7 +372,7 @@ fn changed_verifier_output_or_command_does_not_stall() {
 
 #[test]
 fn mutation_and_success_clear_verifier_stall_state() {
-    let lint_args = json!({"cmd": "npx --yes markdownlint-cli2 README.md"});
+    let lint_args = json!({"cmd": "bunx markdownlint-cli2 README.md"});
     let failure = || lint_failure(1, "README.md:54 error MD060\n");
 
     // A mutation between identical failures means the second run verifies new

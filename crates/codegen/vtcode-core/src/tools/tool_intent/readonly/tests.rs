@@ -58,7 +58,7 @@ fn and_chain_rejects_non_allowlisted_segments() {
     assert!(!is_readonly_command_session_command(&run_cmd("ls -la && python script.py")));
     assert!(!is_readonly_command_session_command(&run_cmd("ls -la && cargo build")));
     assert!(!is_readonly_command_session_command(&run_cmd("python3 mutate.py --dry-run")));
-    assert!(!is_readonly_command_session_command(&run_cmd("npm install --dry-run && rm output")));
+    assert!(!is_readonly_command_session_command(&run_cmd("bun install --dry-run && rm output")));
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn version_and_help_probes_are_readonly_for_any_program() {
         "cargo --version",
         "node --version",
         "python3 -V",
-        "npm --version",
+        "bun --version",
         "git --version",
         "bash --help",
     ] {
@@ -397,7 +397,7 @@ fn parallel_commands_are_limited_to_side_effect_free_inspection() {
         "cargo test",
         "cargo nextest run",
         "cargo clippy",
-        "npm test",
+        "bun test",
         "pnpm run test",
         "git diff | head -20",
     ] {

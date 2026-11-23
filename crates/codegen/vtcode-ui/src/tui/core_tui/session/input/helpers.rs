@@ -69,13 +69,13 @@ pub(super) fn compact_image_label(content: &str) -> Option<String> {
 
     let without_at = unquoted.trim_prefix('@');
 
-    // Skip npm scoped package patterns like @scope/package@version
+    // Skip bun scoped package patterns like @scope/package@version
     if without_at.contains('/')
         && !without_at.starts_with('.')
         && !without_at.starts_with('/')
         && !without_at.starts_with("~/")
     {
-        // Check if this looks like @scope/package (npm package)
+        // Check if this looks like @scope/package (bun package)
         let parts: Vec<&str> = without_at.split('/').collect();
         if parts.len() >= 2 && !parts[0].is_empty() {
             // Reject if it looks like a package name (no extension on second component)

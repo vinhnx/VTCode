@@ -600,8 +600,8 @@ mod tests {
     #[test]
     fn auto_recovery_status_line_does_not_claim_a_retry_without_verifier() {
         assert_eq!(
-            verification_auto_recovery_status_line(Some("npm test"), 1, 2),
-            "[i] Verification gate auto-recovery turn 1/2: retrying `npm test` without manual `continue`."
+            verification_auto_recovery_status_line(Some("bun test"), 1, 2),
+            "[i] Verification gate auto-recovery turn 1/2: retrying `bun test` without manual `continue`."
         );
         let generic = verification_auto_recovery_status_line(None, 2, 2);
         assert!(generic.contains("2/2"));
@@ -679,7 +679,7 @@ mod tests {
         let failure = VerificationFailureSummary {
             exit_code: Some(1),
             command: "python3 scripts/check_markdown.py".to_string(),
-            excerpt_tail: "FileNotFoundError: [Errno 2] No such file or directory: 'npx'".to_string(),
+            excerpt_tail: "FileNotFoundError: [Errno 2] No such file or directory: 'bunx'".to_string(),
             consecutive_failures: 2,
         };
         let reason = verification_exhausted_handoff_reason(
@@ -691,7 +691,7 @@ mod tests {
         );
 
         assert!(reason.contains("failed 2 time(s) consecutively"));
-        assert!(reason.contains("`npx` was not found on PATH"), "handoff names the binary: {reason}");
+        assert!(reason.contains("`bunx` was not found on PATH"), "handoff names the binary: {reason}");
         assert!(reason.contains("environment problem"), "handoff reframes as environmental: {reason}");
     }
 

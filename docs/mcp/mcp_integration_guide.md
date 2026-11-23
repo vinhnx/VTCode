@@ -100,7 +100,7 @@ VT Code supports three transport mechanisms for MCP servers:
 name = "example"
 transport = {
   type = "stdio",
-  command = "npx",
+  command = "bunx",
   args = ["mcp-server-example"],
   working_directory = "/path/to/dir"
 }

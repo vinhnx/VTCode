@@ -592,7 +592,7 @@ fn render_planning_progress_indicator_emits_transcript_line() {
 fn prepare_summary_data_uses_compact_run_headline() {
     // Screenshot 2026-09-24: the `• Ran` headline shows the program only;
     // the complete pipeline stays in the output viewer, never the headline.
-    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let data =
         prepare_summary_data(tool_names::UNIFIED_EXEC, &json!({"action": "run", "command": command}), None, None);
     assert_eq!(data.summary, "Ran grep");

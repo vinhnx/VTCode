@@ -570,7 +570,7 @@ fn resolve_direct_tool_mention(alias: &str, input: &str, at_pos: usize, workspac
 
 fn is_package_manager_command_context(input: &str, at_pos: usize) -> bool {
     let before_at = &input[..at_pos];
-    ["npm", "npx", "yarn", "pnpm", "bun"]
+    ["npm", "npx", "yarn", "pnpm", "bun", "bunx"]
         .iter()
         .any(|cmd| before_at.split_whitespace().any(|word| word == *cmd))
 }

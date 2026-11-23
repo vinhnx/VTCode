@@ -62,14 +62,14 @@ fn test_detect_rust_struct_tool_call_maps_run_alias() {
 }
 #[test]
 fn test_detect_textual_function_maps_run_alias() {
-    let message = "run(command: \"npm\", args: [\"test\"])";
+    let message = "run(command: \"bun\", args: [\"test\"])";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
         serde_json::json!({
             "action": "run",
-            "command": ["npm"],
+            "command": ["bun"],
             "args": ["test"]
         })
     );

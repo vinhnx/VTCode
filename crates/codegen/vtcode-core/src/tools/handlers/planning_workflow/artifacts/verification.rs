@@ -311,6 +311,7 @@ fn is_actual_command_token(raw_word: &str) -> bool {
     const COMMAND_NAMES: &[&str] = &[
         "awk",
         "bun",
+        "bunx",
         "cargo",
         "cat",
         "cmake",

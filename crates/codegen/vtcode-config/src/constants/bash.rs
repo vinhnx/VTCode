@@ -143,6 +143,7 @@ pub const ALLOWED_COMMANDS: &[&str] = &[
     "yarn",
     "pnpm",
     "bun",
+    "bunx",
     "npx",
     "node",
     "yarnpkg",

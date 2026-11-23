@@ -12,7 +12,7 @@ use super::SessionStats;
 /// assertion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MissingExecutable {
-    /// The output names the missing binary (e.g. `npx`).
+    /// The output names the missing binary (e.g. `bunx`).
     Named(String),
     /// The output shows a missing-executable marker but no usable name
     /// (e.g. a truncated traceback tail).
@@ -59,7 +59,7 @@ fn detect_missing_executable(output: &str) -> Option<MissingExecutable> {
     unnamed.then_some(MissingExecutable::Unnamed)
 }
 
-/// Python `FileNotFoundError: [Errno 2] No such file or directory: 'npx'`,
+/// Python `FileNotFoundError: [Errno 2] No such file or directory: 'bunx'`,
 /// Go `exec: "bun": executable file not found in $PATH`, and the
 /// `'<binary>' was not found on PATH` toolchain error quote the binary.
 fn quoted_executable_name(line: &str) -> Option<String> {
@@ -73,7 +73,7 @@ fn quoted_executable_name(line: &str) -> Option<String> {
     is_plausible_binary_name(quoted).then(|| quoted.to_string())
 }
 
-/// bash/zsh `npx: command not found` and dash `sh: 1: npx: not found`. The
+/// bash/zsh `bunx: command not found` and dash `sh: 1: bunx: not found`. The
 /// dash form requires an explicit shell prefix so `error: foo: not found`
 /// (a missing item, not a missing binary) does not match.
 fn shell_not_found_name(line: &str) -> Option<String> {
@@ -98,7 +98,7 @@ fn shell_not_found_name(line: &str) -> Option<String> {
     None
 }
 
-/// Node `Error: spawn npx ENOENT`.
+/// Node `Error: spawn bunx ENOENT`.
 fn spawn_enoent_name(line: &str) -> Option<String> {
     let rest = line.split_once("spawn ")?.1;
     if !rest.contains("ENOENT") {

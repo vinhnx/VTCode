@@ -53,7 +53,7 @@ fn harness_verifier_override_must_be_standalone_or_pure_chain() {
 fn harness_verifier_retries_recorded_failed_lint_for_docs_only_work() {
     let dir = tempfile::TempDir::new().expect("workspace");
     std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname=\"x\"\n").expect("Cargo.toml");
-    let lint = "npx --no-install markdownlint-cli2 README.md";
+    let lint = "bunx --no-install markdownlint-cli2 README.md";
     let mut history = vec![
         uni::Message::user("fix README alignment".to_string()),
         uni::Message::assistant_with_tools(
@@ -124,7 +124,7 @@ fn harness_verifier_does_not_replay_unsafe_unfinished_or_previous_task_checks() 
         ("sandbox_permissions", json!("require_escalated")),
         ("additional_permissions", json!({"network":true})),
     ] {
-        let mut args = json!({"cmd":"npx --no-install markdownlint-cli2 README.md"});
+        let mut args = json!({"cmd":"bunx --no-install markdownlint-cli2 README.md"});
         args[key] = value;
         let history = vec![
             uni::Message::user("fix docs README".to_string()),
@@ -154,18 +154,21 @@ fn harness_verifier_does_not_replay_unsafe_unfinished_or_previous_task_checks() 
         );
     }
     for (args, output) in [
-        (json!({"cmd":"npx --no-install markdownlint-cli2 README.md"}), json!({"exit_code":0})),
-        (json!({"cmd":"npx --no-install markdownlint-cli2 README.md"}), json!({"status":"running"})),
+        (json!({"cmd":"bunx --no-install markdownlint-cli2 README.md"}), json!({"exit_code":0})),
+        (json!({"cmd":"bunx --no-install markdownlint-cli2 README.md"}), json!({"status":"running"})),
         (
-            json!({"cmd":"npx --no-install markdownlint-cli2 README.md"}),
+            json!({"cmd":"bunx --no-install markdownlint-cli2 README.md"}),
             json!({"exit_code":1,"not_executed":true}),
         ),
-        (json!({"cmd":"npx --no-install markdownlint-cli2 README.md"}), json!({"exit_code":1,"blocked":true})),
-        (json!({"cmd":"npx --no-install markdownlint-cli2 README.md; echo ok"}), json!({"exit_code":1})),
-        (json!({"cmd":"npx --no-install markdownlint-cli2 README.md | grep MD060"}), json!({"exit_code":1})),
-        (json!({"cmd":"npx --no-install markdownlint-cli2", "args":["README.md"]}), json!({"exit_code":1})),
         (
-            json!({"cmd":"npx --no-install markdownlint-cli2 README.md", "workdir":"other"}),
+            json!({"cmd":"bunx --no-install markdownlint-cli2 README.md"}),
+            json!({"exit_code":1,"blocked":true}),
+        ),
+        (json!({"cmd":"bunx --no-install markdownlint-cli2 README.md; echo ok"}), json!({"exit_code":1})),
+        (json!({"cmd":"bunx --no-install markdownlint-cli2 README.md | grep MD060"}), json!({"exit_code":1})),
+        (json!({"cmd":"bunx --no-install markdownlint-cli2", "args":["README.md"]}), json!({"exit_code":1})),
+        (
+            json!({"cmd":"bunx --no-install markdownlint-cli2 README.md", "workdir":"other"}),
             json!({"exit_code":1}),
         ),
     ] {
@@ -212,7 +215,7 @@ fn harness_verifier_does_not_replay_unsafe_unfinished_or_previous_task_checks() 
             vec![uni::ToolCall::function(
                 "lint_1".to_string(),
                 "exec_command".to_string(),
-                r#"{"cmd":"npx --no-install markdownlint-cli2 README.md"}"#.to_string(),
+                r#"{"cmd":"bunx --no-install markdownlint-cli2 README.md"}"#.to_string(),
             )],
         ),
         uni::Message::tool_response("unmatched".to_string(), r#"{"exit_code":1}"#.to_string()),

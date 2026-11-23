@@ -110,13 +110,13 @@ fn verification_recovery_is_not_replenished_by_internal_progress() {
 }
 #[test]
 fn missing_executable_hint_names_the_binary_across_toolchains() {
-    let python_traceback = "Traceback (most recent call last):\n  File \"scripts/check_markdown.py\", line 74, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: 'npx'\n";
+    let python_traceback = "Traceback (most recent call last):\n  File \"scripts/check_markdown.py\", line 74, in <module>\nFileNotFoundError: [Errno 2] No such file or directory: 'bunx'\n";
     let cases = [
-        (python_traceback, "npx"),
-        ("npx: command not found", "npx"),
-        ("/bin/sh: npx: command not found", "npx"),
-        ("sh: 1: npx: not found", "npx"),
-        ("Error: spawn npx ENOENT", "npx"),
+        (python_traceback, "bunx"),
+        ("bunx: command not found", "bunx"),
+        ("/bin/sh: bunx: command not found", "bunx"),
+        ("sh: 1: bunx: not found", "bunx"),
+        ("Error: spawn bunx ENOENT", "bunx"),
         ("exec: \"bun\": executable file not found in $PATH", "bun"),
         ("error: cannot run the Markdown linter: 'node' was not found on PATH.", "node"),
     ];
@@ -129,9 +129,9 @@ fn missing_executable_hint_names_the_binary_across_toolchains() {
 }
 #[test]
 fn missing_executable_hint_detects_json_escaped_tool_results() {
-    let response = r#"{"exit_code":1,"output":"Traceback (most recent call last):\nFileNotFoundError: [Errno 2] No such file or directory: 'npx'\n"}"#;
+    let response = r#"{"exit_code":1,"output":"Traceback (most recent call last):\nFileNotFoundError: [Errno 2] No such file or directory: 'bunx'\n"}"#;
     let hint = missing_executable_hint(response).expect("JSON-escaped output must still match");
-    assert!(hint.contains("`npx`"), "hint names the binary: {hint}");
+    assert!(hint.contains("`bunx`"), "hint names the binary: {hint}");
 }
 #[test]
 fn missing_executable_hint_falls_back_to_generic_guidance_without_a_name() {

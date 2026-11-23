@@ -103,7 +103,22 @@ pub(super) fn is_verification_invocation(words: &[String]) -> bool {
                 || (second.as_deref() == Some("run")
                     && matches!(third.as_deref(), Some("test" | "build" | "lint" | "check")))
         }
-        "bunx" => bun_test_or_run_verifies(second.as_deref(), third.as_deref()),
+        "bunx" => {
+            // Mirrors the `bun x` package slot above so `bunx markdownlint-cli2`
+            // guidance is credited as verification. Runner flags are skipped
+            // before locating the package name.
+            let package_index = command_words
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find(|(_, word)| {
+                    !matches!(word.as_str(), "--no-install" | "--silent" | "--verbose" | "--bun")
+                        && !word.starts_with('-')
+                })
+                .map(|(index, _)| index);
+            markdownlint_package_verifies(command_words, package_index)
+                || bun_test_or_run_verifies(second.as_deref(), third.as_deref())
+        }
         "deno" => matches!(second.as_deref(), Some("test" | "lint" | "check")),
         "make" | "gmake" | "just" => make_like_verification_targets(command_words),
         "uv" => {

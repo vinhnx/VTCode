@@ -6,7 +6,7 @@ it does not replace built-in file tools or change shipped defaults. No Sem accou
 
 ## Setup
 
-1. Install Node.js/npm and Git. The pinned npm package downloads a native Sem binary on first installation.
+1. Install Bun and Git. The pinned Bun package downloads a native Sem binary on first installation.
    The example targets macOS and Linux on x64 or ARM64.
 2. Open the [example configuration](../examples/sem-mcp.toml) and replace `SEM_REPO` with the absolute path
    to an existing, trusted Git repository. This is the repository Sem will inspect, not the plugin install directory.
@@ -15,7 +15,7 @@ it does not replace built-in file tools or change shipped defaults. No Sem accou
 4. Inspect configuration with `vtcode mcp get sem` and `vtcode mcp list`. These commands do not prove a live
    connection. Start a new VT Code session and check that the Sem tools are discovered.
 
-If transport requirements are enforced, permit `npx` in your existing `mcp.requirements.allowed_stdio_commands`.
+If transport requirements are enforced, permit `bunx` in your existing `mcp.requirements.allowed_stdio_commands`.
 If tool allowlists are enforced, add only the Sem tools you need to the provider-specific allowlist.
 See [MCP integration](mcp-integration.md#allowlist-behaviour); do not disable existing approval controls.
 
@@ -36,7 +36,7 @@ reads and text search for unresolved code, configuration, and other non-entity c
 ## Execution and privacy
 
 - `SEM_NO_NETWORK=1` disables Sem cloud access and `SEM_NO_TELEMETRY=1` disables Sem telemetry recording.
-  Initial npm installation still needs network access to download the package and native binary.
+  Initial bun installation still needs network access to download the package and native binary.
 - Tool results enter the agent's context and may reach its configured model provider. This is not an offline-model setting.
 - `sem_check` can execute repository build/test commands. Only connect trusted repositories and approve execution
   deliberately. Neither `SEM_REPO` nor the network flag is an operating-system sandbox for those commands.
@@ -45,8 +45,8 @@ reads and text search for unresolved code, configuration, and other non-entity c
 ## Troubleshooting and removal
 
 - No repository: verify the absolute `SEM_REPO` path points to a Git checkout accessible to the launched process.
-- No executable: check Node/npm on VT Code's PATH and that npm install scripts were allowed to download Sem.
-- First-start timeout: install the pinned package separately with `npm install -g @ataraxy-labs/sem@0.27.0`,
+- No executable: check Bun on VT Code's PATH and that bun install scripts were allowed to download Sem.
+- First-start timeout: install the pinned package separately with `bun add -g @ataraxy-labs/sem@0.27.0`,
   then retry. Keep the same version when comparing results.
 - Disable this integration with `enabled = false` on the `sem` provider or remove that provider only.
   Leave global MCP enabled if other providers need it. Removing the provider does not erase existing conversations

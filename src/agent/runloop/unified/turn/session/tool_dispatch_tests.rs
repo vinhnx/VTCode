@@ -183,8 +183,8 @@ fn normalizes_bang_file_mentions_with_spaces() {
 #[test]
 fn leaves_npm_scoped_packages_unchanged_when_not_a_path() {
     let temp_dir = TempDir::new().expect("temp dir");
-    let normalized = normalize_direct_tool_mentions("run npm i @types/node", temp_dir.path());
-    assert_eq!(normalized, "run npm i @types/node");
+    let normalized = normalize_direct_tool_mentions("run bun add @types/node", temp_dir.path());
+    assert_eq!(normalized, "run bun add @types/node");
 }
 
 #[test]

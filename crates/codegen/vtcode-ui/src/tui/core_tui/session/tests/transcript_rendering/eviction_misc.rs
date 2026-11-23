@@ -81,7 +81,7 @@ fn tool_command_header_wraps_in_full_without_truncation() {
     // whitespace stripped proves no characters are lost or truncated.
     // Fixture uses the exact screenshot bytes: `||` inside the quoted pattern
     // and the backslash-escaped `\.backup` must both survive wrapping.
-    let command = "grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
+    let command = "grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs | grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let expected_flat: String = format!("• Ran {command}").chars().filter(|c| !c.is_whitespace()).collect();
     for width in [80u16, 50, 40] {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
@@ -122,7 +122,7 @@ fn pty_command_header_wraps_in_full_without_truncation() {
     // `  │ ` continuations must keep every pipe segment with no `…`. Exact
     // screenshot bytes (`||`, `\.backup`); the `│` stream glyphs are content
     // and must survive reflow rather than being stripped or truncated.
-    let header = "• Ran grep -rn \"@vinhnx/vtcode|npm install -g||npx @vinhnx\" docs |";
+    let header = "• Ran grep -rn \"@vinhnx/vtcode|bun add -g||bunx @vinhnx\" docs |";
     let continuation = "  │ grep -v node_modules | grep -v package-lock | grep -v \"\\.backup\"";
     let expected_flat: String = format!("{header}{continuation}")
         .chars()
