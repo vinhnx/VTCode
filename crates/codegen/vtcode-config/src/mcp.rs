@@ -1,9 +1,11 @@
 use hashbrown::HashMap;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod transport;
+#[cfg(test)]
+mod wildcard_tests;
+
 pub use transport::{
     MCP_LEGACY_PROTOCOL_VERSION, MCP_STABLE_PROTOCOL_VERSION, McpHttpHandshakeMode, McpHttpServerConfig,
     McpProviderConfig, McpSandboxOverrideConfig, McpStdioServerConfig, McpTransportConfig,
@@ -500,43 +502,57 @@ fn pattern_matches(patterns: &[String], candidate: &str) -> bool {
     patterns.iter().any(|pattern| wildcard_match(pattern, candidate))
 }
 
+/// Match a user-authored allow-list pattern against a tool/resource/prompt name.
+///
+/// Only `*` (any run of characters) and `?` (exactly one character) are
+/// metacharacters; every other character is literal and the whole pattern must
+/// match. This is the exact grammar the previous regex translation implemented,
+/// including its treatment of `[`, `{`, `\`, repeated `*`, and newlines.
+///
+/// A dedicated matcher is deliberate: the battle-tested alternatives change
+/// this grammar. `glob::Pattern` parses `**` as a recursive token (`a**b` fails
+/// to compile, `docs/**/*` matches `docs/foo.md`), reads `[...]` as a character
+/// class, and lets wildcards cross newlines — each of which would silently
+/// widen or narrow an authorization allow-list. `regex` would have to compile a
+/// pattern for every candidate. The two-pointer scan below is allocation-free
+/// (apart from the char vectors) and keeps the allow-list semantics stable.
 fn wildcard_match(pattern: &str, candidate: &str) -> bool {
+    // Preserve the legacy short-circuit: a bare `*` matches even inputs with
+    // embedded newlines, which the wildcard branch below cannot consume.
     if pattern == "*" {
         return true;
     }
 
-    let mut regex_pattern = String::from("^");
-    let mut literal_buffer = String::new();
+    let pattern: Vec<char> = pattern.chars().collect();
+    let candidate: Vec<char> = candidate.chars().collect();
+    let (mut pi, mut ci) = (0usize, 0usize);
+    let mut star = None;
+    let mut star_consumed = 0usize;
 
-    for ch in pattern.chars() {
-        match ch {
-            '*' => {
-                if !literal_buffer.is_empty() {
-                    regex_pattern.push_str(&regex::escape(&literal_buffer));
-                    literal_buffer.clear();
-                }
-                regex_pattern.push_str(".*");
-            }
-            '?' => {
-                if !literal_buffer.is_empty() {
-                    regex_pattern.push_str(&regex::escape(&literal_buffer));
-                    literal_buffer.clear();
-                }
-                regex_pattern.push('.');
-            }
-            _ => literal_buffer.push(ch),
+    while ci < candidate.len() {
+        if pi < pattern.len() && pattern[pi] == '*' {
+            star = Some(pi);
+            star_consumed = ci;
+            pi += 1;
+        } else if pi < pattern.len() && ((pattern[pi] == '?' && candidate[ci] != '\n') || pattern[pi] == candidate[ci])
+        {
+            pi += 1;
+            ci += 1;
+        } else if let Some(star_pos) = star
+            && candidate[star_consumed] != '\n'
+        {
+            star_consumed += 1;
+            ci = star_consumed;
+            pi = star_pos + 1;
+        } else {
+            return false;
         }
     }
 
-    if !literal_buffer.is_empty() {
-        regex_pattern.push_str(&regex::escape(&literal_buffer));
+    while pi < pattern.len() && pattern[pi] == '*' {
+        pi += 1;
     }
-
-    regex_pattern.push('$');
-
-    Regex::new(&regex_pattern)
-        .map(|regex| regex.is_match(candidate))
-        .unwrap_or(false)
+    pi == pattern.len()
 }
 
 /// Allow list rules for a provider or default configuration
