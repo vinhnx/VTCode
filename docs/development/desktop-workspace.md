@@ -83,6 +83,13 @@ Launching the CLI without the app installed shows a reminder at most once per da
 For local development, build the service and launch the GUI from the workspace root:
 
 ```sh
+scripts/run-desktop.sh
+```
+
+That helper runs the two commands below (add `--release` for a release build);
+use them directly when you prefer not to add a script step:
+
+```sh
 cargo build --locked -p vtcode
 cargo run --locked -p vtcode-desktop
 ```
