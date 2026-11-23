@@ -772,6 +772,7 @@ mod composer_alignment;
 mod composer_font_scale;
 mod composer_highlight;
 mod composer_keys;
+mod computer_preview;
 mod config_catalog;
 mod config_deep_links;
 mod config_sessions;

@@ -20,7 +20,7 @@ use vtcode_core::core::agent::events::{
     tool_invocation_completed_event, tool_invocation_updated_event, tool_output_completed_event,
     tool_output_started_event,
 };
-use vtcode_core::exec::events::{ToolCallStatus, tool_outcome_from_status};
+use vtcode_core::exec::events::{AppPreviewItem, ToolCallStatus, tool_outcome_from_status};
 use vtcode_core::llm::provider::{LLMRequest, Message, MessageContent, MessageRole};
 
 use super::execution::{
@@ -136,8 +136,12 @@ pub(crate) async fn handle_computer_use_tool_call(
         item_id: &harness_item_id,
         call_id: tool_call_id,
     };
-    let complete = |ctx: &TurnProcessingContext<'_>, args: &Value, status: ToolCallStatus, output: &str| {
-        complete_outer_row(ctx.harness_emitter, &harness_item_id, tool_call_id, args, status, output);
+    let complete = |ctx: &TurnProcessingContext<'_>,
+                    args: &Value,
+                    status: ToolCallStatus,
+                    output: &str,
+                    previews: Vec<AppPreviewItem>| {
+        complete_outer_row(ctx.harness_emitter, &harness_item_id, tool_call_id, args, status, output, previews);
     };
 
     let Some(task) = args_val
@@ -146,7 +150,7 @@ pub(crate) async fn handle_computer_use_tool_call(
         .filter(|task| !task.trim().is_empty())
     else {
         let message = "computer_use needs a non-empty task describing one screen-sized goal.";
-        complete(ctx, args_val, ToolCallStatus::Failed, message);
+        complete(ctx, args_val, ToolCallStatus::Failed, message, Vec::new());
         return Ok(failure_outcome(message));
     };
     // Fail closed on tasks the offline sandbox cannot serve: without this,
@@ -163,7 +167,7 @@ pub(crate) async fn handle_computer_use_tool_call(
             usage: None,
         };
         let report = turn_report_lines(&outcome).join("\n");
-        complete(ctx, args_val, ToolCallStatus::Failed, &report);
+        complete(ctx, args_val, ToolCallStatus::Failed, &report, Vec::new());
         return Ok(map_computer_outcome(&outcome));
     }
     // Footer status for the whole turn (fire-and-forget like the pipeline's
@@ -179,7 +183,7 @@ pub(crate) async fn handle_computer_use_tool_call(
             Ok(loaded) => loaded.config().computer_use.clone(),
             Err(err) => {
                 let message = format!("Computer turn failed to load configuration: {err:#}");
-                complete(ctx, args_val, ToolCallStatus::Failed, &message);
+                complete(ctx, args_val, ToolCallStatus::Failed, &message, Vec::new());
                 return Ok(failure_outcome(&message));
             }
         },
@@ -221,7 +225,7 @@ pub(crate) async fn handle_computer_use_tool_call(
         Ok(proposal) => proposal,
         Err(err) => {
             let message = format!("Computer turn failed: {err:#}");
-            complete(ctx, args_val, ToolCallStatus::Failed, &message);
+            complete(ctx, args_val, ToolCallStatus::Failed, &message, Vec::new());
             return Ok(failure_outcome(&message));
         }
     };
@@ -237,7 +241,7 @@ pub(crate) async fn handle_computer_use_tool_call(
                     ctx.session_stats.record_usage(&provider_name, proposed.usage.as_ref());
                     let merged = merged_event_args(task, &proposed.approval);
                     let message = format!("Computer turn approval failed: {err:#}");
-                    complete(ctx, &merged, ToolCallStatus::Failed, &message);
+                    complete(ctx, &merged, ToolCallStatus::Failed, &message, Vec::new());
                     return Ok(failure_outcome(&message));
                 }
             };
@@ -261,7 +265,7 @@ pub(crate) async fn handle_computer_use_tool_call(
                 Ok(outcome) => outcome,
                 Err(err) => {
                     let message = format!("Computer turn failed: {err:#}");
-                    complete(ctx, &merged, ToolCallStatus::Failed, &message);
+                    complete(ctx, &merged, ToolCallStatus::Failed, &message, Vec::new());
                     return Ok(failure_outcome(&message));
                 }
             };
@@ -270,11 +274,13 @@ pub(crate) async fn handle_computer_use_tool_call(
     };
     ctx.session_stats.record_usage(&provider_name, outcome.usage.as_ref());
     let report = turn_report_lines(&outcome).join("\n");
-    let status = match &outcome.kind {
-        ComputerTurnOutcomeKind::Completed { .. } => ToolCallStatus::Completed,
-        _ => ToolCallStatus::Failed,
+    let (status, previews) = match &outcome.kind {
+        ComputerTurnOutcomeKind::Completed { preview, .. } => {
+            (ToolCallStatus::Completed, preview.as_deref().cloned().into_iter().collect())
+        }
+        _ => (ToolCallStatus::Failed, Vec::new()),
     };
-    complete(ctx, &event_args, status, &report);
+    complete(ctx, &event_args, status, &report, previews);
     Ok(map_computer_outcome(&outcome))
 }
 
@@ -338,8 +344,9 @@ fn update_outer_row(emitter: Option<&HarnessEventEmitter>, harness_item_id: &str
 }
 
 /// Complete the outer row exactly once: invocation verdict plus the
-/// redacted report text. Denials and cancellations complete as failed
-/// rows (matching the pipeline's own cancelled mapping), never silently.
+/// redacted report text, with the retained preview reference when the turn
+/// captured one. Denials and cancellations complete as failed rows
+/// (matching the pipeline's own cancelled mapping), never silently.
 fn complete_outer_row(
     emitter: Option<&HarnessEventEmitter>,
     harness_item_id: &str,
@@ -347,6 +354,7 @@ fn complete_outer_row(
     args: &Value,
     status: ToolCallStatus,
     output: &str,
+    previews: Vec<AppPreviewItem>,
 ) {
     let Some(emitter) = emitter else {
         return;
@@ -367,7 +375,7 @@ fn complete_outer_row(
         None,
         None,
         output.to_string(),
-        Vec::new(),
+        previews,
     ));
 }
 

@@ -89,12 +89,18 @@ pub(crate) fn turn_report_lines(outcome: &ComputerTurnOutcome) -> Vec<String> {
         ComputerTurnOutcomeKind::Failed { stage, message } => {
             vec![format!("Computer turn failed at the {stage:?} stage: {message}")]
         }
-        ComputerTurnOutcomeKind::Completed { results, summary } => {
+        ComputerTurnOutcomeKind::Completed { results, summary, preview } => {
             let mut lines = vec![format!(
                 "Computer turn completed ({}): {} units.",
                 outcome.model, summary.executed_units
             )];
             lines.push(summary_line(summary));
+            if let Some(preview) = preview {
+                lines.push(format!(
+                    "Screenshot captured ({}; ephemeral, not stored).",
+                    vtcode_commons::formatting::format_size(preview.bytes)
+                ));
+            }
             lines.extend(result_report_lines(results));
             lines
         }
@@ -304,6 +310,7 @@ mod tests {
         let lines = turn_report_lines(&outcome(ComputerTurnOutcomeKind::Completed {
             results: NativeTurnResults::Anthropic(vec![(1, ok_block), (3, err_block)]),
             summary: summary.clone(),
+            preview: None,
         }));
         assert!(lines[0].contains("completed (test-model): 1 units"), "{lines:?}");
         assert!(
@@ -317,9 +324,50 @@ mod tests {
         let lines = turn_report_lines(&outcome(ComputerTurnOutcomeKind::Completed {
             results: NativeTurnResults::OpenAi(vec![shot]),
             summary,
+            preview: None,
         }));
         assert!(lines.iter().any(|line| line == "call call_1: ok"), "{lines:?}");
         assert!(!lines.iter().any(|line| line.contains("SECRET")), "{lines:?}");
+        assert!(!lines.iter().any(|line| line.contains("Screenshot captured")), "{lines:?}");
+    }
+
+    #[test]
+    fn completed_report_names_the_retained_screenshot_without_pixels() {
+        let summary = RedactedTurnSummary {
+            target_kind: "browser",
+            target: "fixture-app".to_string(),
+            recipient: "test-model (test)".to_string(),
+            action_kinds: vec!["screenshot".to_string()],
+            action_count: 1,
+            executed_units: 1,
+            review: None,
+            teardown_trigger: "finished",
+            teardown: TeardownOutcome::Removed,
+        };
+        let preview = vtcode_core::exec::events::AppPreviewItem {
+            uri: "computer-preview://row-1".to_string(),
+            mime_type: Some("image/png".to_string()),
+            bytes: 412_000,
+            blocks: 1,
+            ui: None,
+        };
+        let outcome = ComputerTurnOutcome {
+            kind: ComputerTurnOutcomeKind::Completed {
+                results: NativeTurnResults::OpenAi(vec![]),
+                summary,
+                preview: Some(Box::new(preview)),
+            },
+            model: "test-model".to_string(),
+            usage: None,
+        };
+        let lines = turn_report_lines(&outcome);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Screenshot captured (") && line.contains("ephemeral, not stored")),
+            "{lines:?}"
+        );
+        assert!(!lines.iter().any(|line| line.contains("computer-preview://")), "{lines:?}");
     }
 
     #[test]

@@ -59,6 +59,11 @@ pub(crate) enum BackendEvent {
         result: Option<Value>,
         error: Option<String>,
     },
+    ComputerPreviewResponse {
+        request_id: String,
+        result: Option<Value>,
+        error: Option<String>,
+    },
     InteractionResponded {
         identity: InteractionResponseIdentity,
         error: Option<String>,
@@ -97,6 +102,7 @@ struct PendingRequest {
     session_history_request_id: Option<String>,
     session_output_request_id: Option<String>,
     mcp_app_request_id: Option<String>,
+    computer_preview_request_id: Option<String>,
     turn_session_id: Option<String>,
 }
 
@@ -121,6 +127,9 @@ impl PendingRequest {
         let mcp_app_request_id = (method == protocol::method::MCP_APP_READ)
             .then(|| params.get(keys::REQUEST_ID).and_then(Value::as_str).map(str::to_owned))
             .flatten();
+        let computer_preview_request_id = (method == protocol::method::COMPUTER_PREVIEW_READ)
+            .then(|| params.get(keys::REQUEST_ID).and_then(Value::as_str).map(str::to_owned))
+            .flatten();
         let turn_session_id = (method == protocol::method::TURN_SUBMIT)
             .then(|| params.get(keys::SESSION_ID).and_then(Value::as_str).map(str::to_owned))
             .flatten();
@@ -133,6 +142,7 @@ impl PendingRequest {
             session_history_request_id,
             session_output_request_id,
             mcp_app_request_id,
+            computer_preview_request_id,
             turn_session_id,
         }
     }
@@ -149,6 +159,9 @@ impl PendingRequest {
         }
         if let Some(request_id) = self.mcp_app_request_id {
             return BackendEvent::McpAppResponse { request_id, result, error };
+        }
+        if let Some(request_id) = self.computer_preview_request_id {
+            return BackendEvent::ComputerPreviewResponse { request_id, result, error };
         }
         match self.interaction {
             Some(identity) => BackendEvent::InteractionResponded { identity, error },

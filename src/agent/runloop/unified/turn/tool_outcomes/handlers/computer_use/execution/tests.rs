@@ -810,3 +810,33 @@ fn requested_task_uses_last_user_message_even_with_parts_content() {
 }
 
 mod live;
+
+#[test]
+#[serial_test::serial]
+fn completed_preview_retains_usable_screenshots_and_skips_malformed() {
+    super::super::preview::clear_previews();
+    let shot = |id: &str| {
+        serde_json::json!({"type": "tool_result", "tool_use_id": id,
+            "content": [{"type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": PROBE_PNG_BASE64}}]})
+    };
+    let dud = |id: &str| serde_json::json!({"type": "tool_result", "tool_use_id": id, "content": "OK"});
+    // A malformed result never blocks a usable screenshot on either side.
+    for results in [
+        NativeTurnResults::Anthropic(vec![(0, dud("c1")), (2, shot("c2"))]),
+        NativeTurnResults::Anthropic(vec![(0, shot("c1")), (2, dud("c2"))]),
+    ] {
+        let preview = retain_completed_preview(&results, "row-a").expect("usable screenshot");
+        assert_eq!(preview.uri, "computer-preview://row-a");
+        assert_eq!(preview.bytes, u64::try_from(probe_png().len()).unwrap());
+        assert_eq!(
+            super::super::preview::take_preview("row-a").as_ref().map(|shot| shot.as_png()),
+            Some(probe_png().as_slice())
+        );
+    }
+    // Nothing usable anywhere: no reference, nothing retained.
+    let bad = NativeTurnResults::OpenAi(vec![serde_json::json!({"type": "computer_call_output", "call_id": "c9"})]);
+    assert!(retain_completed_preview(&bad, "row-b").is_none());
+    assert!(super::super::preview::take_preview("row-b").is_none());
+    super::super::preview::clear_previews();
+}

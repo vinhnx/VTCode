@@ -228,3 +228,28 @@ async fn computer_use_anthropic_decoded_batch_keeps_positions_and_refuses_mixed(
     assert!(error.to_string().contains("duplicate"));
     assert_eq!(*actions.lock().unwrap(), ["one", "two"]);
 }
+
+#[test]
+fn screenshot_extraction_round_trips_builder_output_and_rejects_malformed() {
+    let png = [b"\x89PNG\r\n\x1a\n".as_slice(), b"probe-bytes"].concat();
+    let shot = Screenshot::png(png.clone()).unwrap();
+    let call = ComputerCall { id: "shot", action: Ok(Action::Screenshot) };
+    let output = call.result(ComputerOutcome::Executed(&Observation::Screenshot(shot)));
+    assert_eq!(screenshot_in_output(&output).as_ref().map(Screenshot::as_png), Some(png.as_slice()));
+    // Asymmetric rejections: every malformed shape fails closed to None.
+    for bad in [
+        json!({"type": "tool_result", "tool_use_id": "shot", "content": "OK"}),
+        json!({"type": "tool_result", "tool_use_id": "shot", "content": [{"type": "text", "text": "hi"}]}),
+        json!({"type": "tool_result", "tool_use_id": "shot", "content": [{"type": "image"}]}),
+        json!({"type": "tool_result", "tool_use_id": "shot",
+            "content": [{"type": "image", "source": {"type": "url", "media_type": "image/png", "data": "x"}}]}),
+        json!({"type": "tool_result", "tool_use_id": "shot",
+            "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "eA=="}}]}),
+        json!({"type": "tool_result", "tool_use_id": "shot",
+            "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "!!!not-base64"}}]}),
+        json!({"type": "tool_result", "tool_use_id": "shot",
+            "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "eA=="}}]}),
+    ] {
+        assert!(screenshot_in_output(&bad).is_none(), "must reject {bad}");
+    }
+}

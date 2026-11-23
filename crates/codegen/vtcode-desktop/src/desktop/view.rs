@@ -71,9 +71,9 @@ use vtcode_commons::history_scope::HistoryScope;
 use vtcode_commons::ui_protocol::AppIconPreference;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
-    ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse, InteractionStep,
-    McpAppReadResult, SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionOutputCursor,
-    SessionOutputPage, SessionSummary, ThreadEventNotification,
+    ComputerPreviewReadResult, ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse,
+    InteractionStep, McpAppReadResult, SessionHistoryMessage, SessionHistoryPage, SessionLoadResult,
+    SessionOutputCursor, SessionOutputPage, SessionSummary, ThreadEventNotification,
 };
 
 use super::files::{self, FileEntry, FilePreview};
@@ -126,6 +126,7 @@ mod composer_highlight;
 mod composer_history;
 mod composer_render;
 use composer_render::ComposerPillBounds;
+mod computer_preview;
 mod config_editor_copy;
 mod config_search;
 mod configuration;
@@ -207,6 +208,9 @@ pub(crate) use bootstrap::run;
 use bootstrap::{dispatch_handoff_links, init_keybindings, open_or_activate_main_window};
 pub(super) use components::desktop_ghost_button;
 use components::*;
+use computer_preview::{
+    ComputerPreviewBody, ComputerPreviewBodyKey, PendingComputerPreviewRead, is_computer_preview_uri,
+};
 use file_tree::{file_tree_items, find_file_tree_item};
 use inspector_changes::*;
 use launch_bounds::{desktop_window_options, main_screen_visible_bounds, reduced_transparency_requested};
@@ -920,6 +924,11 @@ struct DesktopView {
     mcp_app_task: Option<Task<()>>,
     mcp_app_bodies: HashMap<McpAppBodyKey, McpAppReadResult>,
     mcp_app_errors: HashMap<McpAppBodyKey, gpui_kit::SharedString>,
+    computer_preview_pending: HashMap<String, PendingComputerPreviewRead>,
+    computer_preview_task: Option<Task<()>>,
+    computer_preview_bodies: HashMap<ComputerPreviewBodyKey, ComputerPreviewBody>,
+    computer_preview_errors: HashMap<ComputerPreviewBodyKey, gpui_kit::SharedString>,
+    computer_preview_expired: HashSet<ComputerPreviewBodyKey>,
     retained_submission: Option<SubmissionDraft>,
     cli_handoff: Option<CliHandoff>,
     last_usage: Option<vtcode_exec_events::Usage>,

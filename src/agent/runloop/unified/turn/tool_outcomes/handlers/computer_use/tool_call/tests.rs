@@ -92,6 +92,7 @@ fn computer_outcome_mapping_reports_completion_and_refusals() {
     let completed = map_computer_outcome(&outcome(ComputerTurnOutcomeKind::Completed {
         results: NativeTurnResults::OpenAi(vec![serde_json::json!({"call_id": "call_1"})]),
         summary,
+        preview: None,
     }));
     match &completed.status {
         ToolExecutionStatus::Success { output, command_success, .. } => {
@@ -484,10 +485,33 @@ fn complete_outer_row_emits_one_invocation_and_output_verdict() {
     let path = temp.path().join("events.jsonl");
     let emitter = HarnessEventEmitter::new(path.clone()).unwrap();
     let args = serde_json::json!({"task": "take a screenshot"});
-    complete_outer_row(Some(&emitter), "outer-item", "outer-call", &args, ToolCallStatus::Completed, "done");
+    let preview = AppPreviewItem {
+        uri: "computer-preview://outer-item".to_string(),
+        mime_type: Some("image/png".to_string()),
+        bytes: 412,
+        blocks: 1,
+        ui: None,
+    };
+    complete_outer_row(
+        Some(&emitter),
+        "outer-item",
+        "outer-call",
+        &args,
+        ToolCallStatus::Completed,
+        "done",
+        vec![preview],
+    );
     // Asymmetric: a second completion with a failure status proves the
     // verdict rides the status, not the call shape.
-    complete_outer_row(Some(&emitter), "outer-item-2", "outer-call-2", &args, ToolCallStatus::Failed, "denied");
+    complete_outer_row(
+        Some(&emitter),
+        "outer-item-2",
+        "outer-call-2",
+        &args,
+        ToolCallStatus::Failed,
+        "denied",
+        Vec::new(),
+    );
 
     let events = std::fs::read_to_string(&path)
         .unwrap()
@@ -504,8 +528,17 @@ fn complete_outer_row_emits_one_invocation_and_output_verdict() {
     assert_eq!(events[1]["event"]["item"]["id"], serde_json::json!("outer-item:output"));
     assert_eq!(events[1]["event"]["item"]["output"], serde_json::json!("done"));
     assert_eq!(events[1]["event"]["item"]["status"], serde_json::json!("completed"));
+    assert_eq!(
+        events[1]["event"]["item"]["app_previews"],
+        serde_json::json!([{
+            "uri": "computer-preview://outer-item",
+            "mime_type": "image/png",
+            "bytes": 412,
+            "blocks": 1,
+        }])
+    );
     assert_eq!(events[3]["event"]["item"]["output"], serde_json::json!("denied"));
     assert_eq!(events[3]["event"]["item"]["status"], serde_json::json!("failed"));
     // No emitter, no events, no panic: headless paths stay quiet.
-    complete_outer_row(None, "outer-item", "outer-call", &args, ToolCallStatus::Completed, "done");
+    complete_outer_row(None, "outer-item", "outer-call", &args, ToolCallStatus::Completed, "done", Vec::new());
 }

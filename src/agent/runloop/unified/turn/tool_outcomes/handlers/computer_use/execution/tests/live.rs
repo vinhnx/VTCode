@@ -26,7 +26,10 @@ async fn require_container_test() -> bool {
     true
 }
 
+// Serial: completed turns retain into the process-global preview registry,
+// so container runs must not interleave with its unit tests.
 #[tokio::test]
+#[serial_test::serial]
 async fn computer_use_turn_executes_over_real_container() {
     if !require_container_test().await {
         return;
@@ -69,13 +72,16 @@ async fn computer_use_turn_executes_over_real_container() {
     .unwrap();
     let report = super::super::super::report::turn_report_lines(&outcome).join("\n");
     assert!(!report.contains("base64"), "report must stay redacted");
-    let ComputerTurnOutcomeKind::Completed { results, summary } = outcome.kind else {
+    let ComputerTurnOutcomeKind::Completed { results, summary, preview } = outcome.kind else {
         panic!(
             "expected completion, got {:?}; build the image first: docker build --tag {} browser",
             outcome.kind,
             e2e_config().image,
         );
     };
+    let preview = preview.expect("completed turn with screenshots must carry a preview reference");
+    assert!(preview.uri.starts_with("computer-preview://"), "{}", preview.uri);
+    assert_eq!(preview.mime_type.as_deref(), Some("image/png"));
     assert_eq!(summary.action_count, 2);
     assert_eq!(summary.executed_units, 2);
     assert!(summary.review.is_none());
@@ -137,6 +143,7 @@ async fn computer_use_turn_executes_over_real_container() {
 const LIVE_MODEL: &str = "gpt-6-luna";
 
 #[tokio::test]
+#[serial_test::serial]
 async fn computer_use_live_turn_executes_over_real_container() {
     if std::env::var("VTCODE_LIVE_CUA").as_deref() != Ok("1") {
         eprintln!("skipping live computer-use turn: set VTCODE_LIVE_CUA=1 to run");
@@ -212,9 +219,10 @@ async fn computer_use_live_turn_executes_over_real_container() {
     .unwrap();
     let report = super::super::super::report::turn_report_lines(&outcome).join("\n");
     assert!(!report.contains("base64"), "report must stay redacted");
-    let ComputerTurnOutcomeKind::Completed { results, summary } = outcome.kind else {
+    let ComputerTurnOutcomeKind::Completed { results, summary, preview } = outcome.kind else {
         panic!("live turn must complete, got {:?}", outcome.kind);
     };
+    assert!(preview.is_some(), "live turn with screenshots must carry a preview reference");
     assert!(summary.executed_units >= 1, "live turn executed nothing: {summary:?}");
     assert!(
         matches!(summary.teardown, TeardownOutcome::Removed | TeardownOutcome::AlreadyGone),
@@ -233,6 +241,7 @@ async fn computer_use_live_turn_executes_over_real_container() {
 const TYPED_SENTINEL: &str = "SENTINEL-TYPED-vtcode-7f3a";
 
 #[tokio::test]
+#[serial_test::serial]
 async fn computer_use_turn_redacts_sentinels_from_durable_outputs() {
     if !require_container_test().await {
         return;

@@ -90,6 +90,9 @@ impl DesktopView {
             .map(|previews| {
                 previews
                     .iter()
+                    // Computer screenshots share the row's preview list but
+                    // resolve through their own fetch path, never MCP reads.
+                    .filter(|preview| !is_computer_preview_uri(&preview.uri))
                     .take(MAX_ROW_PREVIEWS)
                     .map(|preview| preview.uri.clone())
                     .collect()
@@ -153,13 +156,20 @@ impl DesktopView {
     /// previews. Each card shows the stable linkage facts plus one body state:
     /// the inert preview, a loading row, an error with retry, or an empty note.
     pub(super) fn render_mcp_app_previews(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        if !self.mcp_apps_preview_enabled() || item.app_previews.is_empty() {
+        let has_mcp_refs = item.app_previews.iter().any(|preview| !is_computer_preview_uri(&preview.uri));
+        if !self.mcp_apps_preview_enabled() || !has_mcp_refs {
             return div().into_any_element();
         }
         let colors = cx.theme().colors;
         let caption = themes::aa_muted(colors.background, colors.muted_foreground);
         let mut cards = div().flex().flex_col().gap_2().ml_4();
-        for (index, preview) in item.app_previews.iter().take(MAX_ROW_PREVIEWS).enumerate() {
+        for (index, preview) in item
+            .app_previews
+            .iter()
+            .filter(|preview| !is_computer_preview_uri(&preview.uri))
+            .take(MAX_ROW_PREVIEWS)
+            .enumerate()
+        {
             let key = McpAppBodyKey { item_id: item.id.clone(), uri: preview.uri.clone() };
             let mut meta = match preview.mime_type.as_deref() {
                 Some(mime) => format!("{mime} · {}", format_size(preview.bytes)),

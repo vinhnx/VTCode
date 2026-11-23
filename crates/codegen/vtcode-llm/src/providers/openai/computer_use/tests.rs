@@ -146,3 +146,30 @@ async fn computer_use_openai_decoded_call_keeps_identity_and_image() {
         .unwrap_err();
     assert_eq!(error.to_string(), "mixed-provider computer batch");
 }
+
+#[test]
+fn screenshot_extraction_round_trips_builder_output_and_rejects_malformed() {
+    let png = [b"\x89PNG\r\n\x1a\n".as_slice(), b"probe-bytes"].concat();
+    let shot = Screenshot::png(png.clone()).unwrap();
+    let item = json!({"type": "computer_call", "call_id": "call_1"});
+    let call = ComputerCall {
+        id: "call_1",
+        item: &item,
+        actions: vec![Action::Screenshot],
+    };
+    let output = call.result(&shot);
+    assert_eq!(screenshot_in_output(&output).as_ref().map(Screenshot::as_png), Some(png.as_slice()));
+    // Asymmetric rejections: every malformed shape fails closed to None.
+    for bad in [
+        json!({"type": "computer_call_output", "call_id": "call_1"}),
+        json!({"type": "computer_call_output", "call_id": "call_1", "output": {"type": "computer_screenshot"}}),
+        json!({"type": "computer_call_output", "call_id": "call_1",
+            "output": {"type": "computer_screenshot", "image_url": "https://x/y.png"}}),
+        json!({"type": "computer_call_output", "call_id": "call_1",
+            "output": {"type": "computer_screenshot", "image_url": "data:image/png;base64,!!!not-base64"}}),
+        json!({"type": "computer_call_output", "call_id": "call_1",
+            "output": {"type": "computer_screenshot", "image_url": "data:image/png;base64,eA=="}}),
+    ] {
+        assert!(screenshot_in_output(&bad).is_none(), "must reject {bad}");
+    }
+}

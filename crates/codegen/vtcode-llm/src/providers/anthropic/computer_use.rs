@@ -8,8 +8,8 @@ use compact_str::CompactString;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use vtcode_computer_use::{
-    Action, Driver, MAX_BATCH_ACTIONS, MAX_SCREENSHOT_BYTES, MouseButton, Observation, Point, ScrollDirection,
-    TurnControl,
+    Action, Driver, MAX_BATCH_ACTIONS, MAX_SCREENSHOT_BYTES, MouseButton, Observation, Point, Screenshot,
+    ScrollDirection, TurnControl,
 };
 
 use crate::provider::{NativeCall, NativeCallBody};
@@ -70,6 +70,31 @@ fn computer_result(id: &str, outcome: ComputerOutcome<'_>) -> Value {
         "is_error": is_error,
         "content": content,
     })
+}
+
+/// Recover the validated screenshot from a wire result this module built.
+///
+/// Returns `None` for non-screenshot outcomes and for any malformed payload
+/// (wrong block shape, bad base64, non-PNG bytes, over the byte cap): the
+/// transcript preview is best-effort and fails closed, never trusted input.
+/// Lives beside the builder so a wire-shape change breaks this in review.
+pub fn screenshot_in_output(output: &Value) -> Option<Screenshot> {
+    let blocks = output.get("content")?.as_array()?;
+    let data = blocks.iter().find_map(|block| {
+        if block.get("type")?.as_str()? != "image" {
+            return None;
+        }
+        let source = block.get("source")?;
+        if source.get("type")?.as_str()? != "base64" {
+            return None;
+        }
+        if source.get("media_type")?.as_str()? != "image/png" {
+            return None;
+        }
+        source.get("data")?.as_str()
+    })?;
+    let bytes = STANDARD.decode(data).ok()?;
+    Screenshot::png(bytes).ok()
 }
 
 pub enum ComputerOutcome<'a> {

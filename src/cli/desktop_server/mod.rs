@@ -1,4 +1,5 @@
 mod composer_resources;
+mod computer_preview;
 mod config_settings;
 mod diagnostics;
 mod mcp_app;

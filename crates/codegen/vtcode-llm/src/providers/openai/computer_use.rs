@@ -51,6 +51,19 @@ impl ComputerCall<'_> {
     }
 }
 
+/// Recover the validated screenshot from a wire result this module built.
+///
+/// Returns `None` for any malformed payload (wrong shape, bad base64,
+/// non-PNG bytes, over the byte cap): the transcript preview is
+/// best-effort and fails closed, never trusted input. Lives beside the
+/// builder so a wire-shape change breaks this in review.
+pub fn screenshot_in_output(output: &Value) -> Option<Screenshot> {
+    let image_url = output.get("output")?.get("image_url")?.as_str()?;
+    let encoded = image_url.strip_prefix("data:image/png;base64,")?;
+    let bytes = STANDARD.decode(encoded).ok()?;
+    Screenshot::png(bytes).ok()
+}
+
 /// Execute one bound-route call decoded by `generate_native`. The replay
 /// item and actions ride along from the decoded body; anything else bails
 /// before the driver runs.

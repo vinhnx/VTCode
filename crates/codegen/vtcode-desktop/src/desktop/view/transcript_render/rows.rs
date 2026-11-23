@@ -67,6 +67,7 @@ impl DesktopView {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.transcript.toggle_tool(&toggle_id);
                             this.request_mcp_app_previews(&toggle_id, cx);
+                            this.request_computer_previews(&toggle_id, cx);
                             cx.notify();
                         })),
                 )
@@ -109,6 +110,7 @@ impl DesktopView {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.transcript.toggle_tool(&chevron_id);
                             this.request_mcp_app_previews(&chevron_id, cx);
+                            this.request_computer_previews(&chevron_id, cx);
                             cx.notify();
                         })),
                 )
@@ -179,6 +181,7 @@ impl DesktopView {
                     // The fetch notifies when it queues; this covers the
                     // tier-off and already-loaded paths too.
                     this.request_mcp_app_previews(&id, cx);
+                    this.request_computer_previews(&id, cx);
                     cx.notify();
                 }))
                 .into_any_element()
@@ -272,7 +275,8 @@ impl DesktopView {
                                 .child(render_output_text(&output_excerpt)),
                         )
                     })
-                    .child(self.render_mcp_app_previews(item, cx)),
+                    .child(self.render_mcp_app_previews(item, cx))
+                    .child(self.render_computer_previews(item, cx)),
             );
         }
         panel.into_any_element()

@@ -286,6 +286,11 @@ pub use interaction::{
     InteractionChoice, InteractionHotkey, InteractionKind, InteractionRequest, InteractionResponse, InteractionStep,
 };
 
+pub mod preview;
+pub use preview::{
+    COMPUTER_PREVIEW_URI_SCHEME, ComputerPreviewReadParams, ComputerPreviewReadResult, MAX_COMPUTER_PREVIEW_URI_BYTES,
+    parse_preview_uri, preview_uri,
+};
 pub mod review;
 pub use review::{
     MAX_MCP_APP_BODY_BYTES, McpAppReadParams, McpAppReadResult, WorkspaceReviewParams, WorkspaceReviewResult,

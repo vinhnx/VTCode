@@ -817,6 +817,11 @@ impl DesktopView {
         self.mcp_app_task = None;
         self.mcp_app_bodies.clear();
         self.mcp_app_errors.clear();
+        self.computer_preview_pending.clear();
+        self.computer_preview_task = None;
+        self.computer_preview_bodies.clear();
+        self.computer_preview_errors.clear();
+        self.computer_preview_expired.clear();
     }
 
     /// Reset session state while preserving the composer's attached sources

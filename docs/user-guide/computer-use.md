@@ -29,6 +29,11 @@ and records only a redacted summary in the conversation.
   awaiting approval, launching, executing, teardown — and the completion names the
   target, action kinds, and teardown. The chat input shows a Computer Use badge while
   the switch is on and paints its border in the theme accent while a turn runs.
+- **Screenshot preview on desktop.** Expanding a completed computer turn shows the
+  screenshot it captured. Previews resolve while the bytes are still retained in
+  memory and read as expired afterwards; pixels are never written to conversation
+  history, session archives, or logs. The terminal shows the capture metadata
+  instead of the image.
 
 ## Enabling it
 

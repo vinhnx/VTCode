@@ -12000,6 +12000,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
+ "base64 0.23.1",
  "chrono",
  "clap",
  "colorchoice",
@@ -12012,6 +12013,7 @@ dependencies = [
  "futures",
  "hashbrown 0.17.1",
  "hotpath",
+ "image",
  "indexmap 2.14.2",
  "insta",
  "libc",
@@ -12385,6 +12387,7 @@ name = "vtcode-desktop"
 version = "0.185.0"
 dependencies = [
  "anyhow",
+ "base64 0.23.1",
  "chrono",
  "dirs 7.0.0",
  "futures",

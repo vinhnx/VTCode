@@ -278,7 +278,8 @@ pub struct ToolOutputItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct AppPreviewItem {
-    /// Canonical `ui://` resource URI.
+    /// Canonical resource URI: `ui://` for MCP app bodies, `computer-preview://`
+    /// for ephemeral computer-use screenshots (memory-only, expire on eviction).
     pub uri: String,
     /// MIME type of the first content block, when the server provides one.
     #[serde(default, skip_serializing_if = "Option::is_none")]

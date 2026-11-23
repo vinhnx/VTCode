@@ -17,6 +17,8 @@ pub const SESSION_RECENT_PROMPTS: &str = "session/recent-prompts";
 pub const SESSION_OUTPUT_READ: &str = "session/output/read";
 /// Read one bounded MCP app-resource body for static preview.
 pub const MCP_APP_READ: &str = "mcp/app/read";
+/// Read one retained computer-use screenshot body, or its expiry.
+pub const COMPUTER_PREVIEW_READ: &str = "computer/preview/read";
 /// Close the selected session after cleanup.
 pub const SESSION_CLOSE: &str = "session/close";
 /// Delete one session archive by identifier.

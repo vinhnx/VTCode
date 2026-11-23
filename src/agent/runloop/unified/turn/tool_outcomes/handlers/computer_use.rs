@@ -178,6 +178,7 @@ pub(crate) async fn request_target_approval(
 }
 
 pub(crate) mod execution;
+pub(crate) mod preview;
 pub(crate) mod report;
 mod review;
 pub(crate) mod tool_call;

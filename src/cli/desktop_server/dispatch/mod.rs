@@ -469,6 +469,7 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                 let mut state = context.state.lock().await;
                 state.session_id = Some(session_id.clone());
                 state.restored_output_spools.clear();
+                crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::preview::clear_previews();
             }
             tracing::debug!(
                 target: "vtcode.desktop",
@@ -665,6 +666,11 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
             let result = mcp_app::read(context.workspace.clone(), params).await?;
             Ok((serde_json::to_value(result)?, false))
         }
+        method::COMPUTER_PREVIEW_READ => {
+            let params: protocol::ComputerPreviewReadParams = parse_params(&request.params)?;
+            let result = computer_preview::read(params).await?;
+            Ok((serde_json::to_value(result)?, false))
+        }
         method::SESSION_CLOSE => {
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
             let selected_id = context.state.lock().await.session_id.clone();
@@ -680,6 +686,9 @@ pub(super) async fn handle_request_inner(context: &ServiceContext, request: &Req
                     state.session_options.permission_mode = state.permission_before_full_access.take();
                 }
                 state.restored_output_spools.clear();
+                // Retained screenshots are session-scoped pixels: a closed
+                // session releases them so nothing resolves them afterwards.
+                crate::agent::runloop::unified::turn::tool_outcomes::handlers::computer_use::preview::clear_previews();
             }
             Ok((json!({ "closed": true }), false))
         }

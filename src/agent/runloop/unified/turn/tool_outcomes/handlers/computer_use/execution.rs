@@ -20,6 +20,7 @@ use vtcode_computer_use::browser::container::{ContainerHandle, ContainerSpec, Te
 use vtcode_computer_use::{Driver, TurnControl};
 use vtcode_config::ComputerUseConfig;
 use vtcode_core::core::agent::events::tool_output_updated_event;
+use vtcode_core::exec::events::AppPreviewItem;
 use vtcode_core::llm::provider::{
     LLMProvider, LLMRequest, NativeCall, NativeCallBody, NativeProvider, ToolCall, Usage,
 };
@@ -125,10 +126,16 @@ pub(crate) enum ComputerTurnOutcomeKind {
     /// review could not conclude. The verdict rides along so the report can
     /// name which without re-deriving it.
     ReviewHalted { verdict: BatchReviewVerdict },
-    /// Executed to completion with wire results and a redacted summary.
+    /// Executed to completion with wire results, a redacted summary, and the
+    /// ephemeral screenshot reference when the turn captured one. Failed and
+    /// cancelled turns discard partial results (and their screenshots) instead
+    /// of returning them, so only completed turns preview. The reference is
+    /// boxed: it is the largest field by far and would otherwise bloat every
+    /// outcome value.
     Completed {
         results: NativeTurnResults,
         summary: RedactedTurnSummary,
+        preview: Option<Box<AppPreviewItem>>,
     },
     /// Failed mid-turn; teardown still ran.
     Failed {
@@ -489,12 +496,36 @@ pub(crate) async fn execute_proposed_turn(
     };
     let kind = match execution.outcome {
         GuardedOutcome::Completed { results, .. } => {
-            ComputerTurnOutcomeKind::Completed { results, summary: redacted.clone() }
+            let preview = retain_completed_preview(&results, progress.item_id);
+            ComputerTurnOutcomeKind::Completed { results, summary: redacted.clone(), preview }
         }
         GuardedOutcome::Failed { stage, message } => ComputerTurnOutcomeKind::Failed { stage, message },
         GuardedOutcome::Cancelled => ComputerTurnOutcomeKind::Cancelled,
     };
     Ok(ComputerTurnOutcome { kind, model, usage })
+}
+
+/// Retain the latest screenshot of a completed turn under its outer row id
+/// and describe the reference for the completion event. `None` when the
+/// turn captured nothing usable; extraction fails closed per payload, so
+/// one malformed result never blocks an earlier good screenshot.
+fn retain_completed_preview(results: &NativeTurnResults, item_id: &str) -> Option<Box<AppPreviewItem>> {
+    let shot = match results {
+        NativeTurnResults::Anthropic(positioned) => positioned
+            .iter()
+            .rev()
+            .find_map(|(_, block)| anthropic_use::screenshot_in_output(block)),
+        NativeTurnResults::OpenAi(outputs) => outputs.iter().rev().find_map(openai_use::screenshot_in_output),
+    }?;
+    let bytes = u64::try_from(shot.as_png().len()).unwrap_or(u64::MAX);
+    super::preview::retain_preview(item_id, shot);
+    Some(Box::new(AppPreviewItem {
+        uri: vtcode_desktop_protocol::preview_uri(item_id),
+        mime_type: Some("image/png".to_string()),
+        bytes,
+        blocks: 1,
+        ui: None,
+    }))
 }
 
 struct GuardedExecution {

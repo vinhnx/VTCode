@@ -89,6 +89,18 @@ approval, launching, per-call execution (OpenAI) or batch execution
 event types. Completion output is the shared report text, so the durable
 event and the model-facing tool result agree verbatim.
 
+Completed turns retain their latest screenshot in a memory-only registry
+keyed by outer row id (16 entries / 32 MiB, oldest-first eviction, cleared
+on session create/close) and attach a `computer-preview://` reference to
+the completion event — metadata only, never pixels, and no new `ThreadEvent`
+types. The desktop client resolves references on row expand through
+`computer/preview/read`; misses answer `expired` instead of erroring, so
+the card renders its expired state with no retry. Only completed turns
+retain (failed/cancelled turns discard partials with their screenshots).
+Bodies that cannot fit the 1 MiB protocol frame are downscaled
+(960px, halving to a 240px floor) off the async runtime and served with a
+`downscaled` flag the caption surfaces; small shots pass through untouched.
+
 ## Probe scripts
 
 | Script | Purpose |
