@@ -64,13 +64,18 @@ From your project directory:
 ```bash
 cd path/to/your/project
 vtcode init # scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before committing
-vtcode secret add openai # replace `openai` with your provider
 ```
 
-Keys stay in secure storage (OS keyring or encrypted file); env vars, workspace `.env`, or `vtcode login`
-work where supported. See [getting started](./docs/user-guide/getting-started.md) and
-[provider guides](./docs/providers/provider_guides.md). ChatGPT: `vtcode login openai` (or `--from-codex`);
-Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
+Choose an authentication method for your provider:
+
+- **API key:** `vtcode secret add openai` (replace `openai` with your provider). Keys stay in secure storage
+  (OS keyring or encrypted file); environment variables or a workspace `.env` also work where supported.
+- **ChatGPT subscription:** `vtcode login openai` — no API key needed.
+- **Reuse an existing Codex login:** `vtcode login openai --from-codex` (requires an authenticated Codex CLI).
+
+See [getting started](./docs/user-guide/getting-started.md) and
+[provider guides](./docs/providers/provider_guides.md) for details. Copilot uses the official `copilot` CLI — see
+[OAuth authentication](./docs/guides/oauth-authentication.md).
 
 > **Caution:** Keep API keys out of Git and `vtcode.toml`, and never commit a workspace `.env` file.
 
