@@ -4,7 +4,7 @@
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
 <p>
-  <sub>Terminal-first coding agent, desktop-ready on macOS — explore, plan, edit, and verify with your model of choice.</sub>
+  <sub>Terminal-first coding agent, desktop-ready on macOS — plan, edit, and verify with your model of choice.</sub>
 </p>
 
 [![Rust](https://img.shields.io/badge/rust-1.100.0%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
@@ -16,18 +16,19 @@
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
 
 <p>
-  <img src="./resources/gif/demo-desktop.gif" width="85%" alt="VT Code Desktop app demo" loading="lazy" />
+  <img src="./resources/gif/demo-desktop.gif" width="85%"
+    alt="VT Code Desktop app running an agent coding task" loading="lazy" />
   <br />
-  <sub>Desktop app — <a href="./resources/screenshots/vtcode-cli-tui.gif">terminal TUI demo</a></sub>
+  <sub>Desktop app demo — see also the <a href="./resources/screenshots/vtcode-cli-tui.gif">terminal TUI demo</a></sub>
 </p>
 
 </div>
 
 ## Overview
 
-VT Code is an auditable, resumable agentic coding loop — one shared runloop powers the terminal TUI and the
-native macOS app. It is open source under **MIT OR Apache-2.0** (see [Contributing](#contributing) and
-[License](#license)). Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
+VT Code is an auditable, resumable coding agent — one shared runloop powers the terminal TUI and the
+native macOS app. It is open source under **MIT OR Apache-2.0** (see [License](#license)).
+Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
@@ -35,7 +36,7 @@ native macOS app. It is open source under **MIT OR Apache-2.0** (see [Contributi
 | ----------- | ------------ |
 | **Plan** | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md). |
 | **Safety** | Sandboxed, [auditable command policy](./docs/security/security_model.md). |
-| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md); [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
+| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md) with [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
 | **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
 | **Models** | Per-task [hosted or local providers](./docs/providers/provider_guides.md). |
 
@@ -63,7 +64,8 @@ From your project directory:
 
 ```bash
 cd path/to/your/project
-vtcode init # scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before committing
+# Scaffolds vtcode.toml, .vtcode/, and AGENTS.md; review before committing.
+vtcode init
 ```
 
 Choose an authentication method for your provider:
@@ -78,15 +80,17 @@ See [getting started](./docs/user-guide/getting-started.md) and
 [OAuth authentication](./docs/guides/oauth-authentication.md).
 
 > **Caution:** Keep API keys out of Git and `vtcode.toml`, and never commit a workspace `.env` file.
+> Run `vtcode secret add` or `vtcode login` before your first task.
 
 ### 3. Run your first task
 
 ```bash
-vtcode # open the interactive TUI
+vtcode # opens the interactive TUI
 ```
 
-Ask one focused question, review the proposed changes and test results, then commit. If the binary is not on
-your `PATH`, rerun `vtcode --version` to confirm the install. See [Usage](#usage) for automation commands.
+Ask one focused question, review the proposed changes and test results, then commit.
+If `vtcode` is not found, reopen your shell so `PATH` picks up the install, then rerun `vtcode --version`.
+See [Usage](#usage) for automation commands.
 
 ## Usage
 
@@ -105,15 +109,15 @@ Common commands (full list in [command reference](./docs/user-guide/commands.md)
 | Inspect a run log       | `vtcode trajectory`                                |
 
 Trust levels: `ask` never runs tools, `review` inspects uncommitted changes without the agent loop, and only
-`exec` runs the full tool loop. `exec` needs workspace trust — approve the TTY prompt, or set
+`exec` runs the full tool loop. `exec` needs workspace trust: approve the TTY prompt, or set
 `VTCODE_TRUST_WORKSPACE=full-auto` for non-TTY runs (`deny` refuses instead). For larger tasks, start read-only,
 review the turn diff, and use `/explain` without another model call. See [interactive mode](./docs/user-guide/interactive-mode.md),
 [exec mode](./docs/user-guide/exec-mode.md), and [full automation](./docs/guides/full-automation.md).
 
 ## Desktop app
 
-Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy, sandboxing, sessions, config,
-and credentials. Configure a provider first ([Quick start](#quick-start)).
+Native macOS app (macOS 15+) sharing the CLI runloop, providers, tool policy, sandboxing, sessions,
+config, and credentials. Configure a provider first ([Quick start](#quick-start)).
 
 ### Install (macOS 15+)
 
@@ -127,10 +131,10 @@ then launch with `vtcode desktop` or from Finder. The cask ships Apple Silicon b
 from source with `vtcode desktop --install`. Full options are in the [installation guide](./docs/installation/README.md).
 
 > [!WARNING]
-> **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included): open the app once
-> from Applications, click **Open Anyway** in **System Settings › Privacy & Security**, then reopen from Finder
-> (or `vtcode desktop`). The button expires about an hour after a blocked launch — reopen the app to bring it
-> back. Notarized releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
+> **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included): open the app
+> once from Applications, click **Open Anyway** in **System Settings › Privacy & Security**, then reopen
+> it. The button expires about an hour after a blocked launch; reopen the app to bring it back.
+> Notarized releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
 
 ## Documentation
 
@@ -147,7 +151,7 @@ This section keeps one link per task.
 
 - [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
 - [Configuration](./docs/config/config_field_reference.md) and [security model](./docs/security/security_model.md)
-- [Computer Use](./docs/user-guide/computer-use.md) — isolated offline browser preview with per-turn approval
+- [Computer Use](./docs/user-guide/computer-use.md): isolated offline browser preview with per-turn approval
 
 ### Automate
 
@@ -171,8 +175,8 @@ This section keeps one link per task.
 ## Development
 
 27-crate workspace at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md)).
-`default-members` builds only the root binary plus `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`, and
-`vtcode-ui`. The sketch below shows the core harness path, not every crate:
+The default build covers the root binary plus `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`,
+and `vtcode-ui`. The sketch below shows the core harness path, not every crate:
 
 ```mermaid
 graph LR
@@ -203,16 +207,18 @@ Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/v
 
 ## Contributing
 
-VT Code is open source and community-driven. Code, docs, [evals](./docs/guides/eval.md), and fixes are welcome —
-include `vtcode trajectory` output in bug reports where possible. Before a PR, read
-[contributing](./docs/CONTRIBUTING.md) and pick a [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue)
-or [help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item. Forks: keep license and third-party
-notices intact (see [License](#license)).
+VT Code is open source and community-driven. Code, docs, [evals](./docs/guides/eval.md), and fixes are
+welcome — include `vtcode trajectory` output in bug reports where possible. Before a PR, read
+[contributing](./docs/CONTRIBUTING.md) and pick a
+[good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or
+[help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item. Forks: keep license and
+third-party notices intact (see [License](#license)).
 
 ## Security
 
-Report vulnerabilities privately via [GitHub private vulnerability
-reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [security policy](./docs/SECURITY.md).
+Report vulnerabilities privately via
+[GitHub private vulnerability reporting](https://github.com/vinhnx/vtcode/security/advisories/new).
+See the [security policy](./docs/SECURITY.md).
 
 ## Community
 
@@ -223,7 +229,8 @@ reporting](https://github.com/vinhnx/vtcode/security/advisories/new). See the [s
   [podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) ·
   [video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
-The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive. Contact: `vinhnguyen2308 [at] gmail [dot] com`.
+The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
+Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 ## Thanks to our contributors
 
@@ -307,8 +314,10 @@ contributors, and sponsors. Thank you for growing the community.
 
 <a href="https://star-history.com/#vinhnx/vtcode&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
+   <source media="(prefers-color-scheme: dark)"
+     srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)"
+     srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
  </picture>
 </a>
