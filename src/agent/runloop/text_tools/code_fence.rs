@@ -10,12 +10,14 @@ pub(crate) struct CodeFenceBlock {
 pub(crate) use vtcode_commons::text_fence::find_unfenced_from;
 
 pub(crate) fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
+    // Single line-count scan feeds both capacity estimates below.
+    let total_lines = text.lines().count();
     // Estimate capacity: assume ~1 code block per 30 lines on average, cap at 20
-    let estimated_blocks = text.lines().count() / 30 + 1;
+    let estimated_blocks = total_lines / 30 + 1;
     let mut blocks = Vec::with_capacity(estimated_blocks.min(20));
     let mut current_language: Option<String> = None;
 
-    let estimated_lines = text.lines().count() / 5;
+    let estimated_lines = total_lines / 5;
     let mut current_lines: Vec<String> = Vec::with_capacity(estimated_lines.min(1000));
 
     for raw_line in text.lines() {
