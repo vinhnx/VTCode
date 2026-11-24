@@ -397,3 +397,35 @@ fn attachment_picker_contains_tab_focus_on_both_tabs(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn attachment_picker_home_end_move_selection_without_toggling(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("notes.md"), "hello").expect("write notes");
+    let (window, view) = open_desktop(cx);
+    seed_workspace_files(&view, cx, workspace.path());
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_attachment_picker(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Clicking a row focuses the picker tree (and attaches that file).
+        window.click("picker-file-notes.md", cx);
+        window.render_frame(cx);
+        let tree = view.read(cx).picker_tree.clone();
+        let selected = |app: &gpui_kit::App| tree.read(app).selected_item().map(|item| item.id.to_string());
+        assert_eq!(selected(cx).as_deref(), Some("notes.md"), "click selects the row");
+
+        window.press("end", cx);
+        assert_eq!(selected(cx).as_deref(), Some("src"), "End reaches the last row");
+        window.press("home", cx);
+        assert_eq!(selected(cx).as_deref(), Some("notes.md"), "Home returns to the first row");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).attachments.len(), 1, "edge jumps never toggle attachments");
+    });
+}

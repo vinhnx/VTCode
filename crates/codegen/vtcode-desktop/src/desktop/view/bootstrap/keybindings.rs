@@ -62,6 +62,10 @@ pub(crate) fn init_keybindings(cx: &mut App, preferences: &preferences::Preferen
         KeyBinding::new(key::HOME, FirstSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new(key::END, LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new(key::ENTER, OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
+        // The base Tree binds arrows but not Home/End; every other desktop
+        // collection has edge jumps, so supply them in the same tree scope.
+        KeyBinding::new(key::HOME, SelectFirstFile, Some(gpui_kit::base::tree_key_context())),
+        KeyBinding::new(key::END, SelectLastFile, Some(gpui_kit::base::tree_key_context())),
         KeyBinding::new("f2", RenameSelectedFile, Some(gpui_kit::base::tree_key_context())),
         KeyBinding::new(key::DELETE, DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),
         KeyBinding::new(key::BACKSPACE, DeleteSelectedFile, Some(gpui_kit::base::tree_key_context())),

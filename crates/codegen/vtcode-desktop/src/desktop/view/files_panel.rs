@@ -37,6 +37,30 @@ pub(super) struct DeleteFilePath {
 pub(super) const FILTER_FILES_LABEL: &str = "Filter files";
 pub(super) const NO_MATCHING_FILES_NOTE: &str = "No files match this filter";
 
+/// Final path segment of a workspace-relative path. Shared by the tree rows,
+/// the destructive confirm title, and the drag preview so every surface
+/// names an entry the same way.
+pub(super) fn file_name(rel_path: &str) -> &str {
+    rel_path.rsplit('/').next().unwrap_or(rel_path)
+}
+
+/// Accessible name shared by both file-tree surfaces. The base Kit tree already
+/// exposes hierarchy (role), expansion, and selection; the application owns the
+/// spoken name so the inspector and the picker announce the same thing. The
+/// picker's attached suffix is the only variation, and stays out of folders.
+pub(super) fn file_tree_row_accessibility_label(rel_path: &str, is_dir: bool, attached: bool) -> String {
+    let base = if is_dir {
+        rust_i18n::t!("app.files.folder_accessibility", path = rel_path).to_string()
+    } else {
+        rust_i18n::t!("app.files.file_accessibility", path = rel_path).to_string()
+    };
+    if attached && !is_dir {
+        format!("{base} (attached)")
+    } else {
+        base
+    }
+}
+
 /// Folder/file icon for a file-tree row, following the folder's expansion.
 pub(super) fn file_tree_row_icon(is_dir: bool, expanded: bool) -> IconName {
     if is_dir {
@@ -346,6 +370,55 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Shared edge jump for both file trees. Kit's Tree binds arrows but has
+    /// no Home/End, so the desktop supplies them in the same key context; the
+    /// listener on each surface's container picks the right tree. The base
+    /// TreeState exposes no entry count, so the last row is found by walking
+    /// `entry` — a cheap scan over already-flattened rows, done only on a
+    /// deliberate key press.
+    fn select_tree_edge(tree: &Entity<TreeState>, first: bool, cx: &mut Context<Self>) {
+        tree.update(cx, |tree, cx| {
+            let target = if first {
+                tree.entry(0).map(|_| 0)
+            } else {
+                let mut last = None;
+                let mut ix = 0;
+                while tree.entry(ix).is_some() {
+                    last = Some(ix);
+                    ix += 1;
+                }
+                last
+            };
+            if let Some(ix) = target {
+                tree.set_selected_index(Some(ix), cx);
+                tree.scroll_to_item(
+                    ix,
+                    if first {
+                        gpui_kit::ScrollStrategy::Top
+                    } else {
+                        gpui_kit::ScrollStrategy::Bottom
+                    },
+                );
+            }
+        });
+    }
+
+    pub(super) fn select_first_file(&mut self, cx: &mut Context<Self>) {
+        Self::select_tree_edge(&self.file_tree, true, cx);
+    }
+
+    pub(super) fn select_last_file(&mut self, cx: &mut Context<Self>) {
+        Self::select_tree_edge(&self.file_tree, false, cx);
+    }
+
+    pub(super) fn select_first_picker_file(&mut self, cx: &mut Context<Self>) {
+        Self::select_tree_edge(&self.picker_tree, true, cx);
+    }
+
+    pub(super) fn select_last_picker_file(&mut self, cx: &mut Context<Self>) {
+        Self::select_tree_edge(&self.picker_tree, false, cx);
+    }
+
     pub(super) fn open_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(path) = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
             return;
@@ -517,7 +590,7 @@ impl DesktopView {
         if !self.files.iter().any(|entry| entry.rel_path == rel_path) {
             return;
         }
-        let base = rel_path.rsplit('/').next().unwrap_or(rel_path).to_string();
+        let base = file_name(rel_path).to_string();
         let title = format!("Delete “{base}”?");
         let detail = "The item moves to the Trash. You can restore it from there.".to_string();
         let rel_path = rel_path.to_owned();

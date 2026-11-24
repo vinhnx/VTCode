@@ -318,6 +318,8 @@ actions!(
         OpenPermissions,
         OpenModePicker,
         OpenSelectedFile,
+        SelectFirstFile,
+        SelectLastFile,
         RenameSelectedFile,
         DeleteSelectedFile,
         NewSession,

@@ -796,6 +796,7 @@ mod handoff_notification;
 mod heading_tiers;
 mod inspector_appearance;
 mod inspector_chrome;
+mod inspector_file_tree;
 mod inspector_files;
 mod inspector_layout;
 mod interaction_choices;

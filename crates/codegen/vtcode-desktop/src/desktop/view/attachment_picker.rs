@@ -353,10 +353,12 @@ impl DesktopView {
                     .w_full()
                     .overflow_hidden()
                     .on_action(cx.listener(|this, _: &OpenSelectedFile, _, cx| this.attach_selected_picker_file(cx)))
+                    .on_action(cx.listener(|this, _: &SelectFirstFile, _, cx| this.select_first_picker_file(cx)))
+                    .on_action(cx.listener(|this, _: &SelectLastFile, _, cx| this.select_last_picker_file(cx)))
                     .child(Tree::new(&self.picker_tree, move |_index, entry, selected, _window, app| {
                         let rel_path = entry.item().id.to_string();
                         let is_dir = directory_paths.contains(&rel_path);
-                        let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                        let display_name = files_panel::file_name(&rel_path).to_string();
                         let attached = attached_paths.contains(&rel_path);
                         let search_parent = if searching {
                             rel_path.rsplit_once('/').map(|(dir, _)| dir)
@@ -370,21 +372,11 @@ impl DesktopView {
                         ListItem::new(format!("picker-file-{rel_path}"))
                             .selected(selected)
                             .cursor_pointer()
-                            .accessibility_label({
-                                let base = if is_dir {
-                                    rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str())
-                                        .to_string()
-                                } else {
-                                    rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
-                                };
-                                // The check icon is decorative, so attached
-                                // state joins the spoken label instead.
-                                if attached && !is_dir {
-                                    format!("{base} (attached)")
-                                } else {
-                                    base
-                                }
-                            })
+                            // The check icon is decorative, so the shared
+                            // row label carries attached state in speech.
+                            .accessibility_label(files_panel::file_tree_row_accessibility_label(
+                                &rel_path, is_dir, attached,
+                            ))
                             .child(
                                 div()
                                     .flex_1()

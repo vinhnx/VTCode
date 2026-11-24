@@ -354,6 +354,8 @@ impl DesktopView {
                     .on_action(
                         cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)),
                     )
+                    .on_action(cx.listener(|this, _: &SelectFirstFile, _, cx| this.select_first_file(cx)))
+                    .on_action(cx.listener(|this, _: &SelectLastFile, _, cx| this.select_last_file(cx)))
                     .on_action(
                         cx.listener(|this, _: &RenameSelectedFile, window, cx| this.rename_selected_file(window, cx)),
                     )
@@ -364,7 +366,7 @@ impl DesktopView {
                         Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
                             let rel_path = entry.item().id.to_string();
                             let is_dir = directory_paths.contains(&rel_path);
-                            let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                            let display_name = files_panel::file_name(&rel_path).to_string();
                             // Ranked hits from different directories share
                             // names; the muted parent keeps them distinct.
                             let search_parent = if searching {
@@ -380,12 +382,9 @@ impl DesktopView {
                             ListItem::new(format!("workspace-file-{rel_path}"))
                                 .selected(selected)
                                 .cursor_pointer()
-                                .accessibility_label(if is_dir {
-                                    rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str())
-                                        .to_string()
-                                } else {
-                                    rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
-                                })
+                                .accessibility_label(files_panel::file_tree_row_accessibility_label(
+                                    &rel_path, is_dir, false,
+                                ))
                                 .child(files_panel::file_tree_row_label(
                                     format!("workspace-file-label-{rel_path}"),
                                     entry.depth(),
@@ -399,7 +398,7 @@ impl DesktopView {
                                 // dropped into Finder or an editor.
                                 .on_drag(DragWorkspaceFile { rel_path: rel_path.clone(), is_dir }, |drag, _, _, cx| {
                                     cx.new(|_| FileDragPreview {
-                                        name: drag.rel_path.rsplit('/').next().unwrap_or(&drag.rel_path).to_string(),
+                                        name: files_panel::file_name(&drag.rel_path).to_string(),
                                         is_dir: drag.is_dir,
                                     })
                                 })
