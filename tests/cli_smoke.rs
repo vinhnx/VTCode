@@ -27,6 +27,13 @@ fn vtcode_help_command_succeeds() {
 }
 
 #[test]
+fn vtcode_debug_capabilities_succeeds() {
+    let (_home, mut cmd) = isolated_vtcode_command();
+    let _argument = cmd.arg("debug").arg("capabilities");
+    let _assertion = cmd.assert().success().stdout(contains("VT Code Sandbox Capabilities"));
+}
+
+#[test]
 fn vtcode_tool_policy_status_succeeds() {
     let (_home, mut cmd) = isolated_vtcode_command();
     let _argument = cmd.arg("tool-policy").arg("status");

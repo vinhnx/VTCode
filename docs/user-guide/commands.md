@@ -33,11 +33,18 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode schema`                                                        | Emit built-in tool schemas for automation discovery                 |
 | `vtcode analyze`                                                       | Analyze workspace structure, security, and performance              |
 | `vtcode trajectory`                                                    | Pretty-print run logs for debugging and audits                      |
+| `vtcode debug capabilities`                                            | Show which OS sandbox mechanisms are available on this platform     |
+| `vtcode debug seatbelt --cmd <argv…>`                                  | Run a command under macOS Seatbelt with the workspace policy        |
+| `vtcode debug landlock --cmd <argv…>`                                  | Run a command under Linux Landlock with the workspace policy        |
 | `vtcode snapshots` / `vtcode revert`                                   | List and roll back to workspace snapshots                           |
 | `vtcode cleanup-snapshots`                                             | Prune old snapshots with a retention limit                          |
 | `vtcode update`                                                        | Check for and install binary updates from GitHub Releases           |
 | `vtcode man`                                                           | Generate or display man pages                                       |
 | `vtcode man --all-pages --output man/man1`                             | Write the main page and all visible command pages to a directory    |
+
+`vtcode debug` probes use the sandbox policy resolved for the current workspace, so they
+show what an agent command would experience. A sandbox that is unavailable on the host fails
+closed rather than running the probe unsandboxed.
 
 For a local MCP connection that exposes Companion coding tasks, use
 `vtcode webmcp stdio --companion` with an explicitly selected workspace. The

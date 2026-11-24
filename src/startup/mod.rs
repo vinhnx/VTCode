@@ -169,6 +169,7 @@ impl StartupPolicy {
                     | Commands::Logout { .. }
                     | Commands::Auth { .. }
                     | Commands::Notify { .. }
+                    | Commands::Debug { .. }
                     | Commands::Pods { .. }
                     | Commands::Schedule { .. }
                     | Commands::Update { .. }

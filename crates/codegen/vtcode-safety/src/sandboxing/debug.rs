@@ -23,6 +23,27 @@ pub struct SandboxDebugResult {
 }
 
 impl SandboxDebugResult {
+    /// Whether the wrapped command exited successfully.
+    #[must_use]
+    pub fn success(&self) -> bool {
+        self.success
+    }
+
+    /// Whether the sandbox restrictions were actually applied.
+    ///
+    /// Callers must check this before treating `success` as evidence that the
+    /// sandbox allowed an operation: an unavailable sandbox runs no command.
+    #[must_use]
+    pub fn sandbox_active(&self) -> bool {
+        self.sandbox_active
+    }
+
+    /// Captured standard error from the wrapped command (or availability error).
+    #[must_use]
+    pub fn stderr(&self) -> &str {
+        &self.stderr
+    }
+
     /// Create a result indicating sandbox is not available.
     fn unavailable(sandbox_type: SandboxType) -> Self {
         Self {
@@ -142,7 +163,7 @@ pub fn sandbox_capabilities_summary() -> String {
 
     summary.push_str("\nSecurity features:\n");
     summary.push_str("  - Sensitive path blocking (~/.ssh, ~/.aws, etc.)\n");
-    summary.push_str("  - .git directory write protection\n");
+    summary.push_str("  - read-only git/agent/editor config dirs (.git, .codex, .claude, .cursor, .vscode, …)\n");
     summary.push_str("  - Environment variable sanitization\n");
     summary.push_str("  - Seccomp syscall filtering (Linux)\n");
     summary.push_str("  - Resource limits (memory, PIDs, disk, CPU)\n");

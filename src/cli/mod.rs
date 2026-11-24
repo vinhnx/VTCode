@@ -25,6 +25,7 @@ mod init_project;
 mod man;
 mod messages;
 mod notify;
+pub(crate) mod sandbox_debug;
 #[cfg(target_os = "linux")]
 pub(crate) mod sandbox_exec;
 mod session_store;

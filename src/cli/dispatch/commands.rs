@@ -14,6 +14,7 @@ use crate::cli::app_server::handle_app_server_command;
 use crate::cli::bench_allocator::handle_bench_allocator_command;
 use crate::cli::desktop_server::handle_desktop_server_command;
 use crate::cli::plugins::dispatch_plugins_command;
+use crate::cli::sandbox_debug::handle_sandbox_debug_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
 use crate::cli::{
@@ -177,6 +178,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         }
         Commands::Trajectory { file, top } => {
             trajectory::handle_trajectory_command(core_cfg, file, top).await?;
+        }
+        Commands::Debug { command } => {
+            handle_sandbox_debug_command(startup, command).await?;
         }
         Commands::SessionStore { command } => {
             handle_session_store_command(command).await?;

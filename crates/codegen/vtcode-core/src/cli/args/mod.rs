@@ -11,6 +11,7 @@ mod background;
 mod bench;
 mod companion;
 mod config;
+mod debug;
 mod exec;
 mod models;
 mod plugins;
@@ -34,6 +35,7 @@ pub use config::{
     ConfigCommand, ConfigFile, ConfigResetArgs, ContextConfig, LoggingConfig, PerformanceConfig, SecurityConfig,
     ToolConfig,
 };
+pub use debug::DebugCommand;
 pub use exec::{EvalOutputFormat, ExecEvalArgs, ExecResumeArgs, ExecSubcommand};
 pub use models::ModelCommands;
 pub use plugins::PluginsSubcommand;
@@ -448,6 +450,13 @@ pub enum Commands {
         /// Number of top entries to show
         #[arg(long, default_value_t = 10)]
         top: usize,
+    },
+
+    /// Inspect or exercise the workspace's OS sandbox (no agent session)
+    #[command(name = "debug")]
+    Debug {
+        #[command(subcommand)]
+        command: DebugCommand,
     },
 
     /// Send a VT Code notification using the built-in notification system

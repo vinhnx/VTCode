@@ -57,6 +57,25 @@ fn parses_app_server_command_with_stdio_listen_target() {
 }
 
 #[test]
+fn parses_debug_sandbox_commands_with_trailing_argv() {
+    let capabilities = Cli::parse_from(["vtcode", "debug", "capabilities"]);
+    assert!(matches!(capabilities.command, Some(Commands::Debug { command: DebugCommand::Capabilities })));
+
+    for (platform, expected) in [("seatbelt", "Seatbelt"), ("landlock", "Landlock")] {
+        let cli = Cli::parse_from(["vtcode", "debug", platform, "--cmd", "sh", "-c", "echo ok", "-x"]);
+        let Some(Commands::Debug { command }) = cli.command else {
+            panic!("debug subcommand missing for {platform}");
+        };
+        let argv = match command {
+            DebugCommand::Seatbelt { command } if expected == "Seatbelt" => command,
+            DebugCommand::Landlock { command } if expected == "Landlock" => command,
+            other => panic!("wrong debug command for {platform}: {other:?}"),
+        };
+        assert_eq!(argv, ["sh", "-c", "echo ok", "-x"]);
+    }
+}
+
+#[test]
 fn parses_init_force_flag() {
     let cli = Cli::parse_from(["vtcode", "init", "--force"]);
 
