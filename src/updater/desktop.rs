@@ -28,6 +28,11 @@ const DESKTOP_HELPER_RELATIVE_PATH: &str = "Contents/Helpers/vtcode";
 /// Gatekeeper first-launch steps shipped at the archive root by ad hoc signed
 /// builds (notarized builds omit it).
 const DESKTOP_FIRST_LAUNCH_NOTE: &str = "FIRST-LAUNCH.txt";
+/// Sibling name for the known-good bundle kept aside during replacement.
+/// A fixed name is safe here: it is derived from a fixed root, never user
+/// input, and [`replace_installed_bundle`] decides which of the two bundles
+/// is authoritative on every run.
+const DESKTOP_BACKUP_SUFFIX: &str = ".previous";
 
 pub(crate) enum DesktopInstallOutcome {
     Installed {
@@ -324,9 +329,12 @@ fn install_desktop_bundle(
     // install by a user without write access); admin users writing to a
     // group-writable /Applications stay on the direct path (no password prompt).
     let elevate = ensure_install_dir(install_dir)?;
-    remove_previous_install(destination, elevate)?;
-    run_ditto(&[], &staged_app, destination, "failed to install the desktop app", elevate)?;
-    validate_staged_bundle(destination)?;
+    // Keep the old bundle recoverable until the new one is fully unpacked and
+    // validated. A failed `ditto` (disk full, interruption, permission) must
+    // not leave the user with no installed app.
+    replace_installed_bundle(destination, elevate, |target| {
+        run_ditto(&[], &staged_app, target, "failed to install the desktop app", elevate)
+    })?;
     Ok(InstalledBundle {
         path: destination.to_path_buf(),
         needs_gatekeeper_approval,
@@ -364,27 +372,141 @@ fn ensure_install_dir(install_dir: &Path) -> Result<bool> {
     }
 }
 
-/// Remove any previous install first so stale bundle files never survive an update.
-/// `destination` is constructed from fixed roots or a validated bundle path,
-/// never raw user input, which is what makes the elevated `rm -rf` safe.
-fn remove_previous_install(destination: &Path, elevate: bool) -> Result<()> {
+/// Sibling path used to hold the previous bundle while a replacement runs.
+fn backup_path(destination: &Path) -> PathBuf {
+    let mut name = destination.as_os_str().to_os_string();
+    name.push(DESKTOP_BACKUP_SUFFIX);
+    PathBuf::from(name)
+}
+
+/// Move a bundle aside (or back) within the same install directory. Renaming
+/// is atomic on one filesystem, so the live install is never half-swapped.
+/// `elevate` uses a fixed `mv` argv — `destination` comes from a fixed root or
+/// a validated bundle path, never raw user input.
+fn move_bundle(from: &Path, to: &Path, elevate: bool) -> Result<()> {
+    if !from.exists() {
+        bail!("cannot move missing desktop app at {}", from.display());
+    }
+    // `mv` moves *into* an existing directory instead of replacing it; a
+    // stale target would silently nest one bundle inside another.
+    if to.exists() {
+        bail!("refusing to move desktop app onto existing path {}", to.display());
+    }
     if elevate {
-        let output = run_sudo("rm", &["-rf".as_ref(), destination.as_os_str()])?;
+        let output = run_sudo("mv", &[from.as_os_str(), to.as_os_str()])?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("failed to remove previous desktop app at {}: {}", destination.display(), stderr.trim());
+            bail!("failed to move desktop app from {} to {}: {}", from.display(), to.display(), stderr.trim());
         }
         return Ok(());
     }
-    match std::fs::remove_dir_all(destination) {
+    std::fs::rename(from, to)
+        .with_context(|| format!("failed to move desktop app from {} to {}", from.display(), to.display()))
+}
+
+/// Remove a bundle directory, tolerating an already-absent path. Only reaches
+/// `rm -rf` when a direct removal proved the destination is not user-writable;
+/// all paths are fixed-root derived, which is what makes the elevated form safe.
+fn remove_bundle(path: &Path, elevate: bool) -> Result<()> {
+    if elevate {
+        let output = run_sudo("rm", &["-rf".as_ref(), path.as_os_str()])?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("failed to remove desktop app at {}: {}", path.display(), stderr.trim());
+        }
+        return Ok(());
+    }
+    match std::fs::remove_dir_all(path) {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => {
-            return Err(err)
-                .with_context(|| format!("failed to remove previous desktop app at {}", destination.display()));
-        }
+        Err(err) => return Err(err).with_context(|| format!("failed to remove desktop app at {}", path.display())),
     }
     Ok(())
+}
+
+/// Replace the installed bundle with one produced by `install`, without ever
+/// leaving the user with no app.
+///
+/// The previous bundle is moved to a sibling backup first, `install` writes
+/// and validates the replacement, and only then is the backup removed. If
+/// `install` fails, a partial replacement is removed and the backup moved
+/// back. A crash during the copy is recoverable too: the next run sees a
+/// valid backup beside an absent/invalid bundle and restores it before doing
+/// anything else. The whole swap stays inside one install directory, so both
+/// moves are atomic renames on the same filesystem.
+///
+/// `install` receives the destination path and only writes the bundle; this
+/// helper validates it before discarding the backup, so a bad payload can
+/// never be kept as the live app. Returning `Err` from either step triggers
+/// the rollback. The callback is kept small and injectable so failure and
+/// recovery paths are testable without `ditto` or macOS.
+fn replace_installed_bundle(
+    destination: &Path,
+    elevate: bool,
+    install: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    let backup = backup_path(destination);
+
+    // Recovery from an interrupted earlier run takes priority over a new
+    // install: the backup may be the only launchable copy in that state.
+    if backup.exists() {
+        if validate_staged_bundle(destination).is_ok() {
+            // Both present and valid: the live bundle is authoritative. A
+            // backup we cannot clear is an abnormal filesystem state; fail
+            // closed here rather than risk overwriting a working install.
+            remove_bundle(&backup, elevate).with_context(|| {
+                format!("could not clear leftover update backup at {}; remove it before retrying", backup.display())
+            })?;
+        } else {
+            if validate_staged_bundle(&backup).is_ok() {
+                tracing::warn!(path = %backup.display(), "restoring desktop app left in backup by an interrupted update");
+                remove_bundle(destination, elevate)?;
+                move_bundle(&backup, destination, elevate)?;
+            } else {
+                // Neither copy is launchable; do not promote a broken backup.
+                remove_bundle(&backup, elevate)?;
+            }
+        }
+    }
+
+    let had_previous = destination.exists();
+    if had_previous {
+        move_bundle(destination, &backup, elevate)
+            .with_context(|| format!("failed to set aside previous desktop app at {}", destination.display()))?;
+    }
+
+    let result = install(destination).and_then(|()| validate_staged_bundle(destination));
+    match result {
+        Ok(()) => {
+            if had_previous && let Err(error) = remove_bundle(&backup, elevate) {
+                // The new bundle is valid, so keep it. The leftover backup is
+                // cleaned up (or restored from) on the next update run.
+                tracing::warn!(%error, "could not remove previous desktop app backup");
+            }
+            Ok(())
+        }
+        Err(error) => {
+            // Never leave a half-written bundle at the live path.
+            if let Err(cleanup) = remove_bundle(destination, elevate) {
+                tracing::warn!(%cleanup, "could not remove incomplete desktop app after failed install");
+            }
+            if !had_previous {
+                return Err(error)
+                    .with_context(|| format!("failed to install desktop app at {}", destination.display()));
+            }
+            match move_bundle(&backup, destination, elevate) {
+                Ok(()) => Err(error).with_context(|| {
+                    format!("desktop app update failed; previous version at {} restored", destination.display())
+                }),
+                Err(restore) => Err(error).with_context(|| {
+                    format!(
+                        "desktop app update failed and the previous version at {} could not be restored: {restore}",
+                        backup.display()
+                    )
+                }),
+            }
+        }
+    }
 }
 
 /// Fail closed on archives with unsafe paths or an unexpected layout before
@@ -412,12 +534,22 @@ fn validate_desktop_archive(archive_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// A bundle is only usable when all three load-bearing files are present and
+/// non-empty: the plist, the GUI binary, and the CLI helper the GUI spawns as
+/// its backend. `replace_installed_bundle` uses this check to decide whether
+/// to discard the backup of a previous install, so accepting a bundle whose
+/// copy stopped after the first two files would delete the only working copy.
 fn validate_staged_bundle(bundle: &Path) -> Result<()> {
-    if !bundle.join(DESKTOP_PLIST_RELATIVE_PATH).is_file() {
-        bail!("{} is not a valid app bundle (missing {})", bundle.display(), DESKTOP_PLIST_RELATIVE_PATH);
-    }
-    if !bundle.join(DESKTOP_EXECUTABLE_RELATIVE_PATH).is_file() {
-        bail!("{} is not a valid app bundle (missing {})", bundle.display(), DESKTOP_EXECUTABLE_RELATIVE_PATH);
+    for relative in [
+        DESKTOP_PLIST_RELATIVE_PATH,
+        DESKTOP_EXECUTABLE_RELATIVE_PATH,
+        DESKTOP_HELPER_RELATIVE_PATH,
+    ] {
+        let path = bundle.join(relative);
+        let incomplete = !path.is_file() || std::fs::metadata(&path).map(|meta| meta.len() == 0).unwrap_or(true);
+        if incomplete {
+            bail!("{} is not a valid app bundle (missing or empty {})", bundle.display(), relative);
+        }
     }
     Ok(())
 }

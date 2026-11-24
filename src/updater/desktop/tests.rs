@@ -158,7 +158,176 @@ fn validates_staged_bundle_layout() {
     assert!(error.to_string().contains("Contents/MacOS/vtcode-desktop"));
 
     std::fs::write(bundle.join("Contents/MacOS/vtcode-desktop"), b"binary").expect("binary");
+    let error = validate_staged_bundle(&bundle).expect_err("missing helper");
+    assert!(error.to_string().contains("Contents/Helpers/vtcode"), "{error}");
+
+    let helper = bundle.join(DESKTOP_HELPER_RELATIVE_PATH);
+    std::fs::create_dir_all(helper.parent().expect("helper parent")).expect("helper dirs");
+    std::fs::write(&helper, b"#!/bin/sh\nexit 0\n").expect("helper");
     validate_staged_bundle(&bundle).expect("valid bundle");
+
+    // A copy that stopped mid-write can leave an empty file behind.
+    std::fs::write(&helper, b"").expect("empty helper");
+    let error = validate_staged_bundle(&bundle).expect_err("empty helper");
+    assert!(error.to_string().contains("missing or empty"), "{error}");
+}
+
+fn write_bundle(path: &Path, binary: &[u8]) {
+    let macos = path.join("Contents/MacOS");
+    std::fs::create_dir_all(&macos).expect("dirs");
+    std::fs::write(path.join(DESKTOP_PLIST_RELATIVE_PATH), b"plist").expect("plist");
+    std::fs::write(macos.join("vtcode-desktop"), binary).expect("binary");
+    let helper = path.join(DESKTOP_HELPER_RELATIVE_PATH);
+    std::fs::create_dir_all(helper.parent().expect("helper parent")).expect("helper dirs");
+    std::fs::write(helper, b"#!/bin/sh\nexit 0\n").expect("helper");
+}
+
+fn bundle_binary(path: &Path) -> Vec<u8> {
+    std::fs::read(path.join("Contents/MacOS/vtcode-desktop")).expect("binary")
+}
+
+/// The swap must keep none of the previous bundle's stale files, and must not
+/// leave its backup behind once the validated replacement is in place.
+#[test]
+fn replacing_a_bundle_discards_stale_files_and_the_backup() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    write_bundle(&destination, b"old-binary");
+    std::fs::write(destination.join("Contents/stale.txt"), b"stale").expect("stale");
+
+    replace_installed_bundle(&destination, false, |target| {
+        write_bundle(target, b"new-binary");
+        Ok(())
+    })
+    .expect("swap");
+
+    assert_eq!(bundle_binary(&destination), b"new-binary");
+    assert!(!destination.join("Contents/stale.txt").exists());
+    assert!(!backup_path(&destination).exists());
+}
+
+/// A failed copy must restore the previous bundle byte-for-byte, remove the
+/// partial replacement, and still report the underlying error to the caller.
+#[test]
+fn a_failed_install_restores_the_previous_bundle() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    write_bundle(&destination, b"old-binary");
+
+    let error = replace_installed_bundle(&destination, false, |target| {
+        write_bundle(target, b"partial");
+        std::fs::write(target.join("Contents/torn.txt"), b"torn").expect("torn");
+        anyhow::bail!("ditto failed")
+    })
+    .expect_err("install must fail");
+
+    assert_eq!(bundle_binary(&destination), b"old-binary");
+    assert!(!destination.join("Contents/torn.txt").exists());
+    assert!(!backup_path(&destination).exists());
+    assert!(format!("{error:#}").contains("ditto failed"), "{error:#}");
+    assert!(format!("{error:#}").contains("restored"), "{error:#}");
+}
+
+/// A crash after setting the old bundle aside but before the copy starts
+/// leaves no bundle at the destination and the only launchable copy in the
+/// backup. The next run must recover it before starting a new install. A copy
+/// that was already partly written is covered by
+/// `an_incomplete_live_bundle_never_loses_the_backup`.
+#[test]
+fn an_interrupted_update_is_recovered_from_the_backup() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    let backup = backup_path(&destination);
+    write_bundle(&backup, b"known-good");
+
+    // The replacement fails; recovery must still restore the old app and the
+    // caller must see the install error rather than a silent success.
+    let error = replace_installed_bundle(&destination, false, |_| anyhow::bail!("download torn"))
+        .expect_err("install must fail");
+
+    assert_eq!(bundle_binary(&destination), b"known-good");
+    assert!(!backup.exists());
+    assert!(format!("{error:#}").contains("download torn"), "{error:#}");
+}
+
+/// Recovery must also allow a fresh attempt to succeed: the recovered bundle
+/// is set aside again, then replaced by the validated new one.
+#[test]
+fn an_interrupted_update_can_be_replaced_on_the_next_run() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    let backup = backup_path(&destination);
+    write_bundle(&backup, b"known-good");
+
+    replace_installed_bundle(&destination, false, |target| {
+        write_bundle(target, b"new-binary");
+        Ok(())
+    })
+    .expect("swap");
+
+    assert_eq!(bundle_binary(&destination), b"new-binary");
+    assert!(!backup.exists());
+}
+
+/// An interrupted copy can leave the plist and GUI binary in place but not the
+/// helper the GUI needs to spawn its backend. That partial bundle must not be
+/// treated as "live and valid" at recovery time, or the only working backup is
+/// deleted and the user is left with an app that cannot start.
+#[test]
+fn an_incomplete_live_bundle_never_loses_the_backup() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    let backup = backup_path(&destination);
+    write_bundle(&backup, b"known-good");
+    std::fs::create_dir_all(destination.join("Contents/MacOS")).expect("dirs");
+    std::fs::write(destination.join(DESKTOP_PLIST_RELATIVE_PATH), b"plist").expect("plist");
+    std::fs::write(destination.join("Contents/MacOS/vtcode-desktop"), b"partial").expect("binary");
+
+    let error =
+        replace_installed_bundle(&destination, false, |_| anyhow::bail!("disk full")).expect_err("install must fail");
+
+    assert_eq!(bundle_binary(&destination), b"known-good");
+    assert!(!backup.exists());
+    assert!(format!("{error:#}").contains("disk full"), "{error:#}");
+}
+
+/// Validation belongs to the swap, not the writer: a payload that returned
+/// Ok but is missing bundle files must still roll back to the known-good app.
+#[test]
+fn an_invalid_replacement_rolls_back_to_the_previous_bundle() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    write_bundle(&destination, b"old-binary");
+
+    let error = replace_installed_bundle(&destination, false, |target| {
+        std::fs::create_dir_all(target).expect("dir");
+        std::fs::write(target.join("not-a-bundle.txt"), b"junk").expect("junk");
+        Ok(())
+    })
+    .expect_err("invalid bundle must be rejected");
+
+    assert_eq!(bundle_binary(&destination), b"old-binary");
+    assert!(!destination.join("not-a-bundle.txt").exists());
+    assert!(!backup_path(&destination).exists());
+    assert!(format!("{error:#}").contains("not a valid app bundle"), "{error:#}");
+}
+
+/// A first install has nothing to roll back to, so a failure just leaves no
+/// bundle at the destination and no backup claiming to be one.
+#[test]
+fn a_failed_fresh_install_leaves_no_bundle_or_backup() {
+    let temp = tempfile::tempdir().expect("temp");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+
+    let error = replace_installed_bundle(&destination, false, |target| {
+        write_bundle(target, b"partial");
+        anyhow::bail!("checksum mismatch")
+    })
+    .expect_err("install must fail");
+
+    assert!(!destination.exists());
+    assert!(!backup_path(&destination).exists());
+    assert!(format!("{error:#}").contains("checksum mismatch"), "{error:#}");
 }
 
 /// Point `VTCODE_DESKTOP_APP` at a fixture bundle for the duration of the
@@ -370,6 +539,48 @@ fn elevated_ditto_routes_through_sudo() {
     assert!(logged.contains("ditto /nonexistent-src"), "{logged}");
 }
 
+/// The elevated half of the swap uses different syscalls (`sudo mv`, `sudo
+/// rm -rf`) from the non-elevated tests. Drive the whole rollback through the
+/// sudo stub so a failed install still restores the previous bundle there.
+#[cfg(unix)]
+#[test]
+fn elevated_bundle_swap_routes_through_sudo_and_rolls_back() {
+    let temp = tempfile::tempdir().expect("temp");
+    let stub_dir = temp.path().join("stub-bin");
+    std::fs::create_dir(&stub_dir).expect("stub dir");
+    write_sudo_stub(&stub_dir);
+    let log = temp.path().join("sudo.log");
+    let destination = temp.path().join("Applications").join("VT Code.app");
+    write_bundle(&destination, b"old-binary");
+
+    let _guard = PathGuard::with_stub_dir(&stub_dir, &log);
+    let error = replace_installed_bundle(&destination, true, |_| anyhow::bail!("install failed"))
+        .expect_err("install must fail");
+
+    assert_eq!(bundle_binary(&destination), b"old-binary");
+    assert!(!backup_path(&destination).exists());
+    let logged = std::fs::read_to_string(&log).expect("log");
+    assert!(logged.contains("mv "), "{logged}");
+    assert!(logged.contains("rm -rf"), "{logged}");
+    assert!(logged.contains(DESKTOP_BACKUP_SUFFIX), "{logged}");
+    assert!(format!("{error:#}").contains("install failed"), "{error:#}");
+}
+
+#[test]
+fn move_bundle_refuses_to_nest_into_an_existing_target() {
+    let temp = tempfile::tempdir().expect("temp");
+    let from = temp.path().join("from.app");
+    let to = temp.path().join("to.app");
+    write_bundle(&from, b"source");
+    write_bundle(&to, b"target");
+
+    let error = move_bundle(&from, &to, false).expect_err("target is occupied");
+
+    assert!(error.to_string().contains("refusing to move"), "{error:#}");
+    assert_eq!(bundle_binary(&from), b"source");
+    assert_eq!(bundle_binary(&to), b"target");
+}
+
 #[cfg(unix)]
 fn set_mode(path: &Path, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
@@ -438,6 +649,7 @@ fn installs_bundle_with_ditto_and_replaces_stale_install() {
         &[
             ("VT Code.app/Contents/Info.plist", b"plist"),
             ("VT Code.app/Contents/MacOS/vtcode-desktop", b"new-binary"),
+            ("VT Code.app/Contents/Helpers/vtcode", b"helper"),
         ],
     );
     let extract = temp.path().join("extracted");
@@ -467,6 +679,7 @@ fn ad_hoc_archive_flags_gatekeeper_approval() {
         &[
             ("VT Code.app/Contents/Info.plist", b"plist"),
             ("VT Code.app/Contents/MacOS/vtcode-desktop", b"binary"),
+            ("VT Code.app/Contents/Helpers/vtcode", b"helper"),
             ("FIRST-LAUNCH.txt", b"first launch note"),
         ],
     );
