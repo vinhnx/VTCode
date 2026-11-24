@@ -24,8 +24,6 @@ pub(super) const THEME_SWATCH_STRIDE: f32 = SWATCH_CELL_WIDTH + SWATCH_CELL_GAP;
 /// Size table for one mode's row: uniform cells, so only the visible
 /// window builds per frame. The count comes from the same grid entries the
 /// item closure indexes, so a saved custom theme extends the scroll range.
-/// Rebuilt per render: uniform math over a short count is noise next to one
-/// swatch build, and `Rc` is not `Sync` for a static.
 fn swatch_sizes(count: usize) -> Rc<Vec<Size<Pixels>>> {
     Rc::new(
         (0..count)
@@ -39,6 +37,15 @@ fn swatch_sizes(count: usize) -> Rc<Vec<Size<Pixels>>> {
             })
             .collect(),
     )
+}
+
+/// Refresh the size table only when the row count actually changes. A saved
+/// theme rename rebuilds entries and duplicates but must not reallocate the
+/// geometry the virtual list holds.
+fn refresh_swatch_sizes(sizes: &mut Rc<Vec<Size<Pixels>>>, count: usize) {
+    if sizes.len() != count {
+        *sizes = swatch_sizes(count);
+    }
 }
 
 /// The slice of live view state a swatch needs to decide its active/profile
@@ -73,11 +80,40 @@ pub(super) struct ThemeGrid {
     mode: ThemeMode,
     scroll: VirtualListScrollHandle,
     view: WeakEntity<DesktopView>,
+    /// Derived swatch data is owned by the grid and shared with the item
+    /// closure behind `Rc`, so a frame only clones refcounts — never the size
+    /// table, the entry list, or the built-in label histogram.
+    sizes: Rc<Vec<Size<Pixels>>>,
+    entries: Rc<Vec<themes::ThemeGridEntry>>,
+    duplicates: Rc<HashSet<String>>,
 }
 
 impl ThemeGrid {
-    pub(super) fn new(mode: ThemeMode, scroll: VirtualListScrollHandle, view: &Entity<DesktopView>) -> Self {
-        Self { mode, scroll, view: view.downgrade() }
+    pub(super) fn new(
+        mode: ThemeMode,
+        scroll: VirtualListScrollHandle,
+        view: &Entity<DesktopView>,
+        customs: &[themes::CustomTheme],
+    ) -> Self {
+        let mut grid = Self {
+            mode,
+            scroll,
+            view: view.downgrade(),
+            sizes: Rc::new(Vec::new()),
+            entries: Rc::new(Vec::new()),
+            duplicates: Rc::new(HashSet::new()),
+        };
+        grid.set_customs(customs);
+        grid
+    }
+
+    /// Rebuild the swatch projections after a saved-theme mutation. Called
+    /// from the save/delete callbacks, never from `render`: all three tables
+    /// stay pointer-stable across frames so virtualization does no O(n) work.
+    pub(super) fn set_customs(&mut self, customs: &[themes::CustomTheme]) {
+        self.entries = Rc::new(themes::grid_entries_for(self.mode, customs));
+        self.duplicates = Rc::new(themes::grid_duplicate_labels(customs));
+        refresh_swatch_sizes(&mut self.sizes, self.entries.len());
     }
 }
 
@@ -90,17 +126,11 @@ impl Render for ThemeGrid {
         } else {
             rust_i18n::t!("app.settings.appearance.dark").to_string()
         };
-        // Saved customs live in preferences, not the static registry. Read
-        // them from the live view each render so a theme saved mid-session (or
-        // loaded on launch) joins the row without a registry rebuild.
-        let customs = self
-            .view
-            .upgrade()
-            .map(|view| view.read(cx).preferences.custom_themes.clone())
-            .unwrap_or_default();
-        let entries = themes::grid_entries_for(mode, &customs);
-        let duplicates = themes::grid_duplicate_labels(&customs);
-        let sizes = swatch_sizes(entries.len());
+        // Saved customs arrive through `set_customs` from the save/delete
+        // callbacks (and at construction from launch preferences), so render
+        // only clones refcounts instead of rebuilding the size table and the
+        // built-in label histogram every frame.
+        let sizes = Rc::clone(&self.sizes);
         let list_id = if light { "theme-list-light" } else { "theme-list-dark" };
         let scroller_id = if light {
             "theme-scroller-light"
@@ -139,8 +169,8 @@ impl Render for ThemeGrid {
                             let selection = ThemeSelection::capture(desktop.read(cx));
                             range
                                 .filter_map(|ix| {
-                                    let entry = entries.get(ix)?.clone();
-                                    let duplicate = duplicates.contains(entry.label().as_ref());
+                                    let entry = grid.entries.get(ix)?.clone();
+                                    let duplicate = grid.duplicates.contains(entry.label().as_ref());
                                     Some(DesktopView::render_theme_swatch_content(
                                         entry, duplicate, &selection, &desktop, cx,
                                     ))
@@ -272,9 +302,40 @@ impl DesktopView {
     }
 
     /// Saved-theme mutations change both grids' rows. Each grid is its own
-    /// view, so the parent's notify does not repaint them.
+    /// view, so the parent's notify does not repaint them. Rebuild each grid's
+    /// derived swatch tables here (the only mutation path), then notify.
     pub(super) fn notify_theme_grids(&self, cx: &mut App) {
-        self.theme_grid_light.update(cx, |_, cx| cx.notify());
-        self.theme_grid_dark.update(cx, |_, cx| cx.notify());
+        let customs = &self.preferences.custom_themes;
+        self.theme_grid_light.update(cx, |grid, cx| {
+            grid.set_customs(customs);
+            cx.notify();
+        });
+        self.theme_grid_dark.update(cx, |grid, cx| {
+            grid.set_customs(customs);
+            cx.notify();
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn swatch_sizes_reuse_the_table_until_the_count_changes() {
+        let mut sizes = Rc::new(Vec::new());
+        refresh_swatch_sizes(&mut sizes, 7);
+        let first = Rc::clone(&sizes);
+        refresh_swatch_sizes(&mut sizes, 7);
+        assert!(Rc::ptr_eq(&first, &sizes));
+        assert_eq!(first.len(), 7);
+        assert_eq!(first[0].width, px(THEME_SWATCH_STRIDE));
+        assert_eq!(first[0].height, px(SWATCH_CELL_HEIGHT));
+        assert_eq!(first[6].width, px(SWATCH_CELL_WIDTH), "only the last cell drops the trailing gap");
+
+        refresh_swatch_sizes(&mut sizes, 8);
+        assert!(!Rc::ptr_eq(&first, &sizes));
+        assert_eq!(sizes.len(), 8);
+        assert_eq!(sizes[7].width, px(SWATCH_CELL_WIDTH));
     }
 }

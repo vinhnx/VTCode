@@ -199,10 +199,21 @@ impl DesktopView {
         let light_view = view_handle.clone();
         let dark_view = view_handle.clone();
         let theme_grid_light = cx.new(|_| {
-            appearance_theme_picker::ThemeGrid::new(ThemeMode::Light, theme_scroll_light.clone(), &light_view)
+            appearance_theme_picker::ThemeGrid::new(
+                ThemeMode::Light,
+                theme_scroll_light.clone(),
+                &light_view,
+                &preferences.custom_themes,
+            )
         });
-        let theme_grid_dark =
-            cx.new(|_| appearance_theme_picker::ThemeGrid::new(ThemeMode::Dark, theme_scroll_dark.clone(), &dark_view));
+        let theme_grid_dark = cx.new(|_| {
+            appearance_theme_picker::ThemeGrid::new(
+                ThemeMode::Dark,
+                theme_scroll_dark.clone(),
+                &dark_view,
+                &preferences.custom_themes,
+            )
+        });
         let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
             let target = window
                 .focus_lost_restore_target(cx)
@@ -689,6 +700,7 @@ impl DesktopView {
             activity_focus: cx.focus_handle().tab_stop(true),
             keyboard_focused_activity: None,
             change_list_scroll: VirtualListScrollHandle::new(),
+            tasks_scroll: VirtualListScrollHandle::new(),
             browser_scroll: VirtualListScrollHandle::new(),
             session_row_sizes: FixedRowSizeCache::default(),
             activity_row_sizes: FixedRowSizeCache::default(),

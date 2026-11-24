@@ -805,6 +805,9 @@ struct DesktopView {
     /// screen-reader position only; actions stay on the row buttons.
     keyboard_focused_activity: Option<String>,
     change_list_scroll: VirtualListScrollHandle,
+    /// Scroll position for the Tasks checklist virtual list; retained here so
+    /// it survives re-renders and can be reset on session switch.
+    tasks_scroll: VirtualListScrollHandle,
     browser_scroll: VirtualListScrollHandle,
     session_row_sizes: FixedRowSizeCache,
     activity_row_sizes: FixedRowSizeCache,

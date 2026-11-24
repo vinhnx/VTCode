@@ -207,6 +207,10 @@ fn custom_theme_rename_keeps_its_id_and_duplicate_names_are_rejected(cx: &mut Te
             assert_eq!(view.preferences.custom_themes[0].name, "Ocean Dusk");
             assert_eq!(view.theme_id, "custom-ocean-night");
         }
+        // The count is unchanged, so the size table is reused -- but the swatch
+        // label must still be rebuilt from the renamed entry.
+        scroll_theme_into_view(window, &view, "theme-custom-ocean-night", cx);
+        assert_eq!(window.find("theme-custom-ocean-night").label(), Some("Ocean Dusk (active)"));
 
         // A duplicate name is rejected case-insensitively and leaves the list
         // untouched.

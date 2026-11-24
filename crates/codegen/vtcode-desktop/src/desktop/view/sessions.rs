@@ -774,6 +774,7 @@ impl DesktopView {
         self.activity_follow_filter = None;
         self.activity_seen_head = None;
         self.change_list_scroll = VirtualListScrollHandle::new();
+        self.tasks_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
         self.restored_timeline = Arc::new(Vec::new());

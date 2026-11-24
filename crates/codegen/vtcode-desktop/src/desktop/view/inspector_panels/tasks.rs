@@ -25,10 +25,18 @@ const TRACKER_INLINE_MAX_ROWS: usize = 30;
 /// Leaf-aware current-task pick, mirroring the CLI panel: in-progress beats
 /// pending beats blocked, leaves beat parents.
 pub(in super::super) fn tracker_current_index(items: &[TrackerItemState]) -> Option<usize> {
-    let is_leaf = |index_path: &str| {
-        let prefix = format!("{index_path}.");
-        !items.iter().any(|item| item.index_path.starts_with(&prefix))
-    };
+    // One pass over the index paths collects every ancestor prefix, so each
+    // leaf test is O(1) instead of rescanning all items per candidate status.
+    // A grandchild makes *both* its parent and its grandparent non-leaves.
+    let parents: HashSet<&str> = items
+        .iter()
+        .flat_map(|item| {
+            let path = item.index_path.as_str();
+            path.char_indices()
+                .filter(|(_, ch)| *ch == '.')
+                .filter_map(move |(ix, _)| path.get(..ix))
+        })
+        .collect();
     for want_leaf in [true, false] {
         for status in [
             TrackerItemStatus::InProgress,
@@ -38,7 +46,7 @@ pub(in super::super) fn tracker_current_index(items: &[TrackerItemState]) -> Opt
             if let Some((index, _)) = items
                 .iter()
                 .enumerate()
-                .find(|(_, item)| item.status == status && (!want_leaf || is_leaf(item.index_path.as_str())))
+                .find(|(_, item)| item.status == status && (!want_leaf || !parents.contains(item.index_path.as_str())))
             {
                 return Some(index);
             }
@@ -98,15 +106,22 @@ impl DesktopView {
             .overflow_hidden()
             .gap_2()
             .p_3();
-        let snapshot = self.tracker_snapshot.clone().filter(|snapshot| !snapshot.items.is_empty());
-        let Some(snapshot) = snapshot else {
-            return body
-                .child(empty_state("No tasks yet", "Task tracker updates will appear here.", IconName::ListChecks))
-                .into_any_element();
+        // Read the header values once, then let the virtual-list closure borrow
+        // the live snapshot from the entity handle: cloning the whole snapshot
+        // into the closure would make every frame O(items) again.
+        let (title, progress, current, row_count) = {
+            let Some(snapshot) = self.tracker_snapshot.as_ref().filter(|snapshot| !snapshot.items.is_empty()) else {
+                return body
+                    .child(empty_state("No tasks yet", "Task tracker updates will appear here.", IconName::ListChecks))
+                    .into_any_element();
+            };
+            (
+                tracker_panel_title(snapshot),
+                format!("{}/{} complete", snapshot.completed, snapshot.total),
+                tracker_current_index(&snapshot.items),
+                snapshot.items.len(),
+            )
         };
-        let title = tracker_panel_title(&snapshot);
-        let progress = format!("{}/{} complete", snapshot.completed, snapshot.total);
-        let current = tracker_current_index(&snapshot.items);
         body = body.child(
             div()
                 .flex()
@@ -127,9 +142,9 @@ impl DesktopView {
                 ),
         );
         let row_height = scale_row_height_for_ui_font(TASKS_ROW_HEIGHT, cx.theme().font_size);
-        let item_sizes = self.tasks_row_sizes.get(snapshot.items.len(), row_height);
-        let rows: Rc<Vec<TrackerItemState>> = Rc::new(snapshot.items);
+        let item_sizes = self.tasks_row_sizes.get(row_count, row_height);
         let row_colors = *colors;
+        let scroll = self.tasks_scroll.clone();
         body.child(
             div()
                 .id("tasks-rows")
@@ -141,16 +156,23 @@ impl DesktopView {
                 .flex_1()
                 .min_h_0()
                 .overflow_hidden()
-                .child(v_virtual_list(cx.entity(), "tasks-virtual-list", item_sizes, move |_, visible_range, _, _| {
-                    visible_range
-                        .map(|index| {
-                            rows.get(index).map_or_else(
-                                || div().into_any_element(),
-                                |item| render_task_row(item, Some(index) == current, &row_colors),
-                            )
-                        })
-                        .collect()
-                })),
+                .child(
+                    v_virtual_list(cx.entity(), "tasks-virtual-list", item_sizes, move |view, visible_range, _, _| {
+                        visible_range
+                            .filter_map(|index| {
+                                let item = view
+                                    .tracker_snapshot
+                                    .as_ref()
+                                    .filter(|snapshot| !snapshot.items.is_empty())?
+                                    .items
+                                    .get(index)?;
+                                Some(render_task_row(item, index, row_count, Some(index) == current, &row_colors))
+                            })
+                            .collect()
+                    })
+                    .track_scroll(&scroll),
+                )
+                .child(Scrollbar::vertical(&scroll)),
         )
         .into_any_element()
     }
@@ -219,6 +241,8 @@ impl DesktopView {
 /// not leak the RPIT lifetime.
 fn render_task_row(
     item: &TrackerItemState,
+    index: usize,
+    row_count: usize,
     is_current: bool,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> AnyElement {
@@ -229,6 +253,8 @@ fn render_task_row(
         .test_support()
         .role(gpui_kit::Role::ListItem)
         .aria_label(label)
+        .aria_position_in_set(index + 1)
+        .aria_size_of_set(row_count)
         .flex()
         .items_center()
         .gap_2()

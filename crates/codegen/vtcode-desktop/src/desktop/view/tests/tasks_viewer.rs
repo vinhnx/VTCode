@@ -28,6 +28,32 @@ fn tracker_notification(snapshot: TrackerSnapshot) -> ThreadEventNotification {
     }
 }
 
+#[test]
+fn current_task_prefers_the_deepest_leaf_across_all_ancestor_levels() {
+    let items = vec![
+        item("1", "Parent", TrackerItemStatus::InProgress),
+        item("1.2", "Middle", TrackerItemStatus::InProgress),
+        item("1.2.3", "Leaf", TrackerItemStatus::Blocked),
+    ];
+    // Neither ancestor is a leaf: a grandchild makes every prefix along its
+    // path a parent, not just the immediate one.
+    assert_eq!(tracker_current_index(&items), Some(2));
+
+    let in_progress_leaf = vec![
+        item("1", "Parent", TrackerItemStatus::InProgress),
+        item("1.1", "Leaf", TrackerItemStatus::InProgress),
+    ];
+    assert_eq!(tracker_current_index(&in_progress_leaf), Some(1));
+
+    // With no qualifying leaf, fall back to the highest-priority parent.
+    let parent_fallback = vec![
+        item("1", "Parent", TrackerItemStatus::Blocked),
+        item("1.1", "Done leaf", TrackerItemStatus::Completed),
+    ];
+    assert_eq!(tracker_current_index(&parent_fallback), Some(0));
+    assert_eq!(tracker_current_index(&[]), None);
+}
+
 #[gpui_kit::test]
 fn tracker_updates_replace_the_tasks_snapshot(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
