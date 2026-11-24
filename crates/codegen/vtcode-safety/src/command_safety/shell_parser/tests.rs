@@ -17,6 +17,20 @@ fn output_redirection_destinations_unwraps_nested_interpreter_scripts() {
         output_redirection_destinations("bash -lc \"printf x >> '.claude/settings.json'\""),
         vec![".claude/settings.json".to_string()]
     );
+    // Short options cluster freely and runners wrap the interpreter; both must
+    // be unwrapped or Linux preflight misses the write entirely.
+    for script in [
+        "bash -ilc 'cat > .git/config'",
+        "bash -lic 'cat > .git/config'",
+        "bash -icl 'cat > .git/config'",
+        "bash -x -c 'cat > .git/config'",
+        "/bin/bash -c 'cat > .git/config'",
+        "env bash -c 'cat > .git/config'",
+        "sudo bash -c 'cat > .git/config'",
+        "command bash -c 'cat > .git/config'",
+    ] {
+        assert_eq!(output_redirection_destinations(script), vec![".git/config".to_string()], "{script}");
+    }
     // A non-shell command's argument that merely mentions `sh -c` is data.
     assert_eq!(output_redirection_destinations("echo 'sh -c cat > .git/config'"), Vec::<String>::new());
 }

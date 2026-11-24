@@ -356,42 +356,54 @@ fn collect_output_destinations(script: &str, destinations: &mut Vec<String>, dep
     }
 
     // A nested interpreter keeps its redirections inside a quoted argument, so
-    // the AST walk above cannot see them. Reuse the canonical command
-    // extractor (which already unwraps loops/conditionals) and descend only
-    // into literal `sh|bash|zsh -c|-lc <script>` invocations.
+    // the AST walk above cannot see them. Use the canonical command extractor
+    // (which already unwraps loops/conditionals) and descend into literal shell
+    // invocations, sharing prefix unwrapping with command-safety classification.
     if depth >= MAX_NESTED_SHELL_DEPTH {
         return;
     }
     for command in parse_shell_commands(script).unwrap_or_default() {
-        let Some(flag_index) = command.iter().position(|arg| matches!(arg.as_str(), "-c" | "-lc" | "-ic")) else {
+        let Some(script) = shell_inline_script(&command) else {
             continue;
         };
-        if flag_index == 0 {
+        if contains_dynamic_shell_syntax(script) {
             continue;
         }
-        let shell = std::path::Path::new(command.first().map_or("", String::as_str))
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default();
-        if !matches!(shell, "sh" | "bash" | "zsh") {
+        let inner = super::dangerous_commands::strip_nested_script_quotes(script);
+        collect_output_destinations(inner, destinations, depth + 1);
+    }
+}
+
+/// Return the inline script of a literal `sh`/`bash`/`zsh` invocation.
+///
+/// Shell short options cluster freely (`-c`, `-lc`, `-ilc`, `-lic`, `-icl`,
+/// `-x -c`), so matching a fixed list misses valid forms. In every cluster the
+/// `c` option takes the *next* argument as the script, regardless of the other
+/// letters around it. Program runner prefixes are unwrapped with the shared
+/// helper so a wrapped interpreter (`env bash -c '…'`) is not skipped either.
+fn shell_inline_script(command: &[String]) -> Option<&str> {
+    let command = super::dangerous_commands::unwrap_command_prefix(command)?;
+    let executable = command.first()?;
+    let name = std::path::Path::new(executable)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if !matches!(name, "sh" | "bash" | "zsh") {
+        return None;
+    }
+    for (index, argument) in command.iter().enumerate().skip(1) {
+        let Some(flags) = argument.strip_prefix('-') else {
+            continue;
+        };
+        // Long options never bundle `c`; only short-option clusters do.
+        if flags.starts_with('-') {
             continue;
         }
-        if let Some(inner) = command.get(flag_index + 1)
-            && !contains_dynamic_shell_syntax(inner)
-        {
-            // The extractor keeps one surrounding quote pair on the script.
-            // Strip exactly that pair; `shell_words::split` cannot be used
-            // here because it would split the inner `>` operator as a word.
-            let bytes = inner.as_bytes();
-            let inner_script =
-                if bytes.len() >= 2 && matches!(bytes[0], b'\'' | b'"') && bytes[bytes.len() - 1] == bytes[0] {
-                    inner.get(1..inner.len() - 1).unwrap_or(inner.as_str())
-                } else {
-                    inner.as_str()
-                };
-            collect_output_destinations(inner_script, destinations, depth + 1);
+        if flags.contains('c') {
+            return command.get(index + 1).map(String::as_str);
         }
     }
+    None
 }
 
 /// Parses shell script using tree-sitter bash grammar.

@@ -111,11 +111,16 @@ sandbox policy: `.git` plus agent/editor configuration directories — `.vtcode`
 `.cursor`, `.gemini`, `.windsurf`, `.opencode`, `.devin`, `.vscode`, and `.idea`. These directories matter because
 hooks, plugins, and workflows stored there (for example `.git/hooks`, `.claude/hooks`, `.cursor/hooks.json`,
 `.gemini/settings.json`) and editor format-on-save (`.vscode/settings.json`) run with the user's privileges, outside
-the command sandbox — a sandboxed write there is a host escape. macOS Seatbelt denies these writes
-at the kernel layer. Landlock
-has no deny rules, so Linux also checks literal shell output-redirection destinations against the same policy before
-launch (`cat > .git/hooks/pre-commit` is a write even though `cat` looks like a reader). Dynamic redirection targets
-are rejected earlier by shell validation and are never guessed here.
+the command sandbox — a sandboxed write there is a host escape. macOS Seatbelt denies these writes at the kernel
+layer. Landlock has no deny rules, so Linux also checks literal shell output-redirection destinations and bare
+relative write arguments against the same policy before launch (`cat > .git/hooks/pre-commit` is a write even though
+`cat` looks like a reader). Dynamic redirection targets are rejected earlier by shell validation and are never
+guessed here. The preflight resolves nested `sh`/`bash`/`zsh -c` scripts and common runner prefixes (`env`, `sudo`,
+`command`) so a hidden interpreter cannot bypass the check.
+
+Residual Linux limitation: the preflight check is lexical, so a symlink inside the workspace pointing at a protected
+directory (`link -> .git`, then `cat > link/config`) can still reach the protected file; Seatbelt resolves the final
+path and denies it. Closing that on Linux needs symlink-aware, race-tolerant canonicalization in the preflight.
 
 Provider-owned subprocesses use the same inherited-environment filter. Local Ollama, LM Studio, and llama.cpp helpers,
 plus custom provider authentication commands, do not receive unrelated API keys, cloud credentials, tokens, linker

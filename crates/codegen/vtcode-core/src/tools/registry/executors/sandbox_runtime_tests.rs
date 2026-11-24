@@ -334,6 +334,8 @@ fn preflight_blocks_redirection_writes_to_editor_and_git_config() {
         "cat > .opencode/opencode.jsonc",
         "cat > .devin/hooks/pre-tool-use.sh",
         "sh -c 'cat > .git/config'",
+        "bash -ilc 'cat > .git/config'",
+        "env bash -c 'cat > .vscode/settings.json'",
         "cat > .vscode/settings.json",
         "echo x >> .idea/workspace.xml",
         "echo x > /tmp/ws/.codex/config.toml",
