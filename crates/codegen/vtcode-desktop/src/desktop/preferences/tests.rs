@@ -432,36 +432,38 @@ fn system_motion_baseline_initializes_once_without_redundant_global_notification
 }
 
 #[gpui_kit::test]
-fn caret_stays_solid_in_kit_under_every_motion_state(cx: &mut gpui_kit::TestAppContext) {
+fn caret_blink_follows_effective_reduced_motion(cx: &mut gpui_kit::TestAppContext) {
     use gpui_kit::base::input::CursorBlink;
-    use gpui_kit::component::theme::{Theme, ThemeMode};
+    use gpui_kit::component::theme::Theme;
 
     cx.update(|cx| {
         gpui_kit::init(cx);
-        // The caret is always solid: Kit's binary blink timer never runs, and
-        // the desktop no longer draws a fade pulse — not even when reduced
-        // motion is off.
-        for (preference, baseline) in [
-            (ReducedMotionPreference::On, false),
-            (ReducedMotionPreference::Off, true),
-            (ReducedMotionPreference::System, true),
-        ] {
-            apply_reduced_motion(preference, baseline, cx);
-            assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
-            assert!(Theme::global(cx).cursor_blink.is_steady());
-            assert_eq!(Theme::global(cx).cursor_blink.idle_timeout(), None);
-            assert_eq!(
-                gpui_kit::base::Theme::global(cx).cursor_blink,
-                CursorBlink::steady(),
-                "component update projects onto the base theme inputs read"
-            );
-        }
-
-        // Theme rebuilds and appearance switches must not resurrect a blink.
-        Theme::update(cx, |_| {});
-        Theme::change(ThemeMode::Dark, None, cx);
+        // Explicit choices win over a stale opposite baseline (asymmetric).
+        apply_reduced_motion(ReducedMotionPreference::On, false, cx);
+        assert!(cx.reduce_motion());
         assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
-        assert_eq!(gpui_kit::base::Theme::global(cx).cursor_blink, CursorBlink::steady());
+        assert_eq!(
+            gpui_kit::base::Theme::global(cx).cursor_blink,
+            CursorBlink::steady(),
+            "component update projects onto the base theme inputs read"
+        );
+
+        apply_reduced_motion(ReducedMotionPreference::Off, true, cx);
+        assert!(!cx.reduce_motion());
+        assert_eq!(
+            Theme::global(cx).cursor_blink,
+            CursorBlink::default(),
+            "normal motion keeps the native OS caret blink"
+        );
+
+        // The System arm tracks the live OS value, whatever the baseline said.
+        apply_reduced_motion(ReducedMotionPreference::System, true, cx);
+        let expected = if cx.reduce_motion() {
+            CursorBlink::steady()
+        } else {
+            CursorBlink::default()
+        };
+        assert_eq!(Theme::global(cx).cursor_blink, expected);
     });
 }
 
