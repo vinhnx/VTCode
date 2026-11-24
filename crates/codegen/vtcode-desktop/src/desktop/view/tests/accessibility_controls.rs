@@ -60,3 +60,30 @@ fn high_contrast_switch_restores_the_saved_contrast_when_disabled(cx: &mut TestA
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn contrast_slider_is_a_single_keyboard_stop(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.settings_tab = SettingsTab::Accessibility;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        scroll_settings_by(window, px(-3000.), cx);
+        window.render_frame(cx);
+        focus_element_by_tab(window, "contrast-slider-control", cx);
+        let slider_id = ("slider", view.read(cx).contrast_slider.entity_id());
+        assert_eq!(window.find("contrast-slider-control").focused(), Some(true));
+        assert_eq!(window.find("contrast-slider-control").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("contrast-slider-control").label(), Some("Contrast"));
+        assert_eq!(window.find(slider_id).role(), Some(gpui_kit::Role::Slider));
+        assert_eq!(window.find(slider_id).focused(), Some(false));
+        assert_ne!(window.find(slider_id).focused(), Some(true), "the inner Kit slider must not add a second Tab stop");
+        window.press("tab", cx);
+        window.render_frame(cx);
+        assert_ne!(window.find(slider_id).focused(), Some(true), "one Tab leaves the contrast control entirely");
+        assert_eq!(window.find("contrast-slider-control").focused(), Some(false));
+    })
+    .unwrap();
+}

@@ -62,6 +62,11 @@ impl DesktopView {
                         div()
                             .id("contrast-slider-control")
                             .test_support()
+                            // This wrapper is the single focus stop; the Kit
+                            // slider keeps the value/actions but is not focused.
+                            // Name the focused node so it can be announced.
+                            .role(gpui_kit::Role::Group)
+                            .aria_label(label.clone())
                             .track_focus(&props.contrast_focus)
                             .focus_visible(move |style| style.border_1().border_color(ring))
                             .capture_any_mouse_down(move |event, window, cx| {
@@ -108,6 +113,11 @@ impl DesktopView {
                             .child(
                                 gpui_kit::component::slider::Slider::new(&props.contrast_slider)
                                     .accessibility_label(label)
+                                    // The wrapper owns the single Tab stop and the
+                                    // arrow-key handler that persists the value.
+                                    // Leaving Kit's default stop would add a second
+                                    // stop whose keys change the value without saving.
+                                    .tab_stop(false)
                                     .w(px(180.)),
                             ),
                     )
