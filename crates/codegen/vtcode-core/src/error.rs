@@ -56,7 +56,11 @@ pub struct VtCodeError {
 }
 
 /// Machine-readable error codes for precise error identification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// `Debug` uses [`DebugNoInline`] so this large unit-only enum emits one
+/// concatenated name string instead of 31 string-literal match arms, which is
+/// cheaper to compile and smaller in the binary.
+#[derive(DebugNoInline, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ErrorCode {
     // Input errors
     InvalidArgument,

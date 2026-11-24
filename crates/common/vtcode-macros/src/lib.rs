@@ -7,6 +7,11 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{Data, DataEnum, DeriveInput, Fields, parse_macro_input};
 
+/// Minimum variant count before a unit-only enum uses the concatenated-name
+/// `Debug` strategy. The strategy has a fixed cost (name string + byte scan), so
+/// it only wins once the per-arm costs of the built-in derive dominate.
+const C_LIKE_ENUM_THRESHOLD: usize = 8;
+
 /// Derive macro that generates the same boilerplate as the `string_newtype!`
 /// declarative macro. Apply to a tuple struct wrapping a single `String` field.
 ///
@@ -150,8 +155,16 @@ fn is_string_type(ty: &syn::Type) -> bool {
 /// Rust's built-in `Debug` derive emits `#[inline]` on `fmt`. For large or deeply
 /// nested types — typically error enums formatted on fan-out paths — that lets
 /// `rustc` inline the whole `Debug` tree into every `{:?}` / `?err` call site,
-/// which can bloat binary size. This derive preserves the exact `Debug` output and
-/// only changes the inlining hint.
+/// which can bloat binary size. This derive preserves the exact `Debug` output;
+/// it changes the inlining hint and, for large unit-only enums, the shape of the
+/// generated body (see below).
+///
+/// C-like enums (all unit variants) with at least `C_LIKE_ENUM_THRESHOLD`
+/// variants additionally emit one space-delimited name string and a match that
+/// yields byte offsets, instead of one `write_str("<name>")` call per arm. This
+/// removes the per-arm string literals and temporary locals that make derived
+/// `Debug` expensive to compile and large in the binary; the output is still
+/// byte-identical to the built-in derive.
 ///
 /// Use it for large/nested types whose `Debug` is formatted in hot or fan-out
 /// paths; keep `#[derive(Debug)]` for small, hot, leaf types. See
@@ -257,9 +270,22 @@ fn fmt_body_enum(data: &DataEnum) -> TokenStream2 {
         return quote! { match *self {} };
     }
 
+    // Large unit-only enums are the pathological case for the built-in derive:
+    // match checking is quadratic in arm count and borrow checking allocates a
+    // temp local for every string-literal arm. Emit one name string plus a match
+    // of integer offsets instead (the strategy upstream adopted for
+    // `derive(Debug)`). Keep a match rather than using `discriminant_value`:
+    // attribute macros such as `bitflags` can rewrite discriminants after the
+    // derive runs, which would make offsets point at the wrong names.
+    if data.variants.len() >= C_LIKE_ENUM_THRESHOLD
+        && data.variants.iter().all(|variant| matches!(variant.fields, Fields::Unit))
+    {
+        return fmt_body_c_like_enum(data);
+    }
+
     let arms = data.variants.iter().map(|variant| {
         let variant_ident = &variant.ident;
-        let variant_name = variant.ident.to_string();
+        let variant_name = field_name(variant_ident);
         match &variant.fields {
             Fields::Unit => quote! {
                 Self::#variant_ident => f.write_str(#variant_name),
@@ -308,6 +334,41 @@ fn fmt_body_enum(data: &DataEnum) -> TokenStream2 {
         match self {
             #(#arms)*
         }
+    }
+}
+
+/// `Debug` body for a unit-only enum: write a name sliced out of one
+/// space-delimited string. Offsets are byte offsets computed from the variant
+/// names, and the delimiter is found with an ASCII byte scan (no UTF-8 iterator
+/// or panic-formatting machinery). Raw-identifier prefixes are stripped so the
+/// output matches the built-in derive.
+fn fmt_body_c_like_enum(data: &DataEnum) -> TokenStream2 {
+    let mut names = String::new();
+    let mut offset = 0usize;
+    let mut arms = Vec::with_capacity(data.variants.len());
+    for variant in &data.variants {
+        let variant_ident = &variant.ident;
+        let name = field_name(variant_ident);
+        if !names.is_empty() {
+            names.push(' ');
+        }
+        names.push_str(&name);
+        arms.push(quote! { Self::#variant_ident => #offset, });
+        offset += name.len() + 1;
+    }
+
+    quote! {
+        const __NAMES: &str = #names;
+        let __start: usize = match self {
+            #(#arms)*
+        };
+        let __tail = __NAMES.get(__start..).unwrap_or_default();
+        let __end = __tail
+            .as_bytes()
+            .iter()
+            .position(|byte| *byte == b' ')
+            .unwrap_or(__tail.len());
+        f.write_str(__tail.get(..__end).unwrap_or_default())
     }
 }
 

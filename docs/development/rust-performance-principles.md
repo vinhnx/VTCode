@@ -219,6 +219,20 @@ garbage-collects `Debug` impls that are never referenced, so only impls reached 
 sites contribute. Measure before converting — see the derived-trait recipe in
 `docs/analysis/BLOATY_ANALYSIS.md`.
 
+### Large C-like enums: one name string instead of one literal per arm
+
+For a unit-only ("C-like") enum, the built-in `Debug` derive emits one match arm per variant,
+each holding its own string literal. Match checking is quadratic in the arm count and borrow
+checking allocates a temporary local per literal, so `Debug` on a large enum is a compile-time
+and binary-size hotspot ([compile time improvements for `derive(Debug)`](https://yoyo-code.com/derive-debug-compile-time-improvements/),
+Nov 2026). `DebugNoInline` applies the upstream strategy to enums with at least eight unit
+variants: a single space-delimited name string plus a match yielding byte offsets, with the name
+sliced out by an ASCII byte scan (no UTF-8 iterator or panic-formatting machinery). Output is
+byte-identical to the built-in derive, guarded by the output-equivalence tests in
+`vtcode-macros`. The match deliberately does **not** use `discriminant_value`: attribute macros
+such as `bitflags` can rewrite discriminants after the derive runs, which would make offsets
+point at the wrong names (the upstream TOCTOU regression).
+
 ---
 
 ## ABI Stability & Standard Library Evolution

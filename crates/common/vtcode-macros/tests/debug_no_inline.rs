@@ -57,6 +57,29 @@ mod std_types {
     #[derive(Debug)]
     pub enum Never {}
 
+    /// Ten variants crosses the C-like path threshold; `r#type` checks that raw
+    /// prefixes are stripped exactly like the built-in derive.
+    #[allow(non_camel_case_types)]
+    #[derive(Debug)]
+    pub enum CLike {
+        Alpha,
+        Beta,
+        Gamma,
+        Delta,
+        Epsilon,
+        Zeta,
+        Eta,
+        Theta,
+        Iota,
+        r#type,
+    }
+
+    #[derive(Debug)]
+    pub enum TinyCLike {
+        Alpha,
+        Beta,
+    }
+
     #[derive(Debug)]
     pub struct Generic<T, U> {
         pub first: T,
@@ -137,6 +160,27 @@ mod no_inline_types {
 
     #[derive(DebugNoInline)]
     pub enum Never {}
+
+    #[allow(non_camel_case_types)]
+    #[derive(DebugNoInline)]
+    pub enum CLike {
+        Alpha,
+        Beta,
+        Gamma,
+        Delta,
+        Epsilon,
+        Zeta,
+        Eta,
+        Theta,
+        Iota,
+        r#type,
+    }
+
+    #[derive(DebugNoInline)]
+    pub enum TinyCLike {
+        Alpha,
+        Beta,
+    }
 
     #[derive(DebugNoInline)]
     pub struct Generic<T, U> {
@@ -277,4 +321,44 @@ fn empty_enum_compiles_with_debug() {
     fn assert_debug<T: std::fmt::Debug>() {}
     assert_debug::<std_types::Never>();
     assert_debug::<no_inline_types::Never>();
+}
+
+/// Every variant of a large unit-only enum must print byte-identically to the
+/// built-in derive, including the raw-identifier variant (prefix stripped).
+#[test]
+fn c_like_enum_matches_std_derive_for_every_variant() {
+    let expected = [
+        std_types::CLike::Alpha,
+        std_types::CLike::Beta,
+        std_types::CLike::Gamma,
+        std_types::CLike::Delta,
+        std_types::CLike::Epsilon,
+        std_types::CLike::Zeta,
+        std_types::CLike::Eta,
+        std_types::CLike::Theta,
+        std_types::CLike::Iota,
+        std_types::CLike::r#type,
+    ];
+    let actual = [
+        no_inline_types::CLike::Alpha,
+        no_inline_types::CLike::Beta,
+        no_inline_types::CLike::Gamma,
+        no_inline_types::CLike::Delta,
+        no_inline_types::CLike::Epsilon,
+        no_inline_types::CLike::Zeta,
+        no_inline_types::CLike::Eta,
+        no_inline_types::CLike::Theta,
+        no_inline_types::CLike::Iota,
+        no_inline_types::CLike::r#type,
+    ];
+    for (expected, actual) in expected.iter().zip(actual.iter()) {
+        assert_same(expected, actual);
+    }
+}
+
+/// Below the threshold the derive keeps the straightforward per-arm path.
+#[test]
+fn small_unit_only_enum_matches_std_derive() {
+    assert_same(&std_types::TinyCLike::Alpha, &no_inline_types::TinyCLike::Alpha);
+    assert_same(&std_types::TinyCLike::Beta, &no_inline_types::TinyCLike::Beta);
 }
