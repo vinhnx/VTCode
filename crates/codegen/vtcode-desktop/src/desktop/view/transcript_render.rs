@@ -526,8 +526,9 @@ impl DesktopView {
                         // and short non-list messages keep their pills.
                         .when(user && item.has_list, |bubble| bubble.w_full())
                         .content(
+                            // Kit owns the bubble geometry: radius_2xl for the
+                            // user surface, none for the transparent Ghost.
                             BubbleContent::new()
-                                .rounded(px(18.))
                                 .when(user, |surface| {
                                     surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_2()
                                 })
