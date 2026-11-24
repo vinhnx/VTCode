@@ -883,7 +883,11 @@ pub(super) fn caret_fade_min_opacity(colors: &ThemeColor) -> f32 {
         let surface_rgb = gpui_kit::Rgba::from(surface);
         let mut smallest = 1.0;
         for step in 0..=STEPS {
-            let alpha = FLOOR + (1.0 - FLOOR) * f32::from(step) / f32::from(STEPS);
+            let opacity = FLOOR + (1.0 - FLOOR) * f32::from(step) / f32::from(STEPS);
+            // Kit's `caret_opacity` multiplies the theme color's own alpha, so
+            // the composited alpha is the product. A translucent caret (e.g. an
+            // imported custom accent) must fade less than an opaque one.
+            let alpha = caret.a * opacity;
             let blended = Hsla::from(gpui_kit::Rgba {
                 r: caret.r * alpha + surface_rgb.r * (1.0 - alpha),
                 g: caret.g * alpha + surface_rgb.g * (1.0 - alpha),
@@ -891,7 +895,7 @@ pub(super) fn caret_fade_min_opacity(colors: &ThemeColor) -> f32 {
                 a: 1.0,
             });
             if contrast_ratio(blended, surface) >= CONTRAST_FLOOR {
-                smallest = alpha;
+                smallest = opacity;
                 break;
             }
         }

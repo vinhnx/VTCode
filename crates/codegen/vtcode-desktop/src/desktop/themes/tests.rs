@@ -402,17 +402,55 @@ fn caret_fade_keeps_the_focus_contrast_floor_on_every_theme(cx: &mut gpui_kit::T
                 ("popover", colors.popover),
             ] {
                 let surface_rgb = gpui_kit::Rgba::from(surface);
+                // Kit multiplies its opacity setting by the caret color's own
+                // alpha, so that product is what actually gets composited.
+                let alpha = caret.a * min;
                 let blended = Hsla::from(gpui_kit::Rgba {
-                    r: caret.r * min + surface_rgb.r * (1.0 - min),
-                    g: caret.g * min + surface_rgb.g * (1.0 - min),
-                    b: caret.b * min + surface_rgb.b * (1.0 - min),
+                    r: caret.r * alpha + surface_rgb.r * (1.0 - alpha),
+                    g: caret.g * alpha + surface_rgb.g * (1.0 - alpha),
+                    b: caret.b * alpha + surface_rgb.b * (1.0 - alpha),
                     a: 1.0,
                 });
                 let ratio = contrast_ratio(blended, surface);
-                assert!(ratio >= 3.0, "{}: faded caret on {name} is {ratio:.2} at alpha {min:.2}", palette.id);
+                assert!(ratio >= 3.0, "{}: faded caret on {name} is {ratio:.2} at opacity {min:.2}", palette.id);
             }
         }
         assert!(any_theme_fades, "the fade must be available on at least one theme");
+    });
+}
+
+#[gpui_kit::test]
+fn caret_fade_accounts_for_a_translucent_caret_color(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let _mode = apply_by_id(DEFAULT_THEME_ID, None, cx);
+        let mut colors = cx.theme().colors;
+        let opaque_min = caret_fade_min_opacity(&colors);
+        // A custom accent can carry alpha; Kit's caret_opacity multiplies it.
+        colors.caret = colors.caret.opacity(0.9);
+        let translucent_min = caret_fade_min_opacity(&colors);
+        assert!(
+            translucent_min > opaque_min,
+            "a translucent caret must fade less than an opaque one: {translucent_min:.2} vs {opaque_min:.2}"
+        );
+
+        let caret = gpui_kit::Rgba::from(colors.caret);
+        for (name, surface) in [
+            ("canvas", colors.background),
+            ("panel", colors.secondary),
+            ("popover", colors.popover),
+        ] {
+            let surface_rgb = gpui_kit::Rgba::from(surface);
+            let alpha = caret.a * translucent_min;
+            let blended = Hsla::from(gpui_kit::Rgba {
+                r: caret.r * alpha + surface_rgb.r * (1.0 - alpha),
+                g: caret.g * alpha + surface_rgb.g * (1.0 - alpha),
+                b: caret.b * alpha + surface_rgb.b * (1.0 - alpha),
+                a: 1.0,
+            });
+            let ratio = contrast_ratio(blended, surface);
+            assert!(ratio >= 3.0, "translucent caret on {name} is {ratio:.2} at opacity {translucent_min:.2}");
+        }
     });
 }
 
