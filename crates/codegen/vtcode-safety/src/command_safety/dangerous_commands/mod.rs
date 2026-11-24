@@ -71,24 +71,15 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
     false
 }
 
-/// Shell options that make the next argument an inline script.
-const NESTED_SCRIPT_FLAGS: &[&str] = &["-c", "-lc", "-ilc"];
-
 /// Return the inline script of a `bash`/`sh`/`zsh -c` style command.
 ///
 /// The returned slice is raw argument text, so it may still carry the shell
 /// quotes around the script; run it through [`strip_nested_script_quotes`]
-/// before analyzing its contents.
+/// before analyzing its contents. Delegates to the one canonical recognizer
+/// so the approval layer and the sandbox preflight cannot disagree about which
+/// flags carry a script (`-lic`, `-icl`, `-x -c`, `env bash -c`, …).
 pub(super) fn nested_shell_script(command: &[String]) -> Option<&str> {
-    match command {
-        [executable, flag, script, ..]
-            if matches!(extract_command_name(executable), "bash" | "sh" | "zsh")
-                && NESTED_SCRIPT_FLAGS.contains(&flag.as_str()) =>
-        {
-            Some(script)
-        }
-        _ => None,
-    }
+    crate::command_safety::shell_parser::shell_inline_script(command)
 }
 
 /// Strip one matching pair of shell quotes from a nested `-c` script.

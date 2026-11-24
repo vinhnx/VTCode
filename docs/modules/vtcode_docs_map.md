@@ -108,8 +108,8 @@ below based on the topic area.
 
 - **File**: `docs/development/allocator_memory.md`
   - **Content**: Allocator & Memory Behavior
-  - **Topics**: The problem, Allocator selection, Allocation throughput trade-off (measured), Measuring it,
-    Implementation
+  - **Topics**: The problem, Allocator selection, Memory-bounding caveats, Allocation throughput trade-off (measured),
+    Measuring it
   - **User Questions**: "What can you tell me about Allocator & Memory Behavior?", "How does The problem work?", "How
     does Allocator selection work?"
 

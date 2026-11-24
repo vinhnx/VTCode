@@ -50,6 +50,35 @@ fn nested_shell_script_keeps_inline_code_in_approval_classification() {
 }
 
 #[test]
+fn nested_shell_clustered_flags_and_runners_stay_classified() {
+    // A fixed `-c|-lc|-ilc` list let `-lic`, `-icl`, `-x -c` and wrapped
+    // interpreters skip both hard rejection and inline-code approval.
+    for prefix in [
+        vec!["bash", "-lic"],
+        vec!["bash", "-icl"],
+        vec!["bash", "-x", "-c"],
+        vec!["/bin/bash", "-lc"],
+        vec!["env", "MODE=test", "bash", "-c"],
+        vec!["sudo", "bash", "-c"],
+        vec!["command", "bash", "-c"],
+    ] {
+        let mut destructive = prefix.clone();
+        destructive.push("'rm -rf /'");
+        let command = vec_str(&destructive);
+        assert!(command_might_be_dangerous(&command), "destructive nested script: {command:?}");
+
+        let mut inline = prefix;
+        inline.push("'python3 -c \"print(1)\"'");
+        let command = vec_str(&inline);
+        assert!(command_requires_approval(&command), "inline nested code: {command:?}");
+    }
+
+    let benign = vec_str(&["bash", "-lic", "'echo MARKER'"]);
+    assert!(!command_might_be_dangerous(&benign));
+    assert!(!command_requires_approval(&benign));
+}
+
+#[test]
 fn posix_test_builtin_is_not_a_dynamic_executable() {
     assert!(!command_might_be_dangerous(&vec_str(&["[", "-t", "1", "]"])));
     assert!(!command_might_be_dangerous(&vec_str(&["[", "-f", "src/main.rs", "]"])));

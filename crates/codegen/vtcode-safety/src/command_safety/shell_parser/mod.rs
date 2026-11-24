@@ -381,7 +381,7 @@ fn collect_output_destinations(script: &str, destinations: &mut Vec<String>, dep
 /// `c` option takes the *next* argument as the script, regardless of the other
 /// letters around it. Program runner prefixes are unwrapped with the shared
 /// helper so a wrapped interpreter (`env bash -c '…'`) is not skipped either.
-fn shell_inline_script(command: &[String]) -> Option<&str> {
+pub(crate) fn shell_inline_script(command: &[String]) -> Option<&str> {
     let command = super::dangerous_commands::unwrap_command_prefix(command)?;
     let executable = command.first()?;
     let name = std::path::Path::new(executable)
