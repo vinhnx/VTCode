@@ -142,6 +142,35 @@ for file in .github/workflows/*.yml; do
             report_error "$file" "$line" "action '$uses_ref' has no $LOCKFILE section for $file; run \`gh actions-lock\`"
         fi
     done < <(rg -nH '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*' "$file" || true)
+
+    # install-action resolves an unpinned `tool:` to latest at CI time, so a
+    # compromised upstream release would flow straight into the runner. Every
+    # entry must carry an explicit @version; manifested tools additionally get
+    # SHA-256 and attestation verification of the pinned download, while the
+    # cargo-binstall fallback (ripgrep) pins the version over TLS only. A
+    # `${{ }}`-resolved version (like the nextest steps) already contains `@`
+    # and passes.
+    while IFS=: read -r _path line text; do
+        tool_value=$(printf '%s\n' "$text" | sed -E 's/^[[:space:]]*tool:[[:space:]]*//' | sed -E 's/[[:space:]]+#.*$//' | tr -d '"' | tr -d "'")
+        # `IFS=: read` drops the trailing colon of a bare `tool:` line, leaving
+        # the word `tool` as the whole remainder; that means a null value, the
+        # same as the empty string (any real value keeps its colon in `text`).
+        tool_stripped=$(printf '%s' "$tool_value" | tr -d '[:space:]')
+        if [ -z "$tool_stripped" ] || [ "$tool_stripped" = "tool" ]; then
+            report_error "$file" "$line" "install-action 'tool:' must name a tool with an explicit version (tool: name@version)"
+            continue
+        fi
+        IFS=',' read -ra entries <<<"$tool_value"
+        for entry in "${entries[@]}"; do
+            entry_trimmed=$(printf '%s' "$entry" | tr -d '[:space:]')
+            case "$entry_trimmed" in
+            ?*@?*) ;;
+            *)
+                report_error "$file" "$line" "install-action tool '$entry_trimmed' must pin an explicit version (tool: name@version); unpinned tools resolve to latest at CI time"
+                ;;
+            esac
+        done
+    done < <(rg -nH '^[[:space:]]*tool:[[:space:]]*' "$file" || true)
 done
 
 # Stale allowlist entries fail: every exception must reference an existing

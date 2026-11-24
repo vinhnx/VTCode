@@ -195,11 +195,22 @@ run_structured_logging_lint() {
 
 run_workflow_security_lint() {
 	print_status "Running workflow security policy checks..."
+	local failed=0
 	if ./scripts/check_workflow_security.sh; then
 		print_success "Workflow security policy checks passed!"
-		return 0
 	else
 		print_error "Workflow security policy checks failed."
+		failed=1
+	fi
+	if bash scripts/tests/test_workflow_security.sh; then
+		print_success "Workflow security policy tests passed!"
+	else
+		print_error "Workflow security policy tests failed."
+		failed=1
+	fi
+	if [ "$failed" -eq 0 ]; then
+		return 0
+	else
 		return 1
 	fi
 }

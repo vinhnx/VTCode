@@ -157,7 +157,9 @@ jobs:
       - name: Install ripgrep
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: ripgrep
+          # Pinned (cargo-binstall fallback: TLS only, no checksum to verify).
+          # Unpinned tools resolve to latest at CI time; bump deliberately.
+          tool: ripgrep@15.2.0
 
       # PRs run only the packages the diff can reach; main and manual runs
       # execute the full workspace suite and record test times for shard
@@ -270,7 +272,8 @@ jobs:
       - name: Install ripgrep
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: ripgrep
+          # Pinned like the Linux job (binstall fallback: TLS only, no checksum).
+          tool: ripgrep@15.2.0
 
       - name: Sandbox path policy
         shell: bash

@@ -120,7 +120,9 @@ jobs:
       - name: Install cargo-auditable
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: cargo-auditable
+          # Pinned: unpinned tools resolve to latest at CI time. Bump
+          # deliberately; the action verifies SHA-256 and attestations.
+          tool: cargo-auditable@0.7.7
 
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
@@ -297,7 +299,9 @@ jobs:
       - name: Install Cross
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: cross
+          # Pinned: unpinned tools resolve to latest at CI time. Bump
+          # deliberately; the action verifies SHA-256 and attestations.
+          tool: cross@0.2.5
 
       - name: Build with cross (${{ matrix.target }})
         # No cargo-auditable here: cross runs cargo inside its container, so
@@ -456,7 +460,8 @@ jobs:
       - name: Install cargo-auditable
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: cargo-auditable
+          # Pinned like the Linux job: unpinned tools resolve to latest at CI time.
+          tool: cargo-auditable@0.7.7
 
       - name: Build (x86_64-pc-windows-msvc)
         # --locked (not --frozen): --frozen implies --offline, and a

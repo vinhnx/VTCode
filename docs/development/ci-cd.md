@@ -28,9 +28,9 @@ gh actions-lock
 
 Commit the workflow and `actions.lock` changes together. Verification runs at two levels:
 
-- **Offline / local:** `./scripts/check.sh workflow-security` checks trigger policy and that every
-  symbolic ref has a lockfile entry with a 40-character commit. `gh actions-lock --verify-local`
-  is an equivalent offline coverage check.
+- **Offline / local:** `./scripts/check.sh workflow-security` checks trigger policy, install-action
+  tool pins, and that every symbolic ref has a lockfile entry with a 40-character commit.
+  `gh actions-lock --verify-local` is an equivalent offline coverage check.
 - **CI:** `verify-lockfile.yml` installs a pinned `gh-actions-lock` extension and runs
   `gh actions-lock --verify`, which additionally re-resolves every ref upstream and fails when a
   pin is stale or unreachable.
@@ -41,6 +41,15 @@ action resolves to the exact commit it was previously pinned to. Full semver tag
 for actions with moving major tags; see the
 [install-action security guidance](https://github.com/taiki-e/install-action#security). Dependabot
 updates refs and the lockfile together with a 7-day `cooldown` so fresh releases settle first.
+
+`taiki-e/install-action` `tool:` entries follow the same rule one layer down: every tool pins an
+explicit `@version` (`tool: ripgrep@15.2.0`), because an unpinned tool resolves to latest at CI
+time. `nextest` is the exception — it resolves its version from `.config/nextest.toml` instead of
+a literal. For manifested tools the action verifies SHA-256 checksums and artifact attestations
+for the pinned version; `ripgrep` resolves through the cargo-binstall fallback instead, which
+pins the version over TLS but has no upstream checksum to verify. Bump pins deliberately, past
+the cooldown window. Unpinned entries fail `./scripts/check.sh workflow-security`, and
+`scripts/tests/test_workflow_security.sh` pins that rule.
 
 ### Workflow static analysis (zizmor)
 

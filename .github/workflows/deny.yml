@@ -81,12 +81,16 @@ jobs:
       - name: Install cargo-vet
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: cargo-vet
+          # Pinned: unpinned tools resolve to latest at CI time. Bump
+          # deliberately; the action verifies SHA-256 and attestations.
+          tool: cargo-vet@0.10.3
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2.90.5
         with:
-          tool: cargo-audit
+          # Pinned: unpinned tools resolve to latest at CI time. Bump
+          # deliberately; the action verifies SHA-256 and attestations.
+          tool: cargo-audit@0.22.2
 
       # --locked reuses the committed imports.lock without fetching new upstream
       # audits, so the check is deterministic. Refresh imports explicitly with
