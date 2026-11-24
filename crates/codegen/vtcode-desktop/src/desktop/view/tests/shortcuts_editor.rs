@@ -153,6 +153,13 @@ fn direct_action_dispatch_bypasses_key_context_suppression(cx: &mut TestAppConte
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
     cx.update(|cx| {
+        assert!(
+            view.read(cx)
+                .shortcut_message
+                .as_ref()
+                .is_some_and(|message| message.contains("already assigned")),
+            "cmd-b reaches the capture validator and is rejected as a duplicate"
+        );
         assert_eq!(view.read(cx).sidebar_open, sidebar_open, "suppressed chord stays inert while capturing")
     });
 
