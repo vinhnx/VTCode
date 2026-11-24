@@ -5,6 +5,8 @@ keyboard-only operation, reduced motion, high-contrast or light/dark terminal th
 
 Our practical target is WCAG 2.1 AA where it applies to a terminal app — notably 4.5:1 minimum text contrast — plus
 no pointer-only workflows, honored OS accessibility preferences, and plain-text alternatives to the fullscreen TUI.
+That is a target, not a verified conformance claim: we have not run a formal WCAG evaluation, so we document the
+environments we test and the gaps we know about instead.
 
 ## What we do
 
@@ -72,23 +74,34 @@ no pointer-only workflows, honored OS accessibility preferences, and plain-text 
 - Windows support and some terminal-specific key bindings (for example `Shift+Enter` multiline input) vary by
   terminal; the keyboard-shortcuts guide documents per-terminal notes and fallbacks.
 
-We treat these as bugs when they block real workflows. Reporting them helps us prioritize.
+We treat these as bugs when they block real workflows. Reporting them helps us prioritize. Open remediation work is
+tracked in [accessibility issues](https://github.com/vinhnx/VTCode/issues?q=is%3Aissue+is%3Aopen+a11y); closed items
+in the same search show what has already been fixed.
 
 ## Reporting accessibility issues
 
-1. Open a [bug report](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) with `[a11y]` in the title.
-2. Include the Environment section from the template (OS, VT Code version, terminal, shell) plus:
-   - Assistive technology and version (for example screen reader, magnifier, voice control).
-   - Terminal settings that matter (light/dark, color overrides, `NO_COLOR`, `mouse_capture`, `reduce_motion_mode`,
-     `screen_reader_mode`, relevant `vtcode.toml` excerpt with secrets removed).
-   - Steps to reproduce, what you expected, and what actually happened.
-3. For questions or design discussion, use
+1. Open an [accessibility barrier report](https://github.com/vinhnx/VTCode/issues/new?template=accessibility_report.md).
+   It requests the `accessibility` and `bug` labels; GitHub applies only labels that already exist, so maintainers add
+   `accessibility` during triage if it is missing. A [general bug report](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md)
+   with `[a11y]` in the title works too.
+2. Include whatever context you can: the task you were doing, the surface (TUI, headless command, desktop app, or
+   docs), what you expected and what actually happened, your OS, terminal, and any assistive technology in use.
+   Screenshots, recordings, and logs are optional — you do not need to disclose a disability or prove a barrier to
+   report it.
+3. If you already have a workaround, include it so we can share it while a fix is in progress.
+4. For questions or design discussion, use
    [GitHub Discussions](https://github.com/vinhnx/VTCode/discussions).
-4. Never report a security vulnerability in a public issue. Use
+5. Never report a security vulnerability in a public issue. Use
    [private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new). Details:
    [Security Policy](../docs/SECURITY.md).
 
-We aim to acknowledge reports promptly and will coordinate fixes openly unless privacy requires otherwise.
+## How we respond
+
+We acknowledge new reports, triage them alongside other bugs, and track confirmed barriers as `[a11y]` issues, adding
+the `accessibility` label during triage. Maintainers assign or confirm severity during triage; reporters do not need
+to. We post status updates when a fix is planned or blocked, note a workaround when one exists, and ask the reporter to
+verify a fix when it ships. We do not promise a fixed timeline, and we keep reports open until the barrier is resolved
+or clearly scoped out with a documented reason.
 
 ## Contributor expectations
 
@@ -98,7 +111,12 @@ We aim to acknowledge reports promptly and will coordinate fixes openly unless p
 - Test TUI changes with `VTCODE_REDUCE_MOTION=1`, `VTCODE_SCREEN_READER=1`, `VTCODE_HIGH_CONTRAST=1`, `NO_COLOR=1`, and
   a light and a dark theme before opening a PR, and run `./scripts/check-dev.sh` plus
   `cargo nextest run -p vtcode-ui -E 'test(theme)'`. `python3 scripts/check_accessibility.py` guards the documented
-  switch contract and desktop locale parity.
+  switch contract, the reporting path, and desktop locale parity.
+- The same expectations apply to coding agents. `AGENTS.md` carries the accessibility rules for automated changes,
+  and agent-authored PRs are held to the same checks as human PRs.
+- When a change affects prompts or terminal output, show the rendered result under the relevant switches
+  (`VTCODE_SCREEN_READER=1`, `VTCODE_REDUCE_MOTION=1`, `NO_COLOR=1`, and a light and a dark theme) in the PR, not just
+  a screenshot of the default theme.
 - Follow [Contributing](../docs/CONTRIBUTING.md) (Conventional Commits, surgical diffs, docs with user-facing changes).
 
 ## Technical notes
@@ -109,5 +127,8 @@ and Markdown documentation. No audio, video, or CAPTCHA content ships in the def
 
 ## Maintenance
 
-This statement is maintained by the VT Code maintainers alongside the docs. Last reviewed: 2026-11-21. If this file
-and the linked guides disagree, the guides describe current behavior; please file an issue so we can fix the statement.
+This statement is maintained by the VT Code maintainers alongside the docs. Last reviewed: 2026-11-24. To suggest a
+change to this statement or our accessibility practices, open an
+[accessibility barrier report](https://github.com/vinhnx/VTCode/issues/new?template=accessibility_report.md) or start a
+[discussion](https://github.com/vinhnx/VTCode/discussions). If this file and the linked guides disagree, the guides
+describe current behavior; please file an issue so we can fix the statement.

@@ -14,6 +14,8 @@ the specific invariants this project has already committed to:
   config field reference and in `.github/ACCESSIBILITY.md`
 - the new high-contrast switch is exposed in both the config example and the
   generated reference
+- the statement's reporting path points at a template that requests the
+  `accessibility` label and still contains the required sections
 
 Usage: python3 scripts/check_accessibility.py [--root PATH]
 """
@@ -67,7 +69,17 @@ REMEDIATION = (
     "1. Add the missing locale value to crates/codegen/vtcode-desktop/locales/app.settings.yml.\n"
     "2. Regenerate docs/config/config_field_reference.md with\n"
     "   python3 scripts/generate_config_field_reference.py.\n"
-    "3. Update .github/ACCESSIBILITY.md when user-facing behavior changes."
+    "3. Update .github/ACCESSIBILITY.md when user-facing behavior changes.\n"
+    "4. Keep .github/ISSUE_TEMPLATE/accessibility_report.md and its link in sync with the statement."
+)
+
+ACCESSIBILITY_TEMPLATE = ".github/ISSUE_TEMPLATE/accessibility_report.md"
+REPORTING_SECTIONS = (
+    "## Reporting accessibility issues",
+    "## How we respond",
+    "## Contributor expectations",
+    "## Known limitations",
+    "## Maintenance",
 )
 
 
@@ -115,12 +127,46 @@ def check_documented_switches(root: Path) -> list[str]:
     return errors
 
 
+def check_reporting_contract(root: Path) -> list[str]:
+    """Keep the statement's reporting path and its issue template in sync."""
+    errors: list[str] = []
+    statement_path = root / ".github/ACCESSIBILITY.md"
+    if not statement_path.is_file():
+        return ["accessibility statement is missing"]
+    statement = statement_path.read_text(encoding="utf-8")
+    if "template=accessibility_report.md" not in statement:
+        errors.append(
+            "accessibility statement does not link to the accessibility issue template"
+        )
+    for section in REPORTING_SECTIONS:
+        if section not in statement:
+            errors.append(f"accessibility statement is missing section: {section}")
+    template_path = root / ACCESSIBILITY_TEMPLATE
+    if not template_path.is_file():
+        errors.append(f"missing {ACCESSIBILITY_TEMPLATE}")
+        return errors
+    template = template_path.read_text(encoding="utf-8")
+    if not re.search(r"^labels:.*\baccessibility\b", template, re.MULTILINE):
+        errors.append(
+            "accessibility issue template does not request the accessibility label"
+        )
+    if "disability" not in template or "optional" not in template:
+        errors.append(
+            "accessibility issue template must make media optional and avoid disability disclosure"
+        )
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help="repository root")
     args = parser.parse_args()
 
-    errors = check_locale_parity(args.root) + check_documented_switches(args.root)
+    errors = (
+        check_locale_parity(args.root)
+        + check_documented_switches(args.root)
+        + check_reporting_contract(args.root)
+    )
     if errors:
         print("Accessibility contract drift detected:", file=sys.stderr)
         for error in errors:

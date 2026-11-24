@@ -48,6 +48,62 @@ class ContractTests(unittest.TestCase):
             self.assertIn("contrast", errors[0])
             self.assertIn("vi", errors[0])
 
+    def test_reporting_contract_passes_on_shipped_tree(self):
+        self.assertEqual(module.check_reporting_contract(module.REPO_ROOT), [])
+
+    def test_missing_issue_template_is_reported(self):
+        with tempfile.TemporaryDirectory(prefix="vtcode-a11y-") as directory:
+            root = Path(directory)
+            (root / ".github").mkdir()
+            (root / ".github/ACCESSIBILITY.md").write_text(
+                "template=accessibility_report.md\n"
+                + "\n".join(module.REPORTING_SECTIONS),
+                encoding="utf-8",
+            )
+            errors = module.check_reporting_contract(root)
+            self.assertEqual(len(errors), 1)
+            self.assertIn(module.ACCESSIBILITY_TEMPLATE, errors[0])
+
+    def test_wrong_label_is_reported(self):
+        with tempfile.TemporaryDirectory(prefix="vtcode-a11y-") as directory:
+            root = self._reporting_root(directory, label="bug", media_guidance=True)
+            errors = module.check_reporting_contract(root)
+            self.assertEqual(len(errors), 1)
+            self.assertIn("does not request the accessibility label", errors[0])
+
+    def test_missing_media_guidance_and_section_are_reported(self):
+        with tempfile.TemporaryDirectory(prefix="vtcode-a11y-") as directory:
+            root = self._reporting_root(
+                directory,
+                label="accessibility",
+                media_guidance=False,
+                omit_section="## How we respond",
+            )
+            errors = module.check_reporting_contract(root)
+            self.assertEqual(len(errors), 2)
+            self.assertTrue(any("make media optional" in error for error in errors))
+            self.assertTrue(any("## How we respond" in error for error in errors))
+
+    @staticmethod
+    def _reporting_root(directory, *, label, media_guidance, omit_section=None):
+        root = Path(directory)
+        template_dir = root / ".github/ISSUE_TEMPLATE"
+        template_dir.mkdir(parents=True)
+        (root / ".github/ACCESSIBILITY.md").write_text(
+            "template=accessibility_report.md\n"
+            + "\n".join(s for s in module.REPORTING_SECTIONS if s != omit_section),
+            encoding="utf-8",
+        )
+        guidance = (
+            "Media is optional; no disability disclosure needed.\n"
+            if media_guidance
+            else ""
+        )
+        (template_dir / "accessibility_report.md").write_text(
+            f"labels: {label}\n{guidance}", encoding="utf-8"
+        )
+        return root
+
     def test_undocumented_switch_is_reported(self):
         with tempfile.TemporaryDirectory(prefix="vtcode-a11y-") as directory:
             root = Path(directory)
