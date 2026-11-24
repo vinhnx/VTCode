@@ -52,17 +52,18 @@ Icons & Assets reviewed 2026-11-24 against the
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims re-verified against pinned
 `gpui-kit-assets 0.10.0` generated `IconName`/`icon_assets!` and the desktop asset source). "Depending on the crate
 does not embed every icon" is ALREADY HONORED: `with_assets(DesktopAssets)` is registered before any window opens,
-and the composite source checks `ExtraIcons` before falling back to the 101 default `KitAssets`, merging/sorting/
+and the composite source checks `ExtraIcons` before falling back to the 106 default `KitAssets`, merging/sorting/
 deduping `list` so every served key is listed. `Icon::data` for the one-off brand V monogram, `svg()` for the
 monochrome mark and `img()` for full-color app-icon art are already correct — no changes. `AllAssets` (1,830 SVGs)
-and a `rust-embed` asset folder stay SKIPPED: the app uses 73 named glyphs and its app icons already ship via
+and a `rust-embed` asset folder stay SKIPPED: the app references 68 named glyphs and its app icons already ship via
 `include_bytes!`. The 0.11.0 shared-vs-legacy `IconName` compatibility note is moot — the desktop imports
 `assets::IconName` everywhere. APPLIED (root cause, DRY): the hand-maintained `DESKTOP_ICONS` catalog could not catch
 a new `IconName::X` used in UI code without a matching registration — an unregistered path renders blank with no
-headless failure. `desktop/assets.rs` now derives the set from a recursive scan of `src/**/*.rs`, resolves names
-through `IconName::ALL`, and asserts each `path()` loads through `DesktopAssets`; the scan unit test pins variant
-extraction and the exclusion of line comments and the `ALL` associated const. The helper uses `.get(..).expect()`
-rather than a raw slice because strict `-D warnings --all-targets` clippy rejects unprovable UTF-8 boundaries.
+headless failure. `desktop/assets.rs` now tokenizes every `src/**/*.rs` with `proc-macro2`, resolves the collected
+`IconName::Variant` pairs through `IconName::ALL`, and asserts each `path()` loads through `DesktopAssets`.
+Tokenizing (rather than matching source text) ignores comments and string literals, keeps multiline paths and macro
+bodies in scope, and avoids false failures from fake variants mentioned in prose; the scan unit test pins all of
+those cases plus the `ALL` exclusion.
 
 Images reviewed 2026-11-24 against the
 [GPUI Kit images guide](https://gpui-kit.com/docs/image/) (site v0.11.0,

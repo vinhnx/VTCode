@@ -74,44 +74,54 @@ impl AssetSource for DesktopAssets {
 mod tests {
     use std::collections::{BTreeSet, HashMap};
     use std::path::{Path, PathBuf};
+    use std::str::FromStr;
 
     use gpui_kit::AssetSource;
     use gpui_kit::SharedString;
     use gpui_kit::assets::IconName;
+    use proc_macro2::TokenTree;
 
     use super::DesktopAssets;
 
-    /// Collect `IconName::Variant` tokens from one line of source. Asset
-    /// lookups happen at runtime, so an unregistered glyph is blank with no
-    /// headless failure; the only reliable oracle is the source itself.
-    /// `IconName::ALL` is an associated const enumerating every name, not a
-    /// glyph the asset source must serve, so it is deliberately skipped.
-    fn collect_icon_names(line: &str, names: &mut BTreeSet<String>) {
-        let code = line.split("//").next().unwrap_or_default();
-        let mut rest = code;
-        while let Some(pos) = rest.find("IconName::") {
-            let after = rest
-                .get(pos + "IconName::".len()..)
-                .expect("ASCII prefix ends on a char boundary");
-            let name: String = after
-                .chars()
-                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-                .collect();
-            if !name.is_empty() && name != "ALL" {
-                let _ = names.insert(name);
+    /// Collect `IconName::Variant` pairs from a Rust token stream. Tokenizing
+    /// instead of matching source text ignores comments and string literals,
+    /// allows whitespace/newlines around `::`, and still sees icons inside
+    /// macro invocations. `IconName::ALL` is the name table, not a glyph the
+    /// asset source must serve, so it is deliberately skipped.
+    fn collect_icon_names(stream: proc_macro2::TokenStream, names: &mut BTreeSet<String>) {
+        let tokens: Vec<TokenTree> = stream.into_iter().collect();
+        for (index, token) in tokens.iter().enumerate() {
+            match token {
+                TokenTree::Ident(ident) if ident == "IconName" => {
+                    let has_path_sep = matches!(
+                        (tokens.get(index + 1), tokens.get(index + 2)),
+                        (Some(TokenTree::Punct(first)), Some(TokenTree::Punct(second)))
+                            if first.as_char() == ':' && second.as_char() == ':'
+                    );
+                    if has_path_sep {
+                        if let Some(TokenTree::Ident(name)) = tokens.get(index + 3) {
+                            let name = name.to_string();
+                            if name != "ALL" {
+                                let _ = names.insert(name);
+                            }
+                        }
+                    }
+                }
+                TokenTree::Group(group) => collect_icon_names(group.stream(), names),
+                _ => {}
             }
-            // The prefix is consumed; keep scanning the remainder for more.
-            rest = after;
         }
     }
 
     /// Walk every Rust source under `src/` (the asset registry itself owns no
     /// glyph usages, so it is excluded) and return the variants the UI names.
+    /// Tokenizing the whole file keeps multiline paths and macro bodies in
+    /// scope without treating commented or quoted text as a real usage.
     fn referenced_icon_names() -> BTreeSet<String> {
         fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
             let mut entries = std::fs::read_dir(dir)
                 .expect("read desktop source dir")
-                .filter_map(Result::ok)
+                .map(|entry| entry.expect("read desktop source entry"))
                 .collect::<Vec<_>>();
             entries.sort_by_key(|entry| entry.file_name());
             for entry in entries {
@@ -133,9 +143,9 @@ mod tests {
         let mut names = BTreeSet::new();
         for file in files {
             let content = std::fs::read_to_string(&file).expect("read desktop source file");
-            for line in content.lines() {
-                collect_icon_names(line, &mut names);
-            }
+            let stream = proc_macro2::TokenStream::from_str(&content)
+                .unwrap_or_else(|err| panic!("tokenize {}: {err}", file.display()));
+            collect_icon_names(stream, &mut names);
         }
         names
     }
@@ -158,10 +168,21 @@ mod tests {
 
     #[test]
     fn icon_reference_scan_reads_variants_and_ignores_comments_and_all() {
+        let source = r#"
+            // IconName::NotRegistered
+            /* IconName::AlsoNotRegistered */
+            let label = "IconName::InAString";
+            let url = "https://example.test"; let icon = IconName::ArrowUp;
+            for name in IconName::ALL { let _ = IconName::X; }
+            let multiline = IconName ::
+                Activity;
+            let in_macro = vec![IconName::FileText];
+            let other_enum = MyIconName::Fake;
+        "#;
+        let stream = proc_macro2::TokenStream::from_str(source).expect("tokenize probe source");
         let mut names = BTreeSet::new();
-        collect_icon_names("let a = IconName::Activity; // IconName::NotRegistered", &mut names);
-        collect_icon_names("for name in IconName::ALL { let _ = IconName::X; }", &mut names);
-        assert_eq!(names, BTreeSet::from(["Activity".to_string(), "X".to_string()]));
+        collect_icon_names(stream, &mut names);
+        assert_eq!(names, BTreeSet::from(["ArrowUp", "X", "Activity", "FileText"].map(String::from)));
     }
 
     #[test]

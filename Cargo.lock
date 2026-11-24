@@ -12420,6 +12420,7 @@ dependencies = [
  "objc2-service-management",
  "plist",
  "portable-pty",
+ "proc-macro2",
  "pulldown-cmark",
  "rio-vt",
  "rust-i18n",
