@@ -1,8 +1,10 @@
 //! Storage settings: usage overview plus session and worktree cleanup.
 
 use super::*;
+use gpui_kit::Hsla;
+// Base plot owns geometry; the component path is only a compatibility re-export.
+use gpui_kit::base::plot::shape::BarAlignment;
 use gpui_kit::component::chart::BarChart;
-use gpui_kit::component::plot::shape::BarAlignment;
 
 /// Fixed-pixel frame for the usage chart. The kit chart paints its own
 /// geometry (labels, bands) at constant pixel sizes, so a rem-based frame
@@ -79,6 +81,43 @@ pub(super) fn format_bytes(bytes: u64) -> String {
     } else {
         format!("{whole}.{tenths} {suffix}")
     }
+}
+
+/// One bar in the storage usage chart: its band label, byte value and series
+/// color. Base plot supplies the geometry and takes its fill from us.
+#[derive(Clone, Debug, PartialEq)]
+struct StorageUsageDatum {
+    label: String,
+    bytes: u64,
+    color: Hsla,
+}
+
+/// The single definition of the four usage categories. The chart bands, the
+/// aria breakdown and the legend rows all read it so they cannot drift apart.
+fn storage_usage_data(summary: &protocol::StorageSummary, series: [Hsla; 4]) -> [StorageUsageDatum; 4] {
+    let [sessions, worktrees, memory, other] = series;
+    [
+        StorageUsageDatum {
+            label: rust_i18n::t!("app.settings.storage.sessions").to_string(),
+            bytes: summary.sessions_bytes,
+            color: sessions,
+        },
+        StorageUsageDatum {
+            label: rust_i18n::t!("app.settings.storage.worktrees").to_string(),
+            bytes: summary.worktrees_bytes,
+            color: worktrees,
+        },
+        StorageUsageDatum {
+            label: rust_i18n::t!("app.settings.storage.memory").to_string(),
+            bytes: summary.memory_bytes,
+            color: memory,
+        },
+        StorageUsageDatum {
+            label: rust_i18n::t!("app.settings.storage.other").to_string(),
+            bytes: summary.other_bytes,
+            color: other,
+        },
+    ]
 }
 
 fn format_archive_date(updated_at: Option<u64>) -> String {
@@ -423,22 +462,12 @@ impl DesktopView {
         let Some(summary) = props.storage.summary.as_ref() else {
             return div().into_any_element();
         };
-        let chart_data = [
-            (rust_i18n::t!("app.settings.storage.sessions").to_string(), summary.sessions_bytes, colors.chart_1),
-            (rust_i18n::t!("app.settings.storage.worktrees").to_string(), summary.worktrees_bytes, colors.chart_2),
-            (rust_i18n::t!("app.settings.storage.memory").to_string(), summary.memory_bytes, colors.chart_3),
-            (rust_i18n::t!("app.settings.storage.other").to_string(), summary.other_bytes, colors.chart_4),
-        ];
-        let breakdown = [
-            (rust_i18n::t!("app.settings.storage.sessions").to_string(), summary.sessions_bytes),
-            (rust_i18n::t!("app.settings.storage.worktrees").to_string(), summary.worktrees_bytes),
-            (rust_i18n::t!("app.settings.storage.memory").to_string(), summary.memory_bytes),
-            (rust_i18n::t!("app.settings.storage.other").to_string(), summary.other_bytes),
-        ]
-        .into_iter()
-        .map(|(label, bytes)| format!("{label} {}", format_bytes(bytes)))
-        .collect::<Vec<_>>()
-        .join(", ");
+        let categories = storage_usage_data(summary, [colors.chart_1, colors.chart_2, colors.chart_3, colors.chart_4]);
+        let breakdown = categories
+            .iter()
+            .map(|datum| format!("{} {}", datum.label, format_bytes(datum.bytes)))
+            .collect::<Vec<_>>()
+            .join(", ");
         div()
             .flex()
             .flex_col()
@@ -452,15 +481,15 @@ impl DesktopView {
                     .w_full()
                     .when(summary.total_bytes > 0, |chart| {
                         chart.h(px(STORAGE_CHART_HEIGHT_PX)).child(
-                            BarChart::new(chart_data.to_vec())
-                                .band(|datum| datum.0.clone())
-                                .value(|datum| datum.1 as f64)
+                            BarChart::new(categories.to_vec())
+                                .band(|datum| datum.label.clone())
+                                .value(|datum| datum.bytes as f64)
                                 .alignment(BarAlignment::Left)
                                 .value_axis(false)
                                 .grid(false)
                                 .interactive(false)
                                 .appear(false)
-                                .fill(|datum, _, _, _| datum.2),
+                                .fill(|datum, _, _, _| datum.color),
                         )
                     })
                     .when(summary.total_bytes == 0, |chart| {
@@ -474,32 +503,21 @@ impl DesktopView {
                         )
                     }),
             )
-            .child(
-                div().flex().flex_col().gap_1().children(
-                    [
-                        (rust_i18n::t!("app.settings.storage.sessions").to_string(), summary.sessions_bytes),
-                        (rust_i18n::t!("app.settings.storage.worktrees").to_string(), summary.worktrees_bytes),
-                        (rust_i18n::t!("app.settings.storage.memory").to_string(), summary.memory_bytes),
-                        (rust_i18n::t!("app.settings.storage.other").to_string(), summary.other_bytes),
-                    ]
-                    .into_iter()
-                    .map(|(label, bytes)| {
+            .child(div().flex().flex_col().gap_1().children(categories.iter().map(|datum| {
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().text_sm().text_color(colors.foreground).child(datum.label.clone()))
+                    .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(div().text_sm().text_color(colors.foreground).child(label))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_family(cx.theme().mono_font_family.clone())
-                                    .text_color(themes::muted_text(colors))
-                                    .child(format_bytes(bytes)),
-                            )
-                    }),
-                ),
-            )
+                            .text_sm()
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_color(themes::muted_text(colors))
+                            .child(format_bytes(datum.bytes)),
+                    )
+            })))
             .child(
                 div()
                     .text_xs()
@@ -738,6 +756,35 @@ mod tests {
         assert_eq!(format_bytes(172 * 1024 * 1024 + 1024 * 103), "172.1 MB");
         assert_eq!(format_bytes(15 * 1024 * 1024 * 1024 + 1024 * 1024 * 103), "15.1 GB");
         assert_eq!(format_bytes(2 * 1024 * 1024 * 1024 * 1024), "2 TB");
+    }
+
+    #[test]
+    fn storage_usage_data_pairs_each_label_value_and_color_once() {
+        let summary = protocol::StorageSummary {
+            state_dir: String::new(),
+            workspace: String::new(),
+            sessions_bytes: 11,
+            sessions_count: 1,
+            worktrees_bytes: 22,
+            worktrees_count: 2,
+            memory_bytes: 33,
+            other_bytes: 44,
+            total_bytes: 110,
+        };
+        let series = [
+            Hsla { h: 0.0, s: 1.0, l: 0.5, a: 1.0 },
+            Hsla { h: 0.25, s: 1.0, l: 0.5, a: 1.0 },
+            Hsla { h: 0.5, s: 1.0, l: 0.5, a: 1.0 },
+            Hsla { h: 0.75, s: 1.0, l: 0.5, a: 1.0 },
+        ];
+        let data = storage_usage_data(&summary, series);
+        assert_eq!(
+            data.iter().map(|datum| datum.label.as_str()).collect::<Vec<_>>(),
+            ["Sessions", "Worktrees", "Session memory", "Other"]
+        );
+        assert_eq!(data.iter().map(|datum| datum.bytes).collect::<Vec<_>>(), [11, 22, 33, 44]);
+        assert_eq!(data.iter().map(|datum| datum.color).collect::<Vec<_>>(), series);
+        assert_eq!(data.iter().map(|datum| datum.bytes).sum::<u64>(), summary.total_bytes);
     }
 
     #[test]

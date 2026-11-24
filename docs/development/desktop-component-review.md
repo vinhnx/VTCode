@@ -34,6 +34,18 @@ value, not the clock, since a shortened reveal settles before its base duration 
 clock without painting a fade. `transition`/`spring`/`Keyframes`/`Presence`/`Sequence`/`Stagger`/`MotionReveal` remain
 SKIPPED: no desktop consumer needs them and the recorded reduced-motion preference decision stands.
 
+Base plot reviewed 2026-11-24 against the
+[GPUI Kit plot guide](https://gpui-kit.com/base/plot/) (site v0.11.0; the pinned
+[`v0.10.0` page](https://gpui-kit.com/versions/v0.10.0/base/plot) carries identical prose, re-verified against
+`gpui-base 0.10.0` `src/plot/`). The base owns geometry and takes every color from the caller; `component::plot`
+is only a compatibility re-export, so the sole plot consumer (`view/storage.rs`) now imports `BarAlignment` from
+`base::plot::shape`. `PlotValue` confirms the existing `as f64` byte cast (integers are excluded because linear
+scales divide). `PathCaches`, `Curve`, axes, grids and hover overlays stay SKIPPED: the storage chart is the only
+plot, its axes/grid/tooltip/interaction are deliberately off, and the full breakdown lives in the aria label.
+`PlotAppearScope` and `PlotMotion` add nothing over the 2026-11-24 motion review and the chart's `.appear(false)`.
+Applied the reference's datum model as a DRY fix: the four categories are one named `StorageUsageDatum` array
+feeding the chart bands, the aria breakdown and the legend rows, with colors still handed in by the styled layer.
+
 The supplied VT Code concept guides the design: quiet navigation,
 conversation-first hierarchy, recessed inspector surfaces, compact native actions,
 and a branded composer. Reuse behavior without replacing the existing runtime,
@@ -86,7 +98,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [number-input](https://gpui-kit.com/component/number-input) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [otp-input](https://gpui-kit.com/component/otp-input) | Not needed for the current coding-workspace workflows or available data. |
 | [pagination](https://gpui-kit.com/component/pagination) | Not needed for the current coding-workspace workflows or available data. |
-| [plot](https://gpui-kit.com/component/plot) | Low-level scales/shapes powering Chart; `plot::shape::BarAlignment` orients the storage chart — no custom plot surface needed. |
+| [plot](https://gpui-kit.com/component/plot) | Low-level scales/shapes powering Chart; `base::plot::shape::BarAlignment` orients the storage chart — no custom plot surface needed. Base doc reviewed 2026-11-24 against pinned 0.10.0 (paragraph above). |
 | [popover](https://gpui-kit.com/component/popover) | Replace crowded Appearance popover with a larger modal surface. The 0.9.1 `popover.rs` diff is test-only; trigger open-state behavior carries forward. |
 | [progress](https://gpui-kit.com/component/progress) | Do not invent execution percentages or phases beyond existing runtime events. |
 | [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. Visual language adapted (2026-11-03): borderless panel, counter eyebrow above title above choices, approval marker icon plus tint; digits stay (immediate-commit contract), auto-advance not adopted. Restyled (2026-11-06): framed popover card, borderless rows with checked wash, neutral Recommended Tag pill, header dismiss; approval tint removed, marker icon kept. |
