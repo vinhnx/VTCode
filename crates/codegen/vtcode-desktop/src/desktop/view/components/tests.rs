@@ -183,10 +183,11 @@ fn shimmer_tones_dim_while_animating_and_hold_the_tone_when_static(cx: &mut gpui
 }
 
 /// Motion-policy ratchet: every duration token our fades consume must stay
-/// under the 300ms UI-animation ceiling, and the shared enter curve must
-/// stay ease-out-shaped (front-loaded progress). Pins the upstream contract
-/// `zen_fade_animation` (normal) and the palette fade (fast) depend on;
-/// `duration_slow` is intentionally unpinned (nothing consumes it).
+/// under the 300ms UI-animation ceiling, the enter curve must stay
+/// ease-out-shaped (front-loaded progress), and the exit curve must stay
+/// ease-in-shaped (the forward reveal's accelerating ramp). Pins the upstream
+/// contract the unified `motion::fade_animation` depends on; `duration_slow`
+/// is intentionally unpinned (nothing consumes it).
 #[test]
 fn shared_motion_tokens_stay_within_ui_animation_policy() {
     let motion = MotionTokens::default();
@@ -199,5 +200,9 @@ fn shared_motion_tokens_stay_within_ui_animation_policy() {
     assert!(
         motion.easing_enter.sample(0.25) > 0.25 && motion.easing_enter.sample(0.5) > 0.5,
         "enter curve must stay ease-out-shaped for instant feedback"
+    );
+    assert!(
+        motion.easing_exit.sample(0.25) < 0.25 && motion.easing_exit.sample(0.5) < 0.5,
+        "exit curve must stay ease-in-shaped for the forward reveal"
     );
 }

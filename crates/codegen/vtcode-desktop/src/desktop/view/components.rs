@@ -879,22 +879,11 @@ pub(super) fn running_indicator(
         .into_any_element()
 }
 
-/// Opacity transition for elements that mount through user-driven state —
-/// toggles, panels, popups — using the theme duration and enter curve.
-/// `with_animation` renders the end state statically under reduced motion,
-/// so no manual gate is needed. Private on purpose: [`FadeInExt::fade_in`]
-/// is the single entry point, so the motion tokens stay tuned in one place.
-fn zen_fade_animation(theme: &Theme) -> Animation {
-    let motion = theme.motion_tokens();
-    let easing = motion.easing_enter.clone();
-    Animation::new(motion.duration_normal).with_easing(move |delta| easing.sample(delta))
-}
-
-/// The shared mount fade, kept as one reusable definition: every toggle,
-/// panel, and popup that appears fades opacity 0→1 on mount through the
-/// theme's enter motion. Pair it with a stable animation id per mount
-/// point; state-key the id when the element persists across modes so each
-/// toggle replays the fade.
+/// The shared mount fade: every toggle, panel, and popup that appears fades
+/// opacity 0→1 on mount through the theme's enter motion. All fades go through
+/// `motion::fade_animation`, so the duration/curve policy has one owner.
+/// `with_animation` renders the end state statically under reduced motion and
+/// requests no frames once settled, so no manual gate is needed.
 pub(super) trait FadeInExt: AnimationExt + Sized {
     /// Apply the shared appearance fade with a stable per-mount id. The
     /// element/id types stay fully qualified so the shared import surface
@@ -903,7 +892,9 @@ pub(super) trait FadeInExt: AnimationExt + Sized {
     where
         Self: Styled,
     {
-        self.with_animation(id, zen_fade_animation(theme), |el, delta| el.opacity(delta))
+        // `returning` is the decelerating enter curve; a mount reveal has the
+        // normal duration and that enter curve.
+        self.with_animation(id, motion::fade_animation(theme, false, true), |el, delta| el.opacity(delta))
     }
 }
 
