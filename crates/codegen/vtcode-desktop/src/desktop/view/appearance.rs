@@ -324,10 +324,16 @@ impl DesktopView {
             .items_center()
             .gap_3()
             .min_w_0()
-            .child(div().truncate().child(workspace.to_string()))
+            .child(
+                div()
+                    .id("status-bar-workspace")
+                    .test_support()
+                    .truncate()
+                    .child(workspace.to_string()),
+            )
             .when(self.git_branch.is_some(), |bar| {
                 bar.child(
-                    div().truncate().child(
+                    div().id("status-bar-branch").test_support().truncate().child(
                         rust_i18n::t!(
                             "app.appearance.branch_label",
                             value = self.git_branch.clone().unwrap_or_default()
@@ -337,7 +343,7 @@ impl DesktopView {
                 )
             })
             .when(sandbox.is_some(), |bar| {
-                bar.child(div().truncate().child(
+                bar.child(div().id("status-bar-sandbox").test_support().truncate().child(
                     rust_i18n::t!("app.appearance.sandbox_label", value = sandbox.unwrap_or_default()).to_string(),
                 ))
             });
@@ -354,7 +360,13 @@ impl DesktopView {
                     ),
                 )
             })
-            .child(div().truncate().child(provider_model))
+            .child(
+                div()
+                    .id("status-bar-provider-model")
+                    .test_support()
+                    .truncate()
+                    .child(provider_model),
+            )
             .child(
                 div()
                     .id("agent-status")

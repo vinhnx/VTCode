@@ -285,6 +285,52 @@ fn appearance_sections_keep_order_air_and_narrow_containment(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn status_bar_long_labels_shrink_instead_of_pushing_siblings_out(cx: &mut TestAppContext) {
+    // GPUI's flex layout already releases a truncating label's minimum width
+    // inside the status bar's `min_w_0` rows, so long workspace/branch/model
+    // copy ellipsizes instead of swallowing its siblings. Pin that contract at
+    // both font-size extremes: a future tier change must not reintroduce the
+    // CSS-style nowrap overflow the style guide warns about.
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    view.update(cx, |view, cx| {
+        view.preferences.show_status_bar = true;
+        view.workspace = Some(PathBuf::from(format!("/projects/{}", "w".repeat(160))));
+        view.git_branch = Some("feature/an-extremely-long-branch-name-that-never-ends".to_string());
+        let mut config = runtime_options_config();
+        config.provider = "provider-with-a-very-long-name".to_string();
+        config.model = "model-with-a-very-long-name".to_string();
+        view.configuration = Some(config);
+        cx.notify();
+    });
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let bar = window.find("status-bar").bounds();
+            let bar_right = bar.origin.x + bar.size.width;
+            for id in [
+                "status-bar-workspace",
+                "status-bar-branch",
+                "status-bar-sandbox",
+                "status-bar-provider-model",
+            ] {
+                let bounds = window.find(id).bounds();
+                assert!(
+                    bounds.origin.x >= bar.origin.x - px(1.)
+                        && bounds.origin.x + bounds.size.width <= bar_right + px(1.),
+                    "{id} must shrink inside the status bar at {base_size}px: bounds={bounds:?}, bar={bar:?}"
+                );
+            }
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
 fn settings_panel_spans_the_center_container_while_other_routes_stay_inset(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
