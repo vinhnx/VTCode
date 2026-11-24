@@ -150,10 +150,18 @@ impl DesktopView {
                     ResizeEdge::Inspector | ResizeEdge::TerminalRight => -direction * step,
                 };
                 if this.resize_pane_to(edge, current_size + delta) {
-                    this.save_preferences();
+                    // Key repeat delivers many key-downs per physical press.
+                    // Defer the fsync-backed write to the matching key-up;
+                    // any other save_preferences call also retires it.
+                    this.layout_save_pending = true;
                     cx.notify();
                 }
                 cx.stop_propagation();
+            }))
+            .on_key_up(cx.listener(|this, _: &KeyUpEvent, _, _| {
+                if this.layout_save_pending {
+                    this.save_preferences();
+                }
             }))
             .on_mouse_down(
                 MouseButton::Left,

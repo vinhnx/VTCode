@@ -953,6 +953,10 @@ struct DesktopView {
     sidebar_width: f32,
     inspector_width: f32,
     resizing: Option<PaneResize>,
+    /// Set by splitter arrow-key resizes, cleared by every preferences write.
+    /// Key repeat fires many key-downs per physical press, so the deferred
+    /// write happens once on key release instead of one fsync per repeat.
+    layout_save_pending: bool,
 }
 
 #[cfg(test)]

@@ -61,8 +61,11 @@ impl DesktopView {
         cx.notify();
     }
 
-    /// Persist the current comfort settings.
+    /// Persist the current comfort settings. This is the one write point for
+    /// every layout change (pointer drop, key release, and discrete toggles),
+    /// so it also retires any deferred splitter-key write.
     pub(in crate::desktop::view) fn save_preferences(&mut self) {
+        self.layout_save_pending = false;
         self.preferences.theme = Some(self.theme_id.clone());
         self.preferences.inspector_open = Some(self.inspector_open);
         self.preferences.zen_mode = Some(self.zen_mode);

@@ -788,6 +788,7 @@ impl DesktopView {
             sidebar_width: 270.0,
             inspector_width: preferences::DEFAULT_INSPECTOR_WIDTH,
             resizing: None,
+            layout_save_pending: false,
         }
     }
 }

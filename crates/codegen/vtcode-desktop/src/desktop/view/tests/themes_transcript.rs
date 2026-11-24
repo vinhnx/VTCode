@@ -346,6 +346,48 @@ fn pane_splitters_expose_accessibility_and_keyboard_resize(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn held_splitter_arrow_defers_the_preferences_write_until_release(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.preferences.navigation_on_right = Some(false));
+        window.render_frame(cx);
+        for _ in 0..128 {
+            if view.read(cx).sidebar_resize_focus.is_focused(window) {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+        }
+        assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "Tab reaches the sidebar splitter");
+
+        let keystroke = gpui_kit::Keystroke::parse("right").unwrap();
+        for _ in 0..5 {
+            let _ = window.dispatch_event(
+                gpui_kit::KeyDownEvent {
+                    keystroke: keystroke.clone(),
+                    is_held: true,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.render_frame(cx);
+        }
+        assert_eq!(view.read(cx).sidebar_width, 320., "key repeat keeps resizing the pane");
+        assert_eq!(
+            view.read(cx).preferences.sidebar_width,
+            None,
+            "five key-downs must not cause five fsync-backed preference writes"
+        );
+
+        let _ = window.dispatch_event(gpui_kit::KeyUpEvent { keystroke }.to_platform_input(), cx);
+        assert_eq!(view.read(cx).preferences.sidebar_width, Some(320.));
+        assert!(!view.read(cx).layout_save_pending, "release retires the deferred write");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::{
