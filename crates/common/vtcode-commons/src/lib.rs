@@ -49,6 +49,7 @@ pub mod interjection;
 pub mod interner;
 pub mod json_extract;
 pub mod lexical;
+pub mod line_blocks;
 pub mod line_framing;
 pub mod llm;
 pub mod lr_map;

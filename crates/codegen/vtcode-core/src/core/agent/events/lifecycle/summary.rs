@@ -1,5 +1,6 @@
 use super::*;
 use crate::tools::file_ops::canonical_diff_previews;
+use vtcode_commons::line_blocks::{contains_distinct_line_blocks, contains_line_block};
 
 fn pluralize<'a>(count: u64, singular: &'a str, plural: &'a str) -> &'a str {
     if count == 1 { singular } else { plural }
@@ -263,36 +264,6 @@ fn append_unique_line(lines: &mut Vec<String>, line: &str) {
     if !lines.iter().any(|existing| existing == line) {
         lines.push(line.to_string());
     }
-}
-
-fn contains_line_block(container: &str, candidate: &str) -> bool {
-    !line_block_ranges(container, candidate).is_empty()
-}
-
-fn line_block_ranges(container: &str, candidate: &str) -> Vec<(usize, usize)> {
-    let container_lines = container.lines().collect::<Vec<_>>();
-    let candidate_lines = candidate.lines().collect::<Vec<_>>();
-    if candidate_lines.is_empty() || candidate_lines.len() > container_lines.len() {
-        return Vec::new();
-    }
-
-    container_lines
-        .windows(candidate_lines.len())
-        .enumerate()
-        .filter_map(|(start, window)| {
-            (window == candidate_lines.as_slice()).then_some((start, start + candidate_lines.len()))
-        })
-        .collect()
-}
-
-fn contains_distinct_line_blocks(container: &str, first: &str, second: &str) -> bool {
-    let first_ranges = line_block_ranges(container, first);
-    let second_ranges = line_block_ranges(container, second);
-    first_ranges.iter().any(|&(first_start, first_end)| {
-        second_ranges
-            .iter()
-            .any(|&(second_start, second_end)| first_end <= second_start || second_end <= first_start)
-    })
 }
 
 fn append_labeled_stream_text(lines: &mut Vec<String>, label: &str, text: &str) {

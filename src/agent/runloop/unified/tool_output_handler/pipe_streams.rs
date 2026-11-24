@@ -1,34 +1,6 @@
 //! Pipe-stream alias detection and canonical stream ordering.
 
-pub(super) fn contains_line_block(container: &str, candidate: &str) -> bool {
-    !line_block_ranges(container, candidate).is_empty()
-}
-
-pub(super) fn line_block_ranges(container: &str, candidate: &str) -> Vec<(usize, usize)> {
-    let container_lines = container.lines().collect::<Vec<_>>();
-    let candidate_lines = candidate.lines().collect::<Vec<_>>();
-    if candidate_lines.is_empty() || candidate_lines.len() > container_lines.len() {
-        return Vec::new();
-    }
-
-    container_lines
-        .windows(candidate_lines.len())
-        .enumerate()
-        .filter_map(|(start, window)| {
-            (window == candidate_lines.as_slice()).then_some((start, start + candidate_lines.len()))
-        })
-        .collect()
-}
-
-pub(super) fn contains_distinct_line_blocks(container: &str, first: &str, second: &str) -> bool {
-    let first_ranges = line_block_ranges(container, first);
-    let second_ranges = line_block_ranges(container, second);
-    first_ranges.iter().any(|&(first_start, first_end)| {
-        second_ranges
-            .iter()
-            .any(|&(second_start, second_end)| first_end <= second_start || second_end <= first_start)
-    })
-}
+use vtcode_commons::line_blocks::{contains_distinct_line_blocks, contains_line_block};
 
 pub(super) fn streams_are_aliases(left: &str, right: &str) -> bool {
     contains_line_block(left, right) || contains_line_block(right, left)
