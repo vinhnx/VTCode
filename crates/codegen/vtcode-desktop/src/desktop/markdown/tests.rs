@@ -522,3 +522,49 @@ fn captured_output_text_selects_and_copies_from_a_drag(cx: &mut TestAppContext) 
         assert_eq!(TextSelection::selected_text(window, cx), "alpha beta gamma");
     });
 }
+
+struct CappedCodeFixture {
+    source: SharedString,
+}
+
+impl Render for CappedCodeFixture {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        gpui_kit::div().w(gpui_kit::px(400.)).child(
+            gpui_kit::div()
+                .id("capped-code-probe")
+                .test_support()
+                .child(super::render_markdown("capped-code-md".into(), self.source.clone(), false, cx)),
+        )
+    }
+}
+
+/// A model can emit a whole file in one fence. The shared style must opt into
+/// Kit's scroll mode so the block gets its own scrollbar and a bounded height
+/// instead of inflating a row inside the virtualized transcript.
+#[gpui_kit::test]
+fn long_fenced_code_is_height_capped_and_scrollable(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let style = cx.update(|cx| super::markdown_style(cx));
+    assert_eq!(
+        style.code_block().overflow.y,
+        Some(gpui_kit::Overflow::Scroll),
+        "fenced code must opt into Kit's scroll region",
+    );
+
+    let code = (0..200).map(|index| format!("line {index}\n")).collect::<String>();
+    let source: SharedString = format!("```rust\n{code}```\n\nAfter the code.\n").into();
+    let (window, _) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| CappedCodeFixture { source })).unwrap()
+    });
+    let height = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("capped-code-probe").bounds().size.height
+        })
+        .unwrap();
+    // Uncapped, 200 mono lines would be ~4,000px tall. The cap keeps the whole
+    // row near the 24rem limit regardless of the headless window's rem size.
+    assert!(height < gpui_kit::px(520.), "long code block was not bounded: {height:?}");
+    // The trailing paragraph must still be reachable below the capped block.
+    assert!(height > gpui_kit::px(300.), "capped block collapsed unexpectedly: {height:?}");
+}

@@ -228,11 +228,24 @@ fn append_separator(output: &mut String, separator: char) {
     }
 }
 
+/// Maximum height of one fenced code block. Agent output can emit a whole file
+/// in a single fence; without a cap that block becomes an unbounded row inside
+/// the virtualized transcript, inflating measured list geometry and burying the
+/// rest of the conversation. Kit's scroll mode gives the block its own
+/// scrollbar and consumes wheel input until its edge, so the enclosing list
+/// only scrolls once the code has reached the end.
+const CODE_BLOCK_MAX_HEIGHT_REMS: f32 = 24.0;
+
 pub(super) fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
     let mut code = div()
         .font_family(cx.theme().mono_font_family.clone())
-        .text_size(cx.theme().mono_font_size);
-    let code_style = code.style().clone();
+        .text_size(cx.theme().mono_font_size)
+        .max_h(gpui_kit::rems(CODE_BLOCK_MAX_HEIGHT_REMS));
+    let mut code_style = code.style().clone();
+    // Kit opts a code block into its own scroll region when `overflow.y` is
+    // Scroll: the block gains a scrollbar and consumes the wheel until its
+    // edge, so it cannot inflate a row inside the virtualized transcript.
+    code_style.overflow.y = Some(gpui_kit::Overflow::Scroll);
     let colors = cx.theme().colors;
     let mut table_head = div()
         .bg(colors.table_head)
