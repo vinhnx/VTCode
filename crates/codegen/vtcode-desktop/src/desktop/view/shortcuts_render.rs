@@ -356,7 +356,12 @@ impl DesktopView {
                 preferences.shortcuts = self.shortcut_draft.clone();
                 match preferences.try_save() {
                     Ok(()) => {
-                        bootstrap::reinstall_shortcuts(cx, &self.preferences.shortcuts, &preferences.shortcuts);
+                        bootstrap::reinstall_shortcuts(
+                            cx,
+                            &self.preferences.shortcuts,
+                            &preferences.shortcuts,
+                            self.menus_show_exit_full_screen,
+                        );
                         self.preferences = preferences;
                         self.shortcut_capture = None;
                         self.shortcuts_editing = false;

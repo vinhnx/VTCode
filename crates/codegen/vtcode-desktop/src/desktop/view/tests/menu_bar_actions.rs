@@ -11,6 +11,88 @@ fn init_without_window(cx: &mut TestAppContext) {
     cx.update(super::super::menu_bar::init_native_menus);
 }
 
+/// Native menu items as the platform retained them at the last `set_menus`.
+/// Accept the English name as well so a test can detect a stale, untranslated
+/// menu after a locale switch.
+fn view_menu_items(cx: &TestAppContext) -> Vec<gpui_kit::OwnedMenuItem> {
+    cx.update(|cx| {
+        let menus = cx.get_menus().expect("test platform retains native menus");
+        let localized = rust_i18n::t!("app.menus.view_menu").to_string();
+        let english = rust_i18n::t!("app.menus.view_menu", locale = "en").to_string();
+        let view = menus
+            .iter()
+            .find(|menu| menu.name == localized || menu.name == english)
+            .expect("View menu");
+        view.items.clone()
+    })
+}
+
+fn full_screen_item(cx: &TestAppContext) -> String {
+    let labels = [
+        rust_i18n::t!("app.menus.enter_full_screen").to_string(),
+        rust_i18n::t!("app.menus.exit_full_screen").to_string(),
+        rust_i18n::t!("app.menus.enter_full_screen", locale = "en").to_string(),
+        rust_i18n::t!("app.menus.exit_full_screen", locale = "en").to_string(),
+    ];
+    view_menu_items(cx)
+        .iter()
+        .find_map(|item| match item {
+            gpui_kit::OwnedMenuItem::Action { name, .. } if labels.iter().any(|label| label == name) => {
+                Some(name.clone())
+            }
+            _ => None,
+        })
+        .expect("full screen menu item")
+}
+
+/// `set_menus` snapshots the keymap into each native item's accelerator, so a
+/// shortcut save has to rebuild the menus or they keep showing the old chord.
+/// The View item's Enter/Exit label is an observable marker that the rebuild
+/// ran with the caller's current full-screen state.
+#[gpui_kit::test]
+fn saving_shortcuts_rebuilds_the_native_menus(cx: &mut TestAppContext) {
+    init_without_window(cx);
+    assert_eq!(full_screen_item(cx), rust_i18n::t!("app.menus.enter_full_screen").to_string());
+
+    cx.update(|cx| {
+        super::super::bootstrap::reinstall_shortcuts(
+            cx,
+            &std::collections::BTreeMap::new(),
+            &std::collections::BTreeMap::new(),
+            true,
+        );
+    });
+    assert_eq!(full_screen_item(cx), rust_i18n::t!("app.menus.exit_full_screen").to_string());
+}
+
+/// Locale changes must also go through the one menu rebuild entry point:
+/// `set_menus` captures label text at build time, so a language switch would
+/// otherwise leave the native menu bar in the previous language.
+#[gpui_kit::test]
+fn switching_language_rebuilds_the_native_menus(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    assert_eq!(full_screen_item(cx), rust_i18n::t!("app.menus.enter_full_screen").to_string());
+
+    let view_for_language = view.clone();
+    cx.update_window(window, |_, window, cx| {
+        view_for_language.update(cx, |view, cx| {
+            view.set_ui_language(crate::desktop::localization::UiLanguage::Vietnamese, window, cx);
+        });
+    })
+    .unwrap();
+    let vietnamese = rust_i18n::t!("app.menus.enter_full_screen", locale = "vi").to_string();
+    assert_ne!(vietnamese, "Enter Full Screen", "precondition: the locale has a translation");
+    assert_eq!(full_screen_item(cx), vietnamese);
+
+    let view_for_language = view.clone();
+    cx.update_window(window, |_, window, cx| {
+        view_for_language.update(cx, |view, cx| {
+            view.set_ui_language(crate::desktop::localization::UiLanguage::English, window, cx);
+        });
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn status_menu_show_opens_the_main_window(cx: &mut TestAppContext) {
     init_without_window(cx);

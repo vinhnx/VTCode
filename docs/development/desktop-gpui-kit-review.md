@@ -76,7 +76,7 @@ backend was introduced.
 | [RenderOnce](https://gpui-kit.com/docs/render-once/) | Keep lightweight Kit controls as values; do not turn each button or row into an entity. |
 | [Style](https://gpui-kit.com/docs/style/) | Keep semantic Ciapre/theme colors and current font-aware layout; avoid unrelated pixel-to-rem rewrites. |
 | [Action](https://gpui-kit.com/docs/action/) | Reuse typed actions and existing command owners across keys, menus, and buttons. |
-| [Key bindings](https://gpui-kit.com/docs/keybinding/) | Preserve contextual input routing and native-menu rebuilds after shortcut changes. |
+| [Key bindings](https://gpui-kit.com/docs/keybinding/) | Preserve contextual input routing, fallible `KeyBinding::load` for user input, and native-menu rebuilds after shortcut/locale changes. Reviewed 2026-11-24 against the site v0.11.0 page (claims re-verified in pinned `gpui-pre 0.3.12`: `App::set_menus`/`set_dock_menu` snapshot the keymap and labels at build time); the rebuild was the one gap. `set_native_menus` is now the single rebuild point for the main, Dock, and status menus; `reinstall_shortcuts` and the UI-language switch both route through it with the caller's full-screen state. Pinned by `saving_shortcuts_rebuilds_the_native_menus` and `switching_language_rebuilds_the_native_menus`. |
 | [Events](https://gpui-kit.com/docs/event/) | Confirm through the actual component action path; stale callbacks cannot dismiss a replacement popup. |
 | [Tasks](https://gpui-kit.com/docs/task/) | Keep scans, previews, pickers, and event pumps owned by the view; existing preview close cancels its task. |
 | [Global](https://gpui-kit.com/docs/global/) | Keep theme/application services global and workspace/session data under the view owner. |

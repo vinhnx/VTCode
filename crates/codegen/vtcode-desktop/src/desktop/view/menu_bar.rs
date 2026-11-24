@@ -200,12 +200,6 @@ fn dock_menu_items() -> Vec<MenuItem> {
     items
 }
 
-/// Install the right-click Dock menu for the app icon. A no-op on the
-/// headless test platform (its `set_dock_menu` stub drops the items).
-pub(super) fn set_dock_menu(cx: &mut App) {
-    cx.set_dock_menu(dock_menu_items());
-}
-
 /// Run a status-menu action. Window-bound commands show and activate the main
 /// window first so they always have a view to land on.
 pub(super) fn dispatch_status_action(action: MenuBarAction, cx: &mut App) {
@@ -369,7 +363,9 @@ pub(super) fn set_enabled(enabled: bool, cx: &mut App) -> bool {
     true
 }
 
-/// Rebuild the status-menu and Dock-menu items so titles follow the active locale.
+/// Rebuild the status-menu and Dock-menu items so titles and accelerators
+/// follow the active locale and keymap. Called from [`set_native_menus`], the
+/// single native-menu rebuild entry point.
 pub(super) fn refresh_labels(cx: &App) {
     cx.set_dock_menu(dock_menu_items());
     #[cfg(not(test))]
@@ -449,7 +445,6 @@ impl DesktopView {
 pub(super) fn init_native_menus(cx: &mut App) {
     register_global_actions(cx);
     set_native_menus(cx, false);
-    set_dock_menu(cx);
 }
 
 /// Register the global action handlers backing native menu items. Called once
@@ -464,8 +459,11 @@ fn register_global_actions(cx: &mut App) {
     let _app = cx.on_action(|_: &OpenHelp, cx| cx.open_url(bootstrap::HELP_URL));
 }
 
-/// (Re)install the native menus. Re-invoked when full-screen state changes so
-/// the View item reads Enter or Exit Full Screen as HIG requires.
+/// (Re)install every native menu surface. Re-invoked when full-screen state
+/// changes so the View item reads Enter or Exit Full Screen as HIG requires,
+/// when a shortcut table is saved (the platform snapshots the keymap into
+/// displayed accelerators at build time), and when the UI locale changes.
+/// All three menus share this one entry point so their labels cannot drift.
 pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
     cx.set_menus([
         Menu::new(app::NAME).items([
@@ -529,6 +527,7 @@ pub(super) fn set_native_menus(cx: &mut App, full_screen: bool) {
             OpenHelp,
         )]),
     ]);
+    refresh_labels(cx);
 }
 
 #[cfg(test)]

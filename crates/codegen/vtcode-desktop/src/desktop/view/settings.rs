@@ -630,7 +630,7 @@ impl DesktopView {
 
         self.preferences.set_ui_language(language);
         super::super::localization::set_language(language);
-        menu_bar::refresh_labels(cx);
+        menu_bar::set_native_menus(cx, self.menus_show_exit_full_screen);
         let placeholder = rust_i18n::t!(i18n::COMPOSER_INPUT_PLACEHOLDER).to_string();
         self.composer
             .update(cx, |state, cx| state.set_placeholder(placeholder, window, cx));

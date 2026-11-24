@@ -141,13 +141,22 @@ fn bind_configurable_shortcuts(cx: &mut App, shortcuts: &std::collections::BTree
 /// and stays bound once from [`init_keybindings`]. Reinstalling appends
 /// identical duplicates for unchanged chords; dispatch stops at the first
 /// hit, so they are harmless, and saves are rare user gestures.
+///
+/// Native menus are rebuilt here too: `set_menus` snapshots the keymap into
+/// each item's displayed accelerator, so a rebind leaves the menu showing the
+/// old chord until `set_menus` runs again (GPUI Kit KeyBinding guide). The
+/// caller supplies the current full-screen state so the View item keeps its
+/// Enter/Exit label across the rebuild. `register_global_actions` stays a
+/// startup-only step — `on_action` handlers accumulate on every registration.
 pub(crate) fn reinstall_shortcuts(
     cx: &mut App,
     old_shortcuts: &std::collections::BTreeMap<String, String>,
     new_shortcuts: &std::collections::BTreeMap<String, String>,
+    full_screen: bool,
 ) {
     cx.bind_keys(shortcuts::stale_shadows(old_shortcuts, new_shortcuts, cx));
     bind_configurable_shortcuts(cx, new_shortcuts);
+    menu_bar::set_native_menus(cx, full_screen);
 }
 
 /// (chord, key context) rows of the experimental vim layer. Vim chords reuse
