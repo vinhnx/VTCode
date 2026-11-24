@@ -1,5 +1,8 @@
+use super::super::settings::SettingsTab;
 use super::super::themes::ThemeId;
 use super::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Swatch element ids for the OS-derived defaults (headless tests are Light).
 const DEFAULT_DARK_SWATCH: &str = "theme-noir";
@@ -420,4 +423,46 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         }
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn theme_slash_action_notifies_when_settings_already_open(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Settings already open on another tab: open_settings early-returns,
+    // so the arm itself must notify for the tab switch.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.settings_tab = SettingsTab::VtCode;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|_| {});
+    let notified = Rc::new(Cell::new(0_usize));
+    let probe = notified.clone();
+    let _subscription = view.update(cx, |_, cx| {
+        let handle = cx.entity();
+        cx.observe(&handle, move |_, _, _| probe.set(probe.get() + 1))
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            // Commands kind + closed palette: the composer-clear cascade
+            // cannot incidentally notify for the arm.
+            view.palette_kind = super::super::PaletteKind::Commands;
+            view.palette = None;
+            let action = super::super::composer_controls::desktop_slash_action("/theme").expect("native /theme route");
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+    })
+    .unwrap();
+    cx.update(|_| {});
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).settings_tab, SettingsTab::Appearance);
+    });
+    // At-least-once: fire counts multiply once the view has rendered (live
+    // window invalidators), so only the delta is meaningful — and without
+    // the arm notify the count stays 0.
+    assert!(notified.get() >= 1, "the arm must notify for its own mutations");
 }

@@ -1,6 +1,8 @@
 use super::super::login_items;
 use super::super::settings::SettingsTab;
 use super::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 #[gpui_kit::test]
 fn launch_at_login_toggle_applies_and_persists_intent(cx: &mut TestAppContext) {
@@ -252,4 +254,90 @@ fn login_settings_stay_searchable_by_startup_terms() {
     for term in ["startup", "login", "launch at login", "khởi động"] {
         assert!(keywords.contains(&term), "missing settings keyword: {term}");
     }
+}
+
+#[gpui_kit::test]
+fn background_reconciliation_notifies_only_on_change(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    cx.update(|cx| login_items::test_override(Some(LoginItemStatus::RequiresApproval), cx));
+    // Settle launch work, then flush its notify effects before arming the
+    // probe: the bootstrap reconciliation must not count towards this test.
+    cx.run_until_parked();
+    cx.update(|_| {});
+    let notified = Rc::new(Cell::new(0_usize));
+    let probe = notified.clone();
+    let _subscription = view.update(cx, |_, cx| {
+        let handle = cx.entity();
+        cx.observe(&handle, move |_, _, _| probe.set(probe.get() + 1))
+    });
+    // Change path: an empty cache adopts the OS status and notifies, so
+    // an open VT Code page re-renders without a manual refresh.
+    view.update(cx, |view, cx| {
+        view.login_item_status = None;
+        view.start_login_item_reconciliation(cx);
+    });
+    cx.run_until_parked();
+    cx.update(|_| {});
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).login_item_status, Some(LoginItemStatus::RequiresApproval));
+    });
+    // At-least-once: fire counts multiply once the view has rendered (live
+    // window invalidators), so only the delta is meaningful — and without
+    // the completion notify the count stays 0.
+    assert!(notified.get() >= 1, "adopting the OS status must notify");
+    let after_change = notified.get();
+    // No-change path: a populated cache is left alone, silently.
+    view.update(cx, |view, cx| {
+        view.login_item_status = Some(LoginItemStatus::Enabled);
+        view.start_login_item_reconciliation(cx);
+    });
+    cx.run_until_parked();
+    cx.update(|_| {});
+    assert_eq!(notified.get(), after_change, "a no-op completion must not notify");
+}
+
+#[gpui_kit::test]
+fn settings_slash_action_notifies_when_settings_already_open(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // Settings already open on another tab: open_settings early-returns,
+    // so the arm itself must notify for the tab switch and refresh.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.settings_tab = SettingsTab::Appearance;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| login_items::test_override(Some(LoginItemStatus::RequiresApproval), cx));
+    cx.run_until_parked();
+    cx.update(|_| {});
+    let notified = Rc::new(Cell::new(0_usize));
+    let probe = notified.clone();
+    let _subscription = view.update(cx, |_, cx| {
+        let handle = cx.entity();
+        cx.observe(&handle, move |_, _, _| probe.set(probe.get() + 1))
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            // Commands kind + closed palette: the composer-clear cascade
+            // cannot incidentally notify for the arm.
+            view.palette_kind = super::super::PaletteKind::Commands;
+            view.palette = None;
+            view.login_item_status = None;
+            let action = super::super::composer_controls::desktop_slash_action("/settings vtcode")
+                .expect("native /settings route");
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+    })
+    .unwrap();
+    cx.update(|_| {});
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).settings_tab, SettingsTab::VtCode);
+        assert_eq!(view.read(cx).login_item_status, Some(LoginItemStatus::RequiresApproval));
+    });
+    // At-least-once: fire counts multiply once the view has rendered (live
+    // window invalidators), so only the delta is meaningful — and without
+    // the arm notify the count stays 0.
+    assert!(notified.get() >= 1, "the arm must notify for its own mutations");
 }

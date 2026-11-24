@@ -173,9 +173,10 @@ impl DesktopView {
         let pending = cx.background_spawn(async { objc2::rc::autoreleasepool(|_| native_status()) });
         cx.spawn(async move |view, cx| {
             let status = pending.await;
-            let _updated = view.update(cx, |view, _| {
+            let _updated = view.update(cx, |view, cx| {
                 if view.login_item_status.is_none() {
                     view.apply_login_item_status(status);
+                    cx.notify();
                 }
             });
         })

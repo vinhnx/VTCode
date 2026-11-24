@@ -387,9 +387,7 @@ impl DesktopView {
                 if view.output_page_pending.as_ref() != Some(&pending) {
                     return;
                 }
-                if let Some(task) = view.output_page_task.take() {
-                    task.detach();
-                }
+                detach_task_slot(&mut view.output_page_task);
                 let Ok(mut page) = page else {
                     view.fail_output_page(cx);
                     return;
@@ -486,10 +484,7 @@ impl DesktopView {
                 {
                     return;
                 }
-                if let Some(task) = view.session_load_task.take() {
-                    // The completion callback is running inside this task; let it return normally.
-                    task.detach();
-                }
+                detach_task_slot(&mut view.session_load_task);
                 view.session_request = None;
                 match loaded {
                     Ok((loaded, history)) => view.accept_loaded_session(loaded, history, cx),
@@ -545,9 +540,7 @@ impl DesktopView {
                 {
                     return;
                 }
-                if let Some(task) = view.history_page_task.take() {
-                    task.detach();
-                }
+                detach_task_slot(&mut view.history_page_task);
                 view.history_page_request_id = None;
                 view.history_page_limit = 0;
                 view.history_page_loading = false;

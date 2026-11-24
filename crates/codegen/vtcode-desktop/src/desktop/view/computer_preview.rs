@@ -272,9 +272,7 @@ impl DesktopView {
                 if view.computer_preview_pending.get(&request_id) != Some(&pending) {
                     return;
                 }
-                if let Some(task) = view.computer_preview_task.take() {
-                    task.detach();
-                }
+                detach_task_slot(&mut view.computer_preview_task);
                 let Some((page, image)) = decoded else {
                     view.fail_computer_preview(&request_id, cx);
                     return;

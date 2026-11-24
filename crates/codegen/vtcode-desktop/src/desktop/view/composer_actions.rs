@@ -95,6 +95,10 @@ impl DesktopView {
                 if self.settings_tab == settings::SettingsTab::VtCode {
                     self.refresh_login_item_status(cx);
                 }
+                // open_settings early-returns (without notifying) when
+                // Settings is already open; the tab switch and refresh
+                // above still need a render.
+                cx.notify();
                 true
             }
             DesktopSlashAction::Permissions => {
@@ -163,6 +167,9 @@ impl DesktopView {
                     self.settings_tab = settings::SettingsTab::Appearance;
                     self.clear_submitted_command(window, cx);
                     self.open_settings(window, cx);
+                    // Already-open settings early-return above without
+                    // notifying; the tab switch still needs a render.
+                    cx.notify();
                 }
                 true
             }
@@ -778,42 +785,41 @@ impl DesktopView {
                 let provider = provider.clone();
                 let model = model.clone();
                 let revert_levels = levels.clone();
-                let view = cx.entity().downgrade();
-                window.defer(cx, move |window, cx| {
-                    let _updated = view.update(cx, |view, cx| {
-                        if view.palette_kind != PaletteKind::ModelOptions
-                            || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
-                            || !view.model_is_current(&provider, &model)
+                // Deferred past the emit: the subscription borrows the view,
+                // so the commit runs after the current update releases it.
+                cx.defer_in(window, move |view, window, cx| {
+                    if view.palette_kind != PaletteKind::ModelOptions
+                        || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
+                        || !view.model_is_current(&provider, &model)
+                    {
+                        return;
+                    }
+                    let params = protocol::SessionOptionsSelectParams {
+                        reasoning_effort: Some(effort),
+                        ..Default::default()
+                    };
+                    let selected = view.select_session_options(params.clone(), cx);
+                    if selected {
+                        // A committed effort choice completes the picker:
+                        // dismiss it and restore focus instead of leaving
+                        // the knob open for another adjustment.
+                        view.close_palette(window, cx);
+                        return;
+                    }
+                    if !view.session_option_is_current(&params) {
+                        // Blocked by a pending request. Revert the knob to
+                        // the CLI value so the panel never shows an
+                        // uncommitted level as selected. No commit means
+                        // the panel stays open for a retry.
+                        let current = view.session_options().and_then(|options| {
+                            revert_levels.iter().position(|level| level == &options.reasoning_effort)
+                        });
+                        if let Some(index) = current
+                            && let Some(slider) = view.effort_slider.clone()
                         {
-                            return;
+                            slider.update(cx, |state, cx| state.set_value(index as f32, window, cx));
                         }
-                        let params = protocol::SessionOptionsSelectParams {
-                            reasoning_effort: Some(effort),
-                            ..Default::default()
-                        };
-                        let selected = view.select_session_options(params.clone(), cx);
-                        if selected {
-                            // A committed effort choice completes the picker:
-                            // dismiss it and restore focus instead of leaving
-                            // the knob open for another adjustment.
-                            view.close_palette(window, cx);
-                            return;
-                        }
-                        if !view.session_option_is_current(&params) {
-                            // Blocked by a pending request. Revert the knob to
-                            // the CLI value so the panel never shows an
-                            // uncommitted level as selected. No commit means
-                            // the panel stays open for a retry.
-                            let current = view.session_options().and_then(|options| {
-                                revert_levels.iter().position(|level| level == &options.reasoning_effort)
-                            });
-                            if let Some(index) = current
-                                && let Some(slider) = view.effort_slider.clone()
-                            {
-                                slider.update(cx, |state, cx| state.set_value(index as f32, window, cx));
-                            }
-                        }
-                    });
+                    }
                 });
             }
         });

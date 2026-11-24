@@ -306,6 +306,16 @@ fn compact_viewport(window: &Window) -> bool {
     window.viewport_size().width < px(NARROW_PANEL_BREAKPOINT)
 }
 
+/// Release a stored task slot without cancelling the task itself.
+/// Dropping a [`Task`] cancels it, so a completion callback running
+/// inside its own task must detach instead of dropping the handle:
+/// the slot reads empty afterwards while the callback returns normally.
+fn detach_task_slot<T>(slot: &mut Option<Task<T>>) {
+    if let Some(task) = slot.take() {
+        task.detach();
+    }
+}
+
 actions!(
     desktop,
     [

@@ -301,18 +301,17 @@ impl DesktopView {
     pub(super) fn focus_workspace_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_inspector_tab(InspectorTab::Files, cx);
 
-        let view = cx.entity().downgrade();
-        window.defer(cx, move |window, cx| {
-            let _updated = view.update(cx, |view, cx| {
-                if !view.inspector_open || view.inspector_tab != InspectorTab::Files {
-                    return;
+        // Deferred past the tab switch: the action borrows the view, so the
+        // focus move runs after the current update releases it.
+        cx.defer_in(window, move |view, window, cx| {
+            if !view.inspector_open || view.inspector_tab != InspectorTab::Files {
+                return;
+            }
+            view.file_tree.update(cx, |tree, cx| {
+                if tree.selected_index().is_none() && tree.entry(0).is_some() {
+                    tree.set_selected_index(Some(0), cx);
                 }
-                view.file_tree.update(cx, |tree, cx| {
-                    if tree.selected_index().is_none() && tree.entry(0).is_some() {
-                        tree.set_selected_index(Some(0), cx);
-                    }
-                    tree.focus(window, cx);
-                });
+                tree.focus(window, cx);
             });
         });
     }

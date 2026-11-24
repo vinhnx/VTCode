@@ -307,9 +307,7 @@ impl DesktopView {
                 if view.mcp_app_pending.get(&request_id) != Some(&pending) {
                     return;
                 }
-                if let Some(task) = view.mcp_app_task.take() {
-                    task.detach();
-                }
+                detach_task_slot(&mut view.mcp_app_task);
                 let Ok(page) = parsed else {
                     view.fail_mcp_app_preview(&request_id, cx);
                     return;
