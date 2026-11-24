@@ -93,6 +93,9 @@ pub struct UnifiedCache<K, V> {
 struct UnifiedCacheInner<K, V> {
     entries: FxHashMap<K, CacheEntry<V>>,
     max_size: usize,
+    /// Configured TTL, kept so pressure tuning can set an absolute factor instead
+    /// of compounding reductions on every observation.
+    base_ttl: Duration,
     ttl: Duration,
     stats: CacheStats,
     eviction_policy: EvictionPolicy,
@@ -120,6 +123,7 @@ where
             inner: RwLock::new(UnifiedCacheInner {
                 entries: FxHashMap::with_capacity_and_hasher(max_size, Default::default()),
                 max_size,
+                base_ttl: ttl,
                 ttl,
                 stats: CacheStats { max_size, ..Default::default() },
                 eviction_policy,
@@ -395,15 +399,27 @@ where
         base_overhead + value_size
     }
 
-    /// Reduce TTL for all entries in cache (for pressure-based tuning)
-    /// Returns the new TTL that was set
+    /// Set the effective TTL to `factor` times the *configured* TTL.
+    ///
+    /// Idempotent by design: pressure is observed repeatedly (e.g. once per turn),
+    /// so multiplying the current TTL on every call would shrink it geometrically
+    /// toward zero and leave no way to recover when pressure subsides. A factor of
+    /// `1.0` restores the original TTL. Factors are clamped to `[0, 1]`; a
+    /// non-finite factor leaves the current TTL unchanged.
     pub fn reduce_ttl(&self, factor: f64) -> Duration {
         let Ok(mut inner) = self.inner.write() else {
             return Duration::ZERO;
         };
-        let new_ttl = Duration::from_secs_f64(inner.ttl.as_secs_f64() * factor);
-        inner.ttl = new_ttl;
-        new_ttl
+        if !factor.is_finite() {
+            return inner.ttl;
+        }
+        inner.ttl = inner.base_ttl.mul_f64(factor.clamp(0.0, 1.0));
+        inner.ttl
+    }
+
+    /// TTL this cache was configured with, before any pressure tuning.
+    pub fn base_ttl(&self) -> Duration {
+        self.inner.read().map(|inner| inner.base_ttl).unwrap_or(Duration::ZERO)
     }
 
     /// Evict entries under memory pressure (aggressive cleanup)
@@ -689,16 +705,29 @@ mod tests {
     }
 
     #[test]
-    fn test_pressure_aware_reduce_ttl() {
+    fn pressure_ttl_is_idempotent_and_recoverable() {
         let cache: UnifiedCache<TestKey, String> = UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
 
-        // Reduce by 40% (Warning pressure)
-        let new_ttl = cache.reduce_ttl(0.4);
-        assert_eq!(new_ttl.as_secs(), 120); // 300 * 0.4 = 120s
+        assert_eq!(cache.base_ttl(), Duration::from_secs(300));
+        assert_eq!(cache.reduce_ttl(0.4), Duration::from_secs(120));
+        // Sustained pressure at the same level must not compound toward zero.
+        assert_eq!(cache.reduce_ttl(0.4), Duration::from_secs(120));
+        assert_eq!(cache.reduce_ttl(0.1), Duration::from_secs(30));
+        // Recovery when pressure subsides.
+        assert_eq!(cache.reduce_ttl(1.0), Duration::from_secs(300));
+    }
 
-        // Reduce by 10% (Critical pressure)
-        let new_ttl = cache.reduce_ttl(0.1);
-        assert_eq!(new_ttl.as_secs(), 12); // 120 * 0.1 = 12s
+    #[test]
+    fn pressure_ttl_clamps_out_of_range_factors_and_ignores_non_finite() {
+        let cache: UnifiedCache<TestKey, String> = UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
+        assert_eq!(cache.reduce_ttl(0.5), Duration::from_secs(150));
+
+        // Non-finite factors leave the current TTL alone (no panic, no reset).
+        assert_eq!(cache.reduce_ttl(f64::NAN), Duration::from_secs(150));
+        assert_eq!(cache.reduce_ttl(f64::INFINITY), Duration::from_secs(150));
+        // Out-of-range factors clamp to the documented [0, 1] interval.
+        assert_eq!(cache.reduce_ttl(-1.0), Duration::ZERO);
+        assert_eq!(cache.reduce_ttl(2.0), Duration::from_secs(300));
     }
 
     #[test]
