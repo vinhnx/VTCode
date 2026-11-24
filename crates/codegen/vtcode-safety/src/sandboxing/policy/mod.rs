@@ -287,7 +287,33 @@ fn vtcode_sensitive_paths(environment: &[(&str, &str)]) -> anyhow::Result<Vec<Se
     Ok(paths)
 }
 
-const PROTECTED_WRITABLE_ROOT_DIR_NAMES: &[&str] = &[".git", ".vtcode", ".codex", ".agents"];
+/// Workspace-local directories that tools outside the sandbox execute or read
+/// as configuration. Every writable root keeps these read-only: `.git` hooks,
+/// agent configuration (`.codex`, `.vtcode`, `.agents`, `.claude`, `.cursor`,
+/// `.gemini`, `.windsurf`, `.opencode`, `.devin`) and editor settings
+/// (`.vscode`, `.idea`). Hooks, plugins, and workflows in these directories —
+/// and an editor's format-on-save formatter — run with the user's privileges
+/// *outside* the sandbox, so a sandboxed write there is still a host escape.
+///
+/// Keep this in sync with the tool-level protection in
+/// `vtcode_core::permissions::is_protected_write_path`. The tool layer keeps a
+/// narrow exception for authoring project skills under `.agents/skills/`; the
+/// OS sandbox cannot carve out a subtree from a writable root, so it protects
+/// the whole directory.
+const PROTECTED_WRITABLE_ROOT_DIR_NAMES: &[&str] = &[
+    ".git",
+    ".vtcode",
+    ".codex",
+    ".agents",
+    ".claude",
+    ".cursor",
+    ".gemini",
+    ".windsurf",
+    ".opencode",
+    ".devin",
+    ".vscode",
+    ".idea",
+];
 
 fn protected_writable_root_sensitive_paths(writable_roots: &[WritableRoot]) -> Vec<SensitivePath> {
     let mut paths = Vec::new();

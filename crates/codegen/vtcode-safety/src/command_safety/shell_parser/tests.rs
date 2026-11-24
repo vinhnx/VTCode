@@ -1,6 +1,35 @@
 use super::*;
 
 #[test]
+fn output_redirection_destinations_collects_literal_write_targets() {
+    assert_eq!(
+        output_redirection_destinations("echo x > .git/config && cat >> '.vscode/settings.json'"),
+        vec![".git/config".to_string(), ".vscode/settings.json".to_string()]
+    );
+    assert_eq!(output_redirection_destinations("echo x 2>&1"), Vec::<String>::new());
+    assert_eq!(output_redirection_destinations("cat < .git/config"), Vec::<String>::new());
+}
+
+#[test]
+fn output_redirection_destinations_unwraps_nested_interpreter_scripts() {
+    assert_eq!(output_redirection_destinations("sh -c 'cat > .git/config'"), vec![".git/config".to_string()]);
+    assert_eq!(
+        output_redirection_destinations("bash -lc \"printf x >> '.claude/settings.json'\""),
+        vec![".claude/settings.json".to_string()]
+    );
+    // A non-shell command's argument that merely mentions `sh -c` is data.
+    assert_eq!(output_redirection_destinations("echo 'sh -c cat > .git/config'"), Vec::<String>::new());
+}
+
+#[test]
+fn output_redirection_destinations_fail_closed_on_dynamic_targets() {
+    assert_eq!(output_redirection_destinations("echo x > $OUTPUT"), Vec::<String>::new());
+    assert_eq!(output_redirection_destinations("echo x > >(cat)"), Vec::<String>::new());
+    // A redirection inside a quoted argument is not a file redirect.
+    assert_eq!(output_redirection_destinations("echo '> .git/config'"), Vec::<String>::new());
+}
+
+#[test]
 fn tokenize_simple_command() {
     let cmd = "git status";
     let tokens = tokenize_command(cmd).unwrap();

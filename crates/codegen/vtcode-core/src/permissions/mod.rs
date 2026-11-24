@@ -674,15 +674,32 @@ fn is_protected_write_path(workspace_root: &Path, path: &Path) -> bool {
     };
 
     let as_string = relative.to_string_lossy().replace('\\', "/");
-    if matches!(as_string.as_str(), ".vtcode/commands" | ".vtcode/agents" | ".vtcode/skills")
+    if matches!(as_string.as_str(), ".vtcode/commands" | ".vtcode/agents" | ".vtcode/skills" | ".agents/skills")
         || as_string.starts_with(".vtcode/commands/")
         || as_string.starts_with(".vtcode/agents/")
         || as_string.starts_with(".vtcode/skills/")
+        || as_string.starts_with(".agents/skills/")
     {
         return false;
     }
 
-    matches!(as_string.split('/').next(), Some(".git" | ".vtcode" | ".vscode" | ".idea"))
+    matches!(
+        as_string.split('/').next(),
+        Some(
+            ".git"
+                | ".vtcode"
+                | ".codex"
+                | ".agents"
+                | ".claude"
+                | ".cursor"
+                | ".gemini"
+                | ".windsurf"
+                | ".opencode"
+                | ".devin"
+                | ".vscode"
+                | ".idea"
+        )
+    )
 }
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {

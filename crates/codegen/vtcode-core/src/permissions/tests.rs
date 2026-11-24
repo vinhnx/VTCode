@@ -129,6 +129,57 @@ fn protected_directory_exceptions_are_not_flagged() {
 }
 
 #[test]
+fn agent_config_writes_require_protected_prompt() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    // Agent hooks/plugins run with the user's privileges outside any command
+    // sandbox, so file tools must gate writes there like `.vscode` and `.git`.
+    for path in [
+        "../.codex/config.toml",
+        "../.agents/config.json",
+        "../.claude/settings.json",
+        "../.cursor/hooks.json",
+        "../.gemini/settings.json",
+        "../.windsurf/workflows/deploy.md",
+        "../.opencode/opencode.jsonc",
+        "../.devin/hooks/pre-tool-use.sh",
+        "../.vscode/settings.json",
+    ] {
+        let request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({ "action": "write", "path": path })),
+        );
+        assert!(request.requires_protected_write_prompt(), "expected protected write for {path}");
+    }
+}
+
+#[test]
+fn agents_skill_authoring_stays_exempt_from_protected_write_prompt() {
+    let (_temp, workspace, cwd) = workspace_roots();
+    for path in [
+        "../.agents/skills/example/SKILL.md",
+        "../.agents/skills/example/example.rs",
+    ] {
+        let request = build_permission_request(
+            &workspace,
+            &cwd,
+            tools::UNIFIED_FILE,
+            Some(&json!({ "action": "write", "path": path })),
+        );
+        assert!(!request.requires_protected_write_prompt(), "skill authoring must stay frictionless: {path}");
+    }
+    // Other `.agents` content is still protected.
+    let request = build_permission_request(
+        &workspace,
+        &cwd,
+        tools::UNIFIED_FILE,
+        Some(&json!({ "action": "write", "path": "../.agents/config.json" })),
+    );
+    assert!(request.requires_protected_write_prompt());
+}
+
+#[test]
 fn apply_patch_paths_are_extracted_for_edit_rules() {
     let (_temp, workspace, cwd) = workspace_roots();
     let config = PermissionsConfig {

@@ -106,6 +106,17 @@ available for library callers that intentionally manage their own process isolat
 the context and passes it through initial connections, connection pools, and reconnects. MCP stderr is bounded and
 secret-redacted before it is logged.
 
+Workspace-local directories that another tool executes or reads as configuration stay read-only under a restrictive
+sandbox policy: `.git` plus agent/editor configuration directories — `.vtcode`, `.codex`, `.agents`, `.claude`,
+`.cursor`, `.gemini`, `.windsurf`, `.opencode`, `.devin`, `.vscode`, and `.idea`. These directories matter because
+hooks, plugins, and workflows stored there (for example `.git/hooks`, `.claude/hooks`, `.cursor/hooks.json`,
+`.gemini/settings.json`) and editor format-on-save (`.vscode/settings.json`) run with the user's privileges, outside
+the command sandbox — a sandboxed write there is a host escape. macOS Seatbelt denies these writes
+at the kernel layer. Landlock
+has no deny rules, so Linux also checks literal shell output-redirection destinations against the same policy before
+launch (`cat > .git/hooks/pre-commit` is a write even though `cat` looks like a reader). Dynamic redirection targets
+are rejected earlier by shell validation and are never guessed here.
+
 Provider-owned subprocesses use the same inherited-environment filter. Local Ollama, LM Studio, and llama.cpp helpers,
 plus custom provider authentication commands, do not receive unrelated API keys, cloud credentials, tokens, linker
 overrides, or dynamic-loader variables. Copilot forwards only its documented GitHub authentication variables, and the

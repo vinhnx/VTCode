@@ -59,7 +59,39 @@ fn test_workspace_write_protects_internal_metadata_dirs() {
     assert!(!policy.is_path_writable(&cwd.join(".vtcode/cache"), &cwd));
     assert!(!policy.is_path_writable(&cwd.join(".codex/state"), &cwd));
     assert!(!policy.is_path_writable(&cwd.join(".agents/skills"), &cwd));
+    assert!(!policy.is_path_writable(&cwd.join(".claude/hooks/pre-tool-use.sh"), &cwd));
+    for path in [
+        ".cursor/hooks.json",
+        ".gemini/settings.json",
+        ".windsurf/hooks.json",
+        ".opencode/plugins/injected.ts",
+        ".devin/hooks/pre-tool-use.sh",
+    ] {
+        assert!(!policy.is_path_writable(&cwd.join(path), &cwd), "agent hook config must stay read-only: {path}");
+    }
+    // Editor config is code execution outside the sandbox: VS Code's
+    // format-on-save runs the formatter named in `.vscode/settings.json`.
+    assert!(!policy.is_path_writable(&cwd.join(".vscode/settings.json"), &cwd));
+    assert!(!policy.is_path_writable(&cwd.join(".idea/workspace.xml"), &cwd));
     assert!(policy.is_path_writable(&cwd.join("src/main.rs"), &cwd));
+}
+
+#[test]
+fn test_workspace_editor_config_dirs_stay_readable() {
+    let cwd = PathBuf::from("/tmp/workspace");
+    let policy = SandboxPolicy::workspace_write(vec![cwd.clone()]);
+
+    for path in [
+        ".git/config",
+        ".claude/settings.json",
+        ".cursor/hooks.json",
+        ".gemini/settings.json",
+        ".vscode/settings.json",
+        ".idea/workspace.xml",
+    ] {
+        assert!(policy.is_path_readable(&cwd.join(path)), "read-only protection must not hide {path}");
+    }
+    assert!(!policy.is_path_writable(&cwd.join(".vscode/settings.json"), &cwd));
 }
 
 #[test]

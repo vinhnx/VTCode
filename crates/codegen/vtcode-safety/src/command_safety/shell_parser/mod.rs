@@ -294,6 +294,106 @@ fn is_output_redirection(text: &str) -> bool {
     redirect.starts_with('>') && !redirect.starts_with(">&-")
 }
 
+/// Literal file paths that a static shell script opens for writing.
+///
+/// Command classification cannot see redirections (`cat > .git/config` looks
+/// like a read), so the sandbox preflight uses these destinations to check
+/// writes against the active policy. Descriptor routing (`2>&1`), input and
+/// heredoc redirections carry no file target and are ignored. Dynamic
+/// destinations are skipped because [`validate_redirection_paths`] rejects
+/// them before execution — never guess a path from an unresolved expansion.
+/// Malformed scripts yield no destinations; the strict validators fail closed
+/// on them before this function is reached.
+pub fn output_redirection_destinations(script: &str) -> Vec<String> {
+    let mut destinations = Vec::new();
+    collect_output_destinations(script, &mut destinations, 0);
+    destinations
+}
+
+/// Bound the recursion for nested `sh -c` scripts: a script that generates
+/// another shell script with an ever-growing payload must not hang preflight.
+const MAX_NESTED_SHELL_DEPTH: u8 = 2;
+
+fn collect_output_destinations(script: &str, destinations: &mut Vec<String>, depth: u8) {
+    if !script.contains('>') {
+        return;
+    }
+    let Ok(tree) = BashTree::parse(script) else {
+        return;
+    };
+    if tree.has_error() {
+        return;
+    }
+
+    // Depth-first pre-order: named children are in source order and the stack
+    // is pushed in reverse, so the caller reports blocked targets stably.
+    let mut pending = vec![tree.root()];
+    while let Some(node) = pending.pop() {
+        if node.kind() == "file_redirect" && is_output_redirection(node.text()) {
+            for destination in node.field_children("destination") {
+                let raw = destination.text();
+                if contains_dynamic_shell_syntax(raw) {
+                    continue;
+                }
+                let Ok(words) = shell_words::split(raw) else {
+                    continue;
+                };
+                if let [path] = words.as_slice()
+                    && !path.is_empty()
+                    && !path.bytes().all(|byte| byte.is_ascii_digit())
+                    && path != "-"
+                    // Process substitution (`>(cmd)`) and globbing are not
+                    // literal file paths. Never guess where they write.
+                    && !path.contains(['$', '`', '(', ')', '<', '>', '|', ';', '&', '*', '?', '['])
+                {
+                    destinations.push(path.clone());
+                }
+            }
+        }
+        for child in node.named_children().into_iter().rev() {
+            pending.push(child);
+        }
+    }
+
+    // A nested interpreter keeps its redirections inside a quoted argument, so
+    // the AST walk above cannot see them. Reuse the canonical command
+    // extractor (which already unwraps loops/conditionals) and descend only
+    // into literal `sh|bash|zsh -c|-lc <script>` invocations.
+    if depth >= MAX_NESTED_SHELL_DEPTH {
+        return;
+    }
+    for command in parse_shell_commands(script).unwrap_or_default() {
+        let Some(flag_index) = command.iter().position(|arg| matches!(arg.as_str(), "-c" | "-lc" | "-ic")) else {
+            continue;
+        };
+        if flag_index == 0 {
+            continue;
+        }
+        let shell = std::path::Path::new(command.first().map_or("", String::as_str))
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        if !matches!(shell, "sh" | "bash" | "zsh") {
+            continue;
+        }
+        if let Some(inner) = command.get(flag_index + 1)
+            && !contains_dynamic_shell_syntax(inner)
+        {
+            // The extractor keeps one surrounding quote pair on the script.
+            // Strip exactly that pair; `shell_words::split` cannot be used
+            // here because it would split the inner `>` operator as a word.
+            let bytes = inner.as_bytes();
+            let inner_script =
+                if bytes.len() >= 2 && matches!(bytes[0], b'\'' | b'"') && bytes[bytes.len() - 1] == bytes[0] {
+                    inner.get(1..inner.len() - 1).unwrap_or(inner.as_str())
+                } else {
+                    inner.as_str()
+                };
+            collect_output_destinations(inner_script, destinations, depth + 1);
+        }
+    }
+}
+
 /// Parses shell script using tree-sitter bash grammar.
 fn parse_with_tree_sitter(script: &str, reject_syntax_errors: bool) -> Result<Vec<Vec<String>>, String> {
     // Never hand the scanner an input upstream tree-sitter-bash #337 crashes

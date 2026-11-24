@@ -403,6 +403,7 @@ impl ToolRegistry {
         prepared_command.command = apply_runtime_sandbox_to_command(
             prepared_command.command,
             &prepared_command.requested_command,
+            Some(&prepared_command.shell_script),
             &sandbox_request.working_dir_path,
             sandbox_plan.sandbox_policy,
         )?;

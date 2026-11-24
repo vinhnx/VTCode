@@ -625,6 +625,7 @@ pub(super) fn sandbox_policy_with_additional_permissions(
 pub(super) fn apply_runtime_sandbox_to_command(
     command: Vec<String>,
     requested_command: &[String],
+    shell_script: Option<&str>,
     working_dir: &Path,
     sandbox_policy: Option<SandboxPolicy>,
 ) -> Result<Vec<String>> {
@@ -638,7 +639,7 @@ pub(super) fn apply_runtime_sandbox_to_command(
         ));
     }
 
-    enforce_sandbox_preflight_guards(requested_command, &policy, working_dir)?;
+    enforce_sandbox_preflight_guards(requested_command, shell_script, &policy, working_dir)?;
     transform_command_with_sandbox_policy(command, &policy, working_dir)
 }
 
@@ -692,6 +693,7 @@ fn map_sandbox_transform_error(error: SandboxTransformError, policy: &SandboxPol
 
 pub(super) fn enforce_sandbox_preflight_guards(
     requested_command: &[String],
+    shell_script: Option<&str>,
     policy: &SandboxPolicy,
     working_dir: &Path,
 ) -> Result<()> {
@@ -744,7 +746,60 @@ pub(super) fn enforce_sandbox_preflight_guards(
         }
     }
 
+    // Redirections are invisible to `command_likely_writes_workspace`: `cat >
+    // .git/config` looks like a read. They are also the classic editor-config
+    // injection vector (`.vscode/settings.json`, format-on-save). Landlock has
+    // no deny rules to subtract protected dirs from a writable root, so this
+    // preflight check is the only Linux layer enforcing those protections.
+    if let Some(script) = shell_script {
+        let mut blocked_redirection_targets = BTreeSet::new();
+        for destination in crate::command_safety::shell_parser::output_redirection_destinations(script) {
+            let Some(candidate) = resolve_redirection_destination(&destination, working_dir)? else {
+                continue;
+            };
+            if !policy.is_path_writable(&candidate, working_dir) {
+                blocked_redirection_targets.insert(candidate.display().to_string());
+            }
+        }
+        if !blocked_redirection_targets.is_empty() {
+            let listed = blocked_redirection_targets.into_iter().take(3).collect::<Vec<_>>().join(", ");
+            return Err(anyhow!(
+                "Command redirects output to path(s) blocked for writes by sandbox policy '{}': {}",
+                policy.description(),
+                listed
+            ));
+        }
+    }
+
     Ok(())
+}
+
+/// Resolve a literal output-redirection destination against the command cwd.
+///
+/// Unlike [`resolve_argument_path`], redirection targets are unambiguous paths
+/// and include bare relative forms (`.git/config`, `settings.json`). Parent
+/// traversal is rejected instead of being normalized away: upstream redirection
+/// validation rejects it, and a preflight that silently canonicalized it could
+/// check a different path than the one the shell opens.
+fn resolve_redirection_destination(destination: &str, working_dir: &Path) -> Result<Option<PathBuf>> {
+    let trimmed = destination.trim();
+    if trimmed.is_empty() || trimmed == "/dev/null" {
+        return Ok(None);
+    }
+    let path = if trimmed == "~" || trimmed.starts_with("~/") {
+        vtcode_commons::paths::expand_tilde(trimmed)
+    } else {
+        PathBuf::from(trimmed)
+    };
+    if path.components().any(|component| component == Component::ParentDir) {
+        return Err(anyhow!("redirection destination '{}' must not contain '..' traversal", trimmed));
+    }
+    let resolved = if path.is_absolute() {
+        path
+    } else {
+        working_dir.join(path)
+    };
+    Ok(Some(crate::utils::path::normalize_path(&resolved)))
 }
 
 fn command_likely_needs_network(command: &[String]) -> bool {
@@ -806,6 +861,7 @@ fn command_likely_writes_workspace(command: &[String]) -> bool {
             | "ln"
             | "install"
             | "truncate"
+            | "tee"
             | "rustfmt"
             | "gofmt"
     ) {
@@ -888,7 +944,10 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
             None
         }
     } else {
-        None
+        // Bare relative paths are the common shell form (`touch .git/config`,
+        // `tee .vscode/settings.json`). Shell argv is resolved against cwd, so
+        // the preflight must check the same path the program will open.
+        Some(working_dir.join(trimmed))
     }?;
 
     Some(candidate)

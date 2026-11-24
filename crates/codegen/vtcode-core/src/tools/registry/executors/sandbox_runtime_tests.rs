@@ -21,6 +21,7 @@ async fn parse_permissions(
     parse_requested_sandbox_permissions(obj, workspace_root, cwd, config).await
 }
 
+mod escalation;
 #[test]
 fn runtime_sandbox_config_maps_workspace_policy_overrides() {
     let mut config = vtcode_config::SandboxConfig {
@@ -237,7 +238,7 @@ fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
 fn preflight_blocks_network_commands_when_network_disabled() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
-    let error = enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+    let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
         .expect_err("network command should be denied");
     assert!(error.to_string().contains("denies network"));
 }
@@ -255,7 +256,7 @@ fn workspace_write_allow_all_network_is_not_blocked() {
     assert!(policy.has_full_network_access());
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
-    enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+    enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
         .expect("allow_all network should permit network commands");
 }
 
@@ -272,7 +273,7 @@ fn read_only_allow_all_network_is_not_blocked() {
     assert!(policy.has_full_network_access());
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
-    enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+    enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
         .expect("read-only allow_all network should permit network commands");
 }
 
@@ -292,7 +293,7 @@ fn read_only_allowlist_network_is_not_blocked() {
     assert!(policy.is_network_allowed("api.github.com", 443));
 
     let command = vec!["curl".to_string(), "https://api.github.com".to_string()];
-    enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+    enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
         .expect("read-only allowlist network should permit network commands");
 }
 
@@ -303,7 +304,7 @@ fn preflight_blocks_sensitive_path_arguments() {
         vec![SensitivePath::new("/tmp/blocked")],
     );
     let command = vec!["cat".to_string(), "/tmp/blocked/secret.txt".to_string()];
-    let error = enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+    let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
         .expect_err("sensitive path should be denied");
     assert!(error.to_string().contains("sensitive path"));
 }
@@ -312,9 +313,96 @@ fn preflight_blocks_sensitive_path_arguments() {
 fn preflight_blocks_writes_to_protected_workspace_metadata() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["touch".to_string(), "/tmp/ws/.vtcode/session.json".to_string()];
-    let error = enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from("/tmp/ws").as_path())
+    let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from("/tmp/ws").as_path())
         .expect_err("protected workspace metadata should be denied");
     assert!(error.to_string().contains("blocked for writes"));
+}
+
+#[test]
+fn preflight_blocks_redirection_writes_to_editor_and_git_config() {
+    let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
+    let command = vec!["bash".to_string(), "-lc".to_string()];
+
+    // `cat` is not a known mutator, so the argv-only classifier cannot see
+    // these writes. They are the article's editor/format-on-save injection.
+    for script in [
+        "cat > .git/hooks/pre-commit",
+        "cat > .claude/hooks/pre-tool-use.sh",
+        "cat > .cursor/hooks.json",
+        "cat > .gemini/settings.json",
+        "cat > .windsurf/hooks.json",
+        "cat > .opencode/opencode.jsonc",
+        "cat > .devin/hooks/pre-tool-use.sh",
+        "sh -c 'cat > .git/config'",
+        "cat > .vscode/settings.json",
+        "echo x >> .idea/workspace.xml",
+        "echo x > /tmp/ws/.codex/config.toml",
+    ] {
+        let error =
+            enforce_sandbox_preflight_guards(&command, Some(script), &policy, PathBuf::from("/tmp/ws").as_path())
+                .expect_err("redirection to protected config must be denied");
+        assert!(error.to_string().contains("redirects output"), "unexpected error for {script}: {error}");
+    }
+}
+
+#[test]
+fn preflight_allows_benign_redirections() {
+    let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
+    let command = vec!["bash".to_string(), "-lc".to_string()];
+    let cwd = PathBuf::from("/tmp/ws");
+
+    for script in [
+        "echo x > src/main.rs",
+        "echo x > build.log",
+        "echo x > /dev/null",
+        "echo x 2>&1",
+        "cat < .git/config",
+    ] {
+        enforce_sandbox_preflight_guards(&command, Some(script), &policy, cwd.as_path())
+            .unwrap_or_else(|error| panic!("benign redirection must be allowed: {script}: {error}"));
+    }
+}
+
+#[test]
+fn preflight_blocks_bare_relative_writes_to_protected_config() {
+    let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
+    let cwd = PathBuf::from("/tmp/ws");
+
+    for argv in [
+        vec!["touch", ".vscode/settings.json"],
+        vec!["tee", ".git/hooks/pre-commit"],
+        vec!["cp", "src/main.rs", ".claude/settings.json"],
+    ] {
+        let command: Vec<String> = argv.iter().map(|arg| (*arg).to_string()).collect();
+        let error = enforce_sandbox_preflight_guards(&command, None, &policy, cwd.as_path())
+            .expect_err("bare relative write to protected config must be denied");
+        assert!(error.to_string().contains("blocked for writes"), "{argv:?}: {error}");
+    }
+
+    for argv in [vec!["touch", "src/new.rs"], vec!["tee", "build.log"]] {
+        let command: Vec<String> = argv.iter().map(|arg| (*arg).to_string()).collect();
+        enforce_sandbox_preflight_guards(&command, None, &policy, cwd.as_path())
+            .unwrap_or_else(|error| panic!("benign write must be allowed: {argv:?}: {error}"));
+    }
+}
+
+#[test]
+fn redirection_guard_runs_in_the_runtime_transform() {
+    let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
+    let command = vec![
+        "bash".to_string(),
+        "-lc".to_string(),
+        "printf x > .vscode/settings.json".to_string(),
+    ];
+    let error = apply_runtime_sandbox_to_command(
+        command.clone(),
+        &command,
+        Some(&command[2]),
+        PathBuf::from("/tmp/ws").as_path(),
+        Some(policy),
+    )
+    .expect_err("runtime transform must apply the redirection guard");
+    assert!(error.to_string().contains("redirects output"));
 }
 
 #[test]
@@ -338,7 +426,7 @@ fn external_mode_is_rejected_for_local_pty_execution() {
     )
     .expect("sandbox plan");
     let error =
-        apply_runtime_sandbox_to_command(command, &requested, PathBuf::from(".").as_path(), plan.sandbox_policy)
+        apply_runtime_sandbox_to_command(command, &requested, None, PathBuf::from(".").as_path(), plan.sandbox_policy)
             .expect_err("external sandbox should not be allowed in local PTY flow");
     assert!(error.to_string().contains("not supported"));
 }
@@ -466,9 +554,14 @@ fn with_additional_permissions_widens_read_only_for_write_roots() {
         Some(&additional_permissions),
     )
     .expect("sandbox plan");
-    let transformed =
-        apply_runtime_sandbox_to_command(command, &requested, PathBuf::from("/tmp/ws").as_path(), plan.sandbox_policy)
-            .expect("sandbox transform should succeed");
+    let transformed = apply_runtime_sandbox_to_command(
+        command,
+        &requested,
+        None,
+        PathBuf::from("/tmp/ws").as_path(),
+        plan.sandbox_policy,
+    )
+    .expect("sandbox transform should succeed");
     let needle = extra_path.to_string_lossy().to_string();
 
     assert!(
@@ -728,226 +821,4 @@ fn compound_command_string_without_recursive_delete_stays_unclassified() {
         "a read-only compound command must not require approval: {:?}",
         plan.approval_reason
     );
-}
-
-#[test]
-fn require_escalated_bypasses_runtime_sandbox_enforcement() {
-    let config = vtcode_config::SandboxConfig {
-        enabled: true,
-        default_policy: vtcode_config::SandboxPolicy::External,
-        ..Default::default()
-    };
-
-    let command = vec!["echo".to_string(), "hello".to_string()];
-    let requested = command.clone();
-    let plan = build_shell_execution_plan(
-        &config,
-        PathBuf::from(".").as_path(),
-        PathBuf::from(".").as_path(),
-        &requested,
-        None,
-        SandboxPermissions::RequireEscalated,
-        None,
-    )
-    .expect("sandbox plan");
-    let out = apply_runtime_sandbox_to_command(
-        command.clone(),
-        &requested,
-        PathBuf::from(".").as_path(),
-        plan.sandbox_policy,
-    )
-    .expect("require_escalated should bypass sandbox transform");
-    assert_eq!(out, command);
-}
-
-#[tokio::test]
-async fn additional_permissions_reject_parent_traversal() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let payload = json!({
-        "additional_permissions": {
-            "fs_write": ["../escape"]
-        }
-    });
-    let config = vtcode_config::SandboxConfig::default();
-
-    let err = parse_permissions(&payload, workspace.path(), workspace.path(), &config)
-        .await
-        .expect_err("parent traversal should fail");
-    assert!(err.to_string().contains("must not contain '..' traversal"));
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn additional_permissions_reject_symlink_escape() {
-    use std::os::unix::fs::symlink;
-
-    let workspace = tempfile::tempdir().expect("workspace");
-    let outside = tempfile::tempdir().expect("outside");
-    symlink(outside.path(), workspace.path().join("escape")).expect("symlink fixture");
-
-    let payload = json!({
-        "additional_permissions": {
-            "fs_write": ["escape/output.txt"]
-        }
-    });
-    let config = vtcode_config::SandboxConfig::default();
-
-    let err = parse_permissions(&payload, workspace.path(), workspace.path(), &config)
-        .await
-        .expect_err("symlink escape should fail");
-    assert!(err.to_string().contains("symlink resolution"), "unexpected error: {err:#}");
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn additional_permissions_reject_dangling_symlink() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let outside = tempfile::tempdir().expect("outside");
-    let link = workspace.path().join("link");
-    std::os::unix::fs::symlink(outside.path().join("missing"), &link).expect("symlink fixture");
-    let payload = json!({ "additional_permissions": { "fs_write": [link] } });
-    let error = parse_permissions(&payload, workspace.path(), workspace.path(), &Default::default())
-        .await
-        .expect_err("a dangling symlink must not be granted as a missing path");
-    assert!(format!("{error:#}").contains("Failed to resolve canonical path"));
-}
-
-#[tokio::test]
-async fn additional_permissions_reject_sensitive_paths() {
-    let sensitive_root = tempfile::tempdir().expect("sensitive root");
-    let payload = json!({
-        "additional_permissions": {
-            "fs_read": [sensitive_root.path()]
-        }
-    });
-    let mut config = vtcode_config::SandboxConfig::default();
-    config.sensitive_paths.use_defaults = false;
-    config.sensitive_paths.additional = vec![sensitive_root.path().display().to_string()];
-
-    let err = parse_permissions(&payload, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("sensitive roots should fail");
-    assert!(err.to_string().contains("sensitive or protected location"));
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn additional_permissions_fail_closed_on_unresolvable_sensitive_root() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let protected_target = workspace.path().join("future-secret");
-    let protected_link = workspace.path().join("protected");
-    std::os::unix::fs::symlink(&protected_target, &protected_link).expect("symlink fixture");
-    let payload = json!({ "additional_permissions": { "fs_write": [protected_target] } });
-    let mut config = vtcode_config::SandboxConfig::default();
-    config.sensitive_paths.use_defaults = false;
-    config.sensitive_paths.additional = vec![protected_link.display().to_string()];
-
-    let error = parse_permissions(&payload, workspace.path(), workspace.path(), &config)
-        .await
-        .expect_err("an unresolved protected root must prevent a grant");
-    assert!(format!("{error:#}").contains("failed to resolve additional-permission root"));
-
-    config.sensitive_paths.additional = vec![workspace.path().join("other-missing").display().to_string()];
-    assert!(
-        parse_permissions(&payload, workspace.path(), workspace.path(), &config)
-            .await
-            .is_ok()
-    );
-}
-
-#[tokio::test]
-async fn additional_permissions_reject_paths_outside_allowed_roots() {
-    let payload = json!({
-        "additional_permissions": {
-            "fs_write": ["/etc/passwd"]
-        }
-    });
-    let config = vtcode_config::SandboxConfig::default();
-
-    let err = parse_permissions(&payload, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("non-workspace, non-temp paths should fail");
-    assert!(err.to_string().contains("outside the allowed workspace and temp roots"));
-}
-
-#[tokio::test]
-async fn require_escalated_requires_non_empty_justification() {
-    let payload = json!({
-        "sandbox_permissions": "require_escalated"
-    });
-    let config = vtcode_config::SandboxConfig::default();
-    let err = parse_permissions(&payload, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("require_escalated without justification should fail");
-    assert!(err.to_string().contains("missing `justification`"));
-
-    let payload = json!({
-        "sandbox_permissions": "require_escalated",
-        "justification": "   "
-    });
-    let err = parse_permissions(&payload, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("blank justification should fail");
-    assert!(err.to_string().contains("missing `justification`"));
-}
-
-#[tokio::test]
-async fn bypass_sandbox_requires_justification_and_rejects_additional_permissions() {
-    let config = vtcode_config::SandboxConfig::default();
-    let missing_justification = json!({
-        "sandbox_permissions": "bypass_sandbox"
-    });
-    let err = parse_permissions(&missing_justification, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("bypass_sandbox without justification should fail");
-    assert!(err.to_string().contains("missing `justification`"));
-
-    let conflicting = json!({
-        "sandbox_permissions": "bypass_sandbox",
-        "justification": "Do you want to bypass the sandbox for this command?",
-        "additional_permissions": {
-            "fs_write": ["/tmp/demo.txt"]
-        }
-    });
-    let err = parse_permissions(&conflicting, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("bypass_sandbox plus additional permissions should fail");
-    assert!(
-        err.to_string()
-            .contains("requires `sandbox_permissions` set to `with_additional_permissions`")
-    );
-}
-
-#[tokio::test]
-async fn require_escalated_rejects_additional_permissions_even_with_justification() {
-    let payload = json!({
-        "sandbox_permissions": "require_escalated",
-        "justification": "Do you want to rerun this command without sandbox restrictions?",
-        "additional_permissions": {
-            "fs_write": ["/tmp/demo.txt"]
-        }
-    });
-    let config = vtcode_config::SandboxConfig::default();
-
-    let err = parse_permissions(&payload, Path::new("."), Path::new("."), &config)
-        .await
-        .expect_err("escalated requests must not combine additional permissions");
-    assert!(
-        err.to_string()
-            .contains("requires `sandbox_permissions` set to `with_additional_permissions`")
-    );
-}
-
-#[tokio::test]
-async fn require_escalated_accepts_justified_request() {
-    let payload = json!({
-        "sandbox_permissions": "require_escalated",
-        "justification": "Do you want to rerun this command without sandbox restrictions?"
-    });
-    let (sandbox_permissions, additional_permissions) =
-        parse_permissions(&payload, Path::new("."), Path::new("."), &vtcode_config::SandboxConfig::default())
-            .await
-            .expect("justified require_escalated should parse");
-    assert_eq!(sandbox_permissions, SandboxPermissions::RequireEscalated);
-    assert!(additional_permissions.is_none());
 }
