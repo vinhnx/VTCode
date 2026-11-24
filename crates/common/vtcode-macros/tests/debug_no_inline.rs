@@ -59,7 +59,10 @@ mod std_types {
 
     /// Ten variants crosses the C-like path threshold; `r#type` checks that raw
     /// prefixes are stripped exactly like the built-in derive.
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "raw-identifier variant must stay lowercase to mirror std derive output"
+    )]
     #[derive(Debug)]
     pub enum CLike {
         Alpha,
@@ -161,7 +164,10 @@ mod no_inline_types {
     #[derive(DebugNoInline)]
     pub enum Never {}
 
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "raw-identifier variant must stay lowercase to mirror std derive output"
+    )]
     #[derive(DebugNoInline)]
     pub enum CLike {
         Alpha,
