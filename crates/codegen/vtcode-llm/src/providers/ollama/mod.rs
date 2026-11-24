@@ -898,6 +898,13 @@ impl LLMProvider for OllamaProvider {
                     }
                 }
 
+                // Fail closed when the retained tail tops the shared SSE bound,
+                // so a peer that never emits a newline cannot grow memory for
+                // the stream lifetime. Measured after the line drains above.
+                crate::providers::shared::check_sse_tail_bound(buffer.len()).map_err(|overflow| {
+                    LLMError::Provider { message: format!("Ollama stream error: {overflow}"), metadata: None }
+                })?;
+
                 if completed {
                     break;
                 }

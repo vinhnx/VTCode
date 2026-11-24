@@ -151,12 +151,11 @@ impl LLMProvider for OpenRouterProvider {
                     }
                 }
 
-                // Drain the consumed prefix so `buf` stays bounded to the
-                // unprocessed tail rather than growing for the entire stream.
-                if offset > 0 {
-                    buf.drain(..offset);
-                    offset = 0;
-                }
+                // Drain the consumed prefix and fail closed when the retained
+                // tail tops the shared SSE bound, so a peer that never emits
+                // an event boundary cannot grow memory for the stream lifetime.
+                crate::providers::shared::drain_and_bound_sse_tail(&mut buf, &mut offset)
+                    .map_err(|overflow| format_parse_error("OpenRouter", &overflow))?;
             }
 
             yield LLMStreamEvent::Completed { response: Box::new(aggregator.finalize()) };
@@ -328,12 +327,11 @@ impl LLMProvider for OpenRouterProvider {
                     }
                 }
 
-                // Drain the consumed prefix so `buf` stays bounded to the
-                // unprocessed tail rather than growing for the entire stream.
-                if offset > 0 {
-                    buf.drain(..offset);
-                    offset = 0;
-                }
+                // Drain the consumed prefix and fail closed when the retained
+                // tail tops the shared SSE bound, so a peer that never emits
+                // an event boundary cannot grow memory for the stream lifetime.
+                crate::providers::shared::drain_and_bound_sse_tail(&mut buf, &mut offset)
+                    .map_err(|overflow| format_parse_error("OpenRouter", &overflow))?;
             }
 
             yield NormalizedStreamEvent::Done {

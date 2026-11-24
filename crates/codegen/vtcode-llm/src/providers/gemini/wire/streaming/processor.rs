@@ -265,6 +265,18 @@ impl StreamingProcessor {
             buffer.drain(..processed_chars);
         }
 
+        // Fail closed when the retained tail tops the shared SSE bound: a peer
+        // that never emits a newline would otherwise grow the buffer for the
+        // stream lifetime. Measured after the drain so complete events still
+        // parse. `partial_content` stays `None` — cloning the multi-megabyte
+        // tail into the error would double the spike.
+        crate::providers::shared::check_sse_tail_bound(buffer.len()).map_err(|overflow| {
+            StreamingError::StreamingError {
+                message: overflow.to_string(),
+                partial_content: None,
+            }
+        })?;
+
         Ok(_has_valid_content)
     }
 
@@ -819,5 +831,43 @@ mod tests {
             _ => String::new(),
         };
         assert_eq!(combined, "Hello world");
+    }
+
+    #[test]
+    fn process_buffer_fails_closed_on_boundary_less_tail() {
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+        let mut processor = StreamingProcessor::new();
+        let mut accumulated = StreamingResponse { candidates: Vec::new(), usage_metadata: None };
+        // No newline anywhere: the whole 16 MiB + 1 stays retained.
+        let mut buffer = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+        let mut on_chunk = |_: &str| Ok(());
+
+        let error = processor
+            .process_buffer(&mut buffer, &mut accumulated, &mut on_chunk)
+            .expect_err("boundary-less tail past the cap must trip");
+        assert!(
+            matches!(error, StreamingError::StreamingError { partial_content: None, .. }),
+            "overflow must not clone the tail into the error: {error:?}"
+        );
+        assert!(error.to_string().contains("without an event boundary"), "{error}");
+    }
+
+    #[test]
+    fn process_buffer_accepts_complete_event_past_the_cap() {
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+        // Asymmetric control: the same oversized payload with a trailing
+        // newline parses and drains, so nothing is retained and the bound
+        // must not trip — the check measures the tail, not the chunk.
+        let mut processor = StreamingProcessor::new();
+        let mut accumulated = StreamingResponse { candidates: Vec::new(), usage_metadata: None };
+        let mut buffer = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+        buffer.push('\n');
+        let mut on_chunk = |_: &str| Ok(());
+        processor
+            .process_buffer(&mut buffer, &mut accumulated, &mut on_chunk)
+            .expect("drained event must pass");
+        assert!(buffer.is_empty());
     }
 }

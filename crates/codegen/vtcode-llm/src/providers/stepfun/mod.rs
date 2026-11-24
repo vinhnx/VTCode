@@ -26,7 +26,8 @@ use crate::providers::error_handling::{format_network_error, format_parse_error}
 use crate::providers::openai::tool_serialization::sanitize_openai_function_parameters;
 use crate::providers::shared::{
     ResponsesNormalizedStreamOptions, StreamAggregator, Utf8StreamDecoder, create_responses_normalized_stream,
-    extract_data_payload, find_sse_boundary_bytes, function_output_value_from_message_content,
+    drain_and_bound_sse_tail, extract_data_payload, find_sse_boundary_bytes,
+    function_output_value_from_message_content,
 };
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -672,10 +673,13 @@ impl StepFunProvider {
                     }
                 }
 
-                if offset > 0 {
-                    buffer.drain(..offset);
-                    offset = 0;
-                }
+                // Drain the consumed prefix and fail closed when the retained
+                // tail tops the shared SSE bound, so a peer that never emits
+                // an event boundary cannot grow memory for the stream lifetime.
+                drain_and_bound_sse_tail(&mut buffer, &mut offset).map_err(|overflow| LLMError::Provider {
+                    message: error_display::format_llm_error(PROVIDER_NAME, &overflow.to_string()),
+                    metadata: None,
+                })?;
             }
 
             yield LLMStreamEvent::Completed { response: Box::new(aggregator.finalize()) };

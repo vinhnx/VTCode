@@ -852,3 +852,86 @@ async fn generate_uses_custom_attribution_override_vs_default() {
     assert_eq!(blank.resolved_title(), OpenRouterAttributionConfig::DEFAULT_TITLE);
     env.restore_var(env_vars::VTCODE_OPENROUTER_ATTRIBUTION, prior);
 }
+
+#[tokio::test]
+async fn stream_fails_closed_on_boundary_less_tail() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let provider = test_provider(&server.uri(), models::openrouter::OPENAI_GPT_OSS_120B);
+
+    // No newline anywhere: the whole body stays retained past the cap.
+    let body = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = LLMProvider::stream(
+        &provider,
+        LLMRequest {
+            model: models::openrouter::OPENAI_GPT_OSS_120B.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("stream should start");
+
+    let mut saw_overflow = false;
+    while let Some(event) = stream.next().await {
+        if let Err(error) = event {
+            assert!(error.to_string().contains("without an event boundary"), "{error}");
+            saw_overflow = true;
+        }
+    }
+    assert!(saw_overflow, "boundary-less tail past the cap must trip");
+}
+
+#[tokio::test]
+async fn stream_normalized_fails_closed_on_boundary_less_tail() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let provider = test_provider(&server.uri(), models::openrouter::OPENAI_GPT_OSS_120B);
+
+    let body = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(body),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream_normalized(LLMRequest {
+            model: models::openrouter::OPENAI_GPT_OSS_120B.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("normalized stream should start");
+
+    let mut saw_overflow = false;
+    while let Some(event) = stream.next().await {
+        if let Err(error) = event {
+            assert!(error.to_string().contains("without an event boundary"), "{error}");
+            saw_overflow = true;
+        }
+    }
+    assert!(saw_overflow, "boundary-less tail past the cap must trip");
+}

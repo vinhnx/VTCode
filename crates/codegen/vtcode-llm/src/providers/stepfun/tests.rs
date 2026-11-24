@@ -234,6 +234,43 @@ async fn stream_normalized_tolerates_stepfun_reasoning_boundaries() {
     assert_eq!(response.usage.map(|usage| usage.total_tokens), Some(12));
 }
 
+#[tokio::test]
+async fn stream_normalized_fails_closed_on_boundary_less_tail() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+
+    // No newline anywhere: the whole body stays retained past the cap.
+    let body = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+    Mock::given(method("POST"))
+        .and(path("/v1/responses"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body, "text/event-stream"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = mock_provider(&format!("{}/v1", server.uri()));
+    let mut stream = provider
+        .stream_normalized(LLMRequest {
+            model: models::stepfun::STEP_3_7_FLASH.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("stream should start");
+
+    let mut saw_overflow = false;
+    while let Some(event) = stream.next().await {
+        if let Err(error) = event {
+            assert!(error.to_string().contains("without an event boundary"), "{error}");
+            saw_overflow = true;
+        }
+    }
+    assert!(saw_overflow, "boundary-less tail past the cap must trip");
+}
+
 #[test]
 fn step_5_preview_uses_1m_context_and_reasoning_effort() {
     let provider = StepFunProvider::new("test-key".to_string());

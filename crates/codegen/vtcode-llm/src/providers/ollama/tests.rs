@@ -441,6 +441,49 @@ async fn streaming_completion_keeps_tagged_reasoning_out_of_public_content() {
 }
 
 #[tokio::test]
+async fn streaming_completion_fails_closed_on_boundary_less_tail() {
+    use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+
+    let Some(server) = crate::providers::test_support::start_mock_server_or_skip().await else {
+        return;
+    };
+    let provider =
+        OllamaProvider::from_config(None, Some("test-model:cloud".into()), Some(server.uri()), None, None, None, None);
+
+    // No newline anywhere: the whole body stays retained past the cap.
+    let body = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+    Mock::given(method("POST"))
+        .and(path("/api/chat"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/x-ndjson"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = LLMProvider::stream(
+        &provider,
+        LLMRequest {
+            model: "test-model:cloud".into(),
+            messages: vec![Message::user("hello".into())].into(),
+            tool_choice: Some(ToolChoice::None),
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("mock Ollama stream");
+
+    let mut saw_overflow = false;
+    while let Some(event) = stream.next().await {
+        if let Err(error) = event {
+            assert!(error.to_string().contains("without an event boundary"), "{error}");
+            saw_overflow = true;
+        }
+    }
+    assert!(saw_overflow, "boundary-less tail past the cap must trip");
+}
+
+#[tokio::test]
 async fn tool_free_stream_failure_does_not_dispatch_an_uncharged_nonstream_fallback() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};

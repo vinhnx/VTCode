@@ -147,6 +147,19 @@ impl OllamaClient {
                                     }
                                 }
                             }
+                            // Fail closed when the retained tail tops the shared
+                            // SSE bound, so a peer that never emits a newline
+                            // cannot grow memory for the pull lifetime. The pull
+                            // stream carries no `Result`, so overflow surfaces
+                            // as an error event like a server-side failure.
+                            if let Err(overflow) =
+                                crate::providers::shared::check_sse_tail_bound(buf.len())
+                            {
+                                yield OllamaPullEvent::Error(format!(
+                                    "Ollama pull stream error: {overflow}"
+                                ));
+                                return;
+                            }
                         }
                     }
                     Err(_) => {
@@ -221,5 +234,52 @@ mod tests {
         let normalized = version_str.trim_start_matches('v');
         let v = Version::parse(normalized).expect("parse version");
         assert_eq!(v, Version::new(0, 13, 4));
+    }
+
+    #[tokio::test]
+    async fn pull_stream_fails_closed_on_boundary_less_tail() {
+        use futures::StreamExt;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        use super::OllamaClient;
+        use crate::providers::ollama::pull::OllamaPullEvent;
+        use crate::providers::shared::MAX_SSE_TAIL_BYTES;
+        use crate::providers::test_support::start_mock_server_or_skip;
+
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
+        Mock::given(method("GET"))
+            .and(path("/api/tags"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("{\"models\":[]}"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // No newline anywhere: the whole body stays retained past the cap.
+        let body = "x".repeat(MAX_SSE_TAIL_BYTES + 1);
+        Mock::given(method("POST"))
+            .and(path("/api/pull"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = OllamaClient::try_from_base_url(&server.uri())
+            .await
+            .expect("client should probe");
+        let mut stream = client.pull_model_stream("test-model").await.expect("pull should start");
+
+        // The pull stream carries no `Result`: overflow must surface as an
+        // error event like a server-side failure.
+        let mut saw_overflow = false;
+        while let Some(event) = stream.next().await {
+            if let OllamaPullEvent::Error(message) = event {
+                assert!(message.contains("without an event boundary"), "{message}");
+                saw_overflow = true;
+            }
+        }
+        assert!(saw_overflow, "boundary-less tail past the cap must trip");
     }
 }
