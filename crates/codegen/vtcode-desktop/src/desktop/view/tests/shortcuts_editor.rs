@@ -130,6 +130,46 @@ fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn direct_action_dispatch_bypasses_key_context_suppression(cx: &mut TestAppContext) {
+    // GPUI builds the dispatch path from focus and a key_context only selects a
+    // *binding*; a typed Action dispatched directly ignores contexts entirely.
+    // The capture pill removes the DESKTOP/SETTINGS contexts, so cmd-b is inert
+    // as a keystroke, yet native menus and command deeplinks dispatch the very
+    // same ToggleSidebar Action directly and must still reach the root handler.
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
+        window.click("shortcut-edit-commands", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert!(view.read(cx).shortcut_capture.is_some(), "pencil click arms capture"));
+    let sidebar_open = cx.update(|cx| view.read(cx).sidebar_open);
+
+    cx.update_window(window, |_, window, cx| window.press("cmd-b", cx)).unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).sidebar_open, sidebar_open, "suppressed chord stays inert while capturing")
+    });
+
+    cx.update_window(window, |_, window, cx| window.dispatch_action(Box::new(super::super::ToggleSidebar), cx))
+        .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+    cx.update(|cx| {
+        assert_ne!(
+            view.read(cx).sidebar_open,
+            sidebar_open,
+            "direct dispatch reaches the root handler with DESKTOP/SETTINGS contexts removed"
+        )
+    });
+}
+
+#[gpui_kit::test]
 fn shortcut_reset_from_defaults_reports_noop(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
