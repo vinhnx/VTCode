@@ -662,6 +662,47 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn caret_blink_choice_gates_the_pulse_and_persists(cx: &mut TestAppContext) {
+    use crate::desktop::preferences::{CaretBlinkPreference, Preferences};
+
+    cx.update(|cx| cx.set_reduce_motion(false));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            assert_eq!(view.preferences.caret_blink, CaretBlinkPreference::Blink);
+            view.mark_caret_active(cx);
+            assert!(view.caret_pulse_active, "Blink starts the bounded pulse on activity");
+
+            view.set_caret_blink(CaretBlinkPreference::Steady, cx);
+            assert!(!view.caret_pulse_active, "Steady cancels a running pulse");
+            assert_eq!(Preferences::load().caret_blink, CaretBlinkPreference::Steady);
+            view.mark_caret_active(cx);
+            assert!(!view.caret_pulse_active, "Steady ignores later activity");
+
+            view.set_caret_blink(CaretBlinkPreference::Blink, cx);
+            view.mark_caret_active(cx);
+            assert!(view.caret_pulse_active);
+            view.mark_caret_inactive(cx);
+            assert!(!view.caret_pulse_active, "blur drops the pulse without waiting for the idle timer");
+            view.mark_caret_active(cx);
+        });
+        cx.set_reduce_motion(true);
+        view.update(cx, |view, cx| {
+            view.mark_caret_active(cx);
+            assert!(!view.caret_pulse_active, "reduced motion keeps the caret solid");
+        });
+        cx.set_reduce_motion(false);
+    })
+    .unwrap();
+
+    cx.executor().advance_clock(Duration::from_secs(5));
+    cx.run_until_parked();
+    cx.update_entity(&view, |view, _| {
+        assert!(!view.caret_pulse_active, "an idle composer drops the pulse and its frames");
+    });
+}
+
+#[gpui_kit::test]
 fn reduced_motion_segment_moves_with_keyboard_and_reports_selection(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

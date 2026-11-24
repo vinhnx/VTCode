@@ -217,6 +217,12 @@ fn app_catalog_covers_language_controls_and_kit_overrides() {
 }
 
 #[test]
+fn settings_header_close_copy_is_localized_for_every_language() {
+    assert_localized(&["app.settings.close"], &[]);
+    assert_eq!(rust_i18n::t!("app.settings.close", locale = "en").to_string(), "Close settings");
+}
+
+#[test]
 fn notification_and_about_settings_copy_covers_every_language() {
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "en").to_string(), "Notifications");
     assert_eq!(rust_i18n::t!("app.settings.tab.notifications", locale = "vi").to_string(), "Thông báo");

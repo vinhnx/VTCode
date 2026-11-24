@@ -386,9 +386,14 @@ impl DesktopView {
                         // step lands the title on the `px_4` body spine.
                         .pl_1()
                         .child(div().id("settings-title").test_support().child(panel_title(title, &colors))),
-                    // Dismissal stays on Escape, the bottom gutter, and toolbar
-                    // Back; the header no longer duplicates a close control.
-                    div(),
+                    // The header X joins Escape, the bottom gutter, and
+                    // toolbar Back as pointer dismissal. All four share the
+                    // same guard, so a staged edit still prompts before close.
+                    desktop_dismiss_button("settings-dismiss", rust_i18n::t!("app.settings.close").to_string())
+                        .small()
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.request_panel_dismiss(window, cx);
+                        })),
                 ))
                 .child(if narrow {
                     div()

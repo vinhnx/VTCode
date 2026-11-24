@@ -1,6 +1,5 @@
 use gpui::{
-    AnyElement, App, Bounds, Element, ElementId, GlobalElementId, InspectorElementId, LayoutId,
-    Pixels, Window,
+    AnyElement, App, Bounds, Element, ElementId, GlobalElementId, InspectorElementId, LayoutId, Pixels, Window,
 };
 
 use super::InputGroupButton;
@@ -14,10 +13,7 @@ pub(super) struct InputGroupButtonElement {
 
 impl InputGroupButtonElement {
     pub(super) fn new(button: InputGroupButton) -> Self {
-        Self {
-            button: Some(button),
-            disabled: false,
-        }
+        Self { button: Some(button), disabled: false }
     }
 
     pub(super) fn disable(&mut self, disabled: bool) {

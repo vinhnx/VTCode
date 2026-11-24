@@ -625,7 +625,8 @@ impl DesktopView {
                     Textarea::new(&self.question_answer)
                         .accessibility_id("question-answer")
                         .aria_label(rust_i18n::t!("app.interaction.your_answer").to_string())
-                        .cursor_text()
+                        .when(self.pending_interaction_response.is_some(), |input| input.cursor_default())
+                        .when(self.pending_interaction_response.is_none(), |input| input.cursor_text())
                         .disabled(self.pending_interaction_response.is_some())
                         .bg(colors.background)
                         .h(gpui_kit::rems(4.5)),

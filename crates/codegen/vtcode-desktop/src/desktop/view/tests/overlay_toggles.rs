@@ -224,8 +224,8 @@ fn close_truncates_the_panel_while_back_preserves_forward(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-        // The full-width settings panel has no close button; its bottom
-        // gutter is the pointer-dismiss control and truncates forward entries.
+        // The header X and the bottom gutter share the same dismiss path;
+        // the gutter still truncates forward entries.
         let panel = window.find("settings-panel").bounds();
         let root = window.find("pane-root").bounds();
         window.click_at(

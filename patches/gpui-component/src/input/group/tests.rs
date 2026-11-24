@@ -5,10 +5,7 @@ use gpui::{AppContext as _, TestAppContext};
 #[test]
 fn validation_takes_precedence_over_focus_and_remains_visible_when_disabled() {
     for mode in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
-        let theme = crate::Theme {
-            mode,
-            ..Default::default()
-        };
+        let theme = crate::Theme { mode, ..Default::default() };
         let focused = GroupAppearance::new(&theme, true, false, false);
         assert_eq!(focused.border, theme.ring);
         assert_eq!(focused.ring, Some(theme.ring.opacity(0.5)));
@@ -21,14 +18,7 @@ fn validation_takes_precedence_over_focus_and_remains_visible_when_disabled() {
             for disabled in [false, true] {
                 let invalid = GroupAppearance::new(&theme, focused, disabled, true);
                 assert_eq!(invalid.border, theme.danger);
-                assert_eq!(
-                    invalid.ring,
-                    Some(
-                        theme
-                            .danger
-                            .opacity(if theme.is_dark() { 0.4 } else { 0.2 })
-                    )
-                );
+                assert_eq!(invalid.ring, Some(theme.danger.opacity(if theme.is_dark() { 0.4 } else { 0.2 })));
             }
         }
     }
@@ -42,11 +32,7 @@ fn test_input_group_builder(cx: &mut TestAppContext) {
         let textarea = cx.new(|cx| TextareaState::new(window, cx));
         let group = InputGroup::new("group")
             .input(InputGroupInput::new(&input).aria_label("Replaced input"))
-            .input(
-                InputGroupTextarea::new(&textarea)
-                    .aria_label("Message")
-                    .readonly(true),
-            )
+            .input(InputGroupTextarea::new(&textarea).aria_label("Message").readonly(true))
             .disabled(true)
             .invalid(true)
             .small()
@@ -56,21 +42,13 @@ fn test_input_group_builder(cx: &mut TestAppContext) {
                     .child(InputGroupText::new().child("Help"))
                     .child(InputGroupButton::new("send").primary().label("Send")),
             );
-        assert_eq!(
-            group.control.as_ref().unwrap().state().entity_id(),
-            textarea.entity_id()
-        );
+        assert_eq!(group.control.as_ref().unwrap().state().entity_id(), textarea.entity_id());
         assert!(group.disabled && group.invalid);
         assert_eq!(group.size, Size::Small);
         assert_eq!(group.addons[0].children.len(), 2);
-        assert_eq!(
-            group.addons[0].alignment,
-            InputGroupAddonAlignment::BlockEnd
-        );
+        assert_eq!(group.addons[0].alignment, InputGroupAddonAlignment::BlockEnd);
 
-        let button = InputGroupButton::new("icon")
-            .icon(crate::IconName::Copy)
-            .small();
+        let button = InputGroupButton::new("icon").icon(crate::IconName::Copy).small();
         assert_eq!(button.size, Size::Small);
         assert!(button.button.is_icon_only());
         assert!(matches!(button.button.variant(), ButtonVariant::Ghost));
@@ -83,9 +61,8 @@ mod interaction {
     use super::*;
     use crate::{Root, WindowExt as _};
     use gpui::{
-        ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler as _, FocusHandle,
-        InputEvent as _, LongPressEvent, Modifiers, Render, TouchPhase, VisualTestContext, point,
-        px,
+        ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler as _, FocusHandle, InputEvent as _,
+        LongPressEvent, Modifiers, Render, TouchPhase, VisualTestContext, point, px,
     };
     use gpui_base::test_support::{ElementSnapshot, find};
     use std::rc::Rc;
@@ -118,9 +95,7 @@ mod interaction {
                                 InputGroupTextarea::new(&self.textarea)
                                     .aria_label("Message")
                                     .when_some(self.paste_handler.clone(), |input, handler| {
-                                        input.on_paste(move |item, window, cx| {
-                                            handler(item, window, cx)
-                                        })
+                                        input.on_paste(move |item, window, cx| handler(item, window, cx))
                                     })
                                     .refine_style(&self.control_style),
                             )
@@ -129,9 +104,7 @@ mod interaction {
                                 InputGroupInput::new(&self.input)
                                     .aria_label("Address")
                                     .when_some(self.paste_handler.clone(), |input, handler| {
-                                        input.on_paste(move |item, window, cx| {
-                                            handler(item, window, cx)
-                                        })
+                                        input.on_paste(move |item, window, cx| handler(item, window, cx))
                                     })
                                     .refine_style(&self.control_style),
                             )
@@ -139,20 +112,17 @@ mod interaction {
                     })
                     // Deliberately supply parts in reverse visual order.
                     .addon(
-                        InputGroupAddon::new("end")
-                            .align(InputGroupAddonAlignment::InlineEnd)
-                            .child(InputGroupButton::new("action").label("Run").on_click(
-                                cx.listener(|this, _, window, cx| {
+                        InputGroupAddon::new("end").align(InputGroupAddonAlignment::InlineEnd).child(
+                            InputGroupButton::new("action").label("Run").on_click(cx.listener(
+                                |this, _, window, cx| {
                                     this.clicks += 1;
                                     this.other.focus(window, cx);
                                     cx.notify();
-                                }),
+                                },
                             )),
+                        ),
                     )
-                    .addon(
-                        InputGroupAddon::new("start")
-                            .child(InputGroupText::new().child("https://")),
-                    )
+                    .addon(InputGroupAddon::new("start").child(InputGroupText::new().child("https://")))
                     .when(self.multiline, |group| {
                         group
                             .addon(
@@ -229,12 +199,9 @@ mod interaction {
                 let received = received.clone();
                 probe.paste_handler = Some(Rc::new(move |item, _, _| {
                     received.borrow_mut().push(item.clone());
-                    item.entries().iter().any(|entry| {
-                        matches!(
-                            entry,
-                            ClipboardEntry::Image(_) | ClipboardEntry::ExternalPaths(_)
-                        )
-                    })
+                    item.entries()
+                        .iter()
+                        .any(|entry| matches!(entry, ClipboardEntry::Image(_) | ClipboardEntry::ExternalPaths(_)))
                 }));
                 cx.notify();
             });
@@ -262,10 +229,7 @@ mod interaction {
                 });
                 draw(&mut cx);
                 assert_eq!(&*received.borrow(), &payloads[..=ix]);
-                assert_eq!(
-                    cx.update(|_, cx| state.text(cx).to_string()),
-                    if ix < 2 { "" } else { "text" }
-                );
+                assert_eq!(cx.update(|_, cx| state.text(cx).to_string()), if ix < 2 { "" } else { "text" });
             }
             for (disabled, readonly) in [(true, false), (false, true)] {
                 probe.update(&mut cx, |probe, cx| {
@@ -299,14 +263,10 @@ mod interaction {
             cx.update(|window, cx| {
                 if multiline {
                     let state = probe.read(cx).textarea.clone();
-                    state.update(cx, |state, cx| {
-                        state.set_value("quick select value", window, cx)
-                    });
+                    state.update(cx, |state, cx| state.set_value("quick select value", window, cx));
                 } else {
                     let state = probe.read(cx).input.clone();
-                    state.update(cx, |state, cx| {
-                        state.set_value("quick select value", window, cx)
-                    });
+                    state.update(cx, |state, cx| state.set_value("quick select value", window, cx));
                 }
             });
             draw(&mut cx);
@@ -323,12 +283,7 @@ mod interaction {
             for phase in [TouchPhase::Started, TouchPhase::Ended] {
                 cx.update(|window, cx| {
                     window.dispatch_event(
-                        LongPressEvent {
-                            phase,
-                            start_position: position,
-                            position,
-                        }
-                        .to_platform_input(),
+                        LongPressEvent { phase, start_position: position, position }.to_platform_input(),
                         cx,
                     );
                 });
@@ -338,10 +293,7 @@ mod interaction {
                 assert!(snapshot(&mut cx, command).visible());
             }
             click(&mut cx, "Copy");
-            assert_eq!(
-                cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text())),
-                Some("quick".into())
-            );
+            assert_eq!(cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text())), Some("quick".into()));
             assert!(cx.update(|window, _| find(window, &[], &"Copy".into()).is_none()));
             assert_eq!(
                 probe.read_with(&cx, |probe, cx| {
@@ -370,22 +322,13 @@ mod interaction {
         let frame = snapshot(&mut cx, ("input", state.entity_id())).bounds();
         let text = state.read_with(&cx, |state, _| state.text_bounds().unwrap());
         assert!((text.left() - frame.left() - px(24.)).abs() <= px(1.));
-        cx.simulate_click(
-            point(text.left() + px(0.5), text.center().y),
-            Modifiers::default(),
-        );
+        cx.simulate_click(point(text.left() + px(0.5), text.center().y), Modifiers::default());
         draw(&mut cx);
         assert_eq!(state.read_with(&cx, |state, _| state.cursor()), 0);
         let range = state.read_with(&cx, |state, _| state.range_to_bounds(&(4..7)).unwrap());
-        let ime = cx.update(|window, cx| {
-            state.update(cx, |state, cx| {
-                state.bounds_for_range(4..5, text, window, cx).unwrap()
-            })
-        });
-        assert_eq!(
-            range, ime,
-            "UTF-16 IME bounds must match the actual glyph bounds"
-        );
+        let ime = cx
+            .update(|window, cx| state.update(cx, |state, cx| state.bounds_for_range(4..5, text, window, cx).unwrap()));
+        assert_eq!(range, ime, "UTF-16 IME bounds must match the actual glyph bounds");
         state.update(&mut cx, |state, cx| state.set_selected_range(4..7, cx));
         cx.simulate_input("文");
         draw(&mut cx);
@@ -435,10 +378,7 @@ mod interaction {
         assert_eq!(control.value(), Some("Ada 中文"));
         assert_eq!(control.focused(), Some(true));
         assert_eq!(snapshot(&mut cx, "group").role(), Some(Role::Group));
-        assert_eq!(
-            cx.update(|window, cx| window.focused_input(cx)),
-            Some(state.clone().into())
-        );
+        assert_eq!(cx.update(|window, cx| window.focused_input(cx)), Some(state.clone().into()));
 
         click(&mut cx, "action");
         assert_eq!(probe.read_with(&cx, |probe, _| probe.clicks), 1);
@@ -452,9 +392,7 @@ mod interaction {
     }
 
     #[gpui::test]
-    fn disabled_blocks_actions_and_edits_but_readonly_keeps_copy_and_actions(
-        cx: &mut TestAppContext,
-    ) {
+    fn disabled_blocks_actions_and_edits_but_readonly_keeps_copy_and_actions(cx: &mut TestAppContext) {
         let (probe, mut cx) = mount(cx, false);
         let state = probe.read_with(&cx, |probe, _| probe.input.clone());
         click(&mut cx, "start");
@@ -469,10 +407,7 @@ mod interaction {
         cx.simulate_input("blocked");
         draw(&mut cx);
         assert_eq!(probe.read_with(&cx, |probe, _| probe.clicks), 0);
-        assert_eq!(
-            state.read_with(&cx, |state, _| state.value()),
-            "Retained value"
-        );
+        assert_eq!(state.read_with(&cx, |state, _| state.value()), "Retained value");
         assert!(state.read_with(&cx, |state, _| state.presentation().is_disabled()));
 
         probe.update(&mut cx, |probe, cx| {
@@ -488,10 +423,7 @@ mod interaction {
             window.dispatch_action(Box::new(crate::input::Copy), cx);
         });
         draw(&mut cx);
-        assert_eq!(
-            state.read_with(&cx, |state, _| state.value()),
-            "Retained value"
-        );
+        assert_eq!(state.read_with(&cx, |state, _| state.value()), "Retained value");
         assert_eq!(
             cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text())),
             Some("Retained value".into())
@@ -508,10 +440,7 @@ mod interaction {
         click(&mut cx, "start");
         cx.simulate_input("Editable error");
         draw(&mut cx);
-        assert_eq!(
-            state.read_with(&cx, |state, _| state.value()),
-            "Editable error"
-        );
+        assert_eq!(state.read_with(&cx, |state, _| state.value()), "Editable error");
     }
 
     #[gpui::test]
@@ -529,14 +458,8 @@ mod interaction {
         assert_eq!(control.focused(), Some(true));
         assert!(header.bottom() <= control.bounds().top());
         assert!(control.bounds().bottom() <= footer.top());
-        assert!(
-            footer.top() > initial_footer.top(),
-            "textarea must grow before its toolbar"
-        );
-        assert_eq!(
-            state.read_with(&cx, |state, _| state.value()),
-            "One\nTwo\nThree\nFour\nFive"
-        );
+        assert!(footer.top() > initial_footer.top(), "textarea must grow before its toolbar");
+        assert_eq!(state.read_with(&cx, |state, _| state.value()), "One\nTwo\nThree\nFour\nFive");
 
         // A narrow viewport must still give the editor usable space between addons.
         cx.update(|window, cx| {
@@ -573,28 +496,23 @@ mod interaction {
                         .addon(
                             InputGroupAddon::new("popup-actions")
                                 .align(InputGroupAddonAlignment::BlockEnd)
-                                .child(InputGroupButton::new("first").label("First").on_click(
-                                    move |_, _, _| enabled_clicks.set(enabled_clicks.get() + 1),
-                                ))
+                                .child(
+                                    InputGroupButton::new("first")
+                                        .label("First")
+                                        .on_click(move |_, _, _| enabled_clicks.set(enabled_clicks.get() + 1)),
+                                )
                                 .child(div().id("between").test_support().child("then"))
                                 .children([
-                                    InputGroupButton::new("last")
-                                        .label("Last")
-                                        .into_any_element(),
+                                    InputGroupButton::new("last").label("Last").into_any_element(),
                                     InputGroupButton::new("menu-trigger")
                                         .label("Menu")
-                                        .dropdown_menu(|menu, _, _| {
-                                            menu.item(PopupMenuItem::new("Action"))
-                                        })
+                                        .dropdown_menu(|menu, _, _| menu.item(PopupMenuItem::new("Action")))
                                         .on_open_change(move |open, _, _| {
                                             menu_changes.borrow_mut().push(("menu", *open));
                                         })
                                         .into_any_element(),
                                     Popover::new("group-popover")
-                                        .trigger(
-                                            InputGroupButton::new("popover-trigger")
-                                                .label("Details"),
-                                        )
+                                        .trigger(InputGroupButton::new("popover-trigger").label("Details"))
                                         .child("Details content")
                                         .on_open_change(move |open, _, _| {
                                             popover_changes.borrow_mut().push(("popover", *open));
@@ -610,18 +528,9 @@ mod interaction {
                         .child(
                             InputGroupButton::new("disabled-action")
                                 .label("Disabled")
-                                .on_click(move |_, _, _| {
-                                    disabled_clicks.set(disabled_clicks.get() + 1)
-                                }),
+                                .on_click(move |_, _, _| disabled_clicks.set(disabled_clicks.get() + 1)),
                         )
-                        .render_in_group(
-                            GroupPresentation {
-                                disabled: true,
-                                ..Default::default()
-                            },
-                            window,
-                            cx,
-                        ),
+                        .render_in_group(GroupPresentation { disabled: true, ..Default::default() }, window, cx),
                 )
         }
     }

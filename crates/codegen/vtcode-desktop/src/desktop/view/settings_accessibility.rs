@@ -6,6 +6,7 @@ use super::*;
 pub(super) struct AccessibilitySettingsProps {
     pub(super) show_status_bar: bool,
     pub(super) reduced_motion: preferences::ReducedMotionPreference,
+    pub(super) caret_blink: preferences::CaretBlinkPreference,
     pub(super) motion_choice_focus: FocusHandle,
     pub(super) contrast_slider: Entity<gpui_kit::component::slider::SliderState>,
     pub(super) contrast_focus: FocusHandle,
@@ -20,6 +21,7 @@ impl AccessibilitySettingsProps {
         Self {
             show_status_bar: view.preferences.show_status_bar,
             reduced_motion: view.preferences.reduced_motion,
+            caret_blink: view.preferences.caret_blink,
             motion_choice_focus: view.motion_choice_focus.clone(),
             contrast_slider: view.contrast_slider.clone(),
             contrast_focus: view.contrast_focus.clone(),
@@ -165,7 +167,26 @@ impl DesktopView {
                         props.motion_choice_focus.clone(),
                         view.clone(),
                         cx,
-                    )),
+                    ))
+                    // New strings stay English literals until every locale has
+                    // a native-quality translation for this control.
+                    .child(
+                        gpui_kit::component::switch::Switch::new("caret-blink")
+                            .label("Blink text cursor".to_string())
+                            .checked(props.caret_blink.blinks())
+                            .cursor_pointer()
+                            .on_click({
+                                let view = view.clone();
+                                move |checked: &bool, _: &mut Window, cx: &mut App| {
+                                    let preference = if *checked {
+                                        preferences::CaretBlinkPreference::Blink
+                                    } else {
+                                        preferences::CaretBlinkPreference::Steady
+                                    };
+                                    view.update(cx, |view, cx| view.set_caret_blink(preference, cx));
+                                }
+                            }),
+                    ),
             ))
             .child(Self::render_contrast_settings_content(&props, view, cx))
             .into_any_element()

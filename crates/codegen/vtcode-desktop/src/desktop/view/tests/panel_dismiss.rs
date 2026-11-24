@@ -27,6 +27,21 @@ fn gutter_press_dismisses_a_clean_settings_page(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn header_close_dismisses_a_clean_settings_page(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Settings);
+        // The header X is another pointer entry into the shared dismiss path.
+        window.click("settings-dismiss", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn dismiss_requests_hold_dirty_settings_for_the_prompt(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     // Stage a shortcut edit directly, the same shape a capture commit writes.
@@ -38,11 +53,15 @@ fn dismiss_requests_hold_dirty_settings_for_the_prompt(cx: &mut TestAppContext) 
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         // A dismiss request holds for the prompt: headless it never answers.
-        // With the header close control gone, this is the shared entry point
-        // used by the bottom gutter and the remaining dismiss affordances.
+        // This is the shared entry point used by the header close button,
+        // the bottom gutter, and the remaining dismiss affordances.
         view.update(cx, |view, cx| view.request_panel_dismiss(window, cx));
         window.render_frame(cx);
         assert!(view.read(cx).current_route() == Route::Settings, "dirty dismiss waits for the prompt");
+        // The header X holds the same way.
+        window.click("settings-dismiss", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).current_route() == Route::Settings, "dirty header close waits for the prompt");
         // The gutter holds the same way.
         let panel = window.find("settings-panel").bounds();
         let root = window.find("pane-root").bounds();

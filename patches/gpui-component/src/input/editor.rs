@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, DefiniteLength, Entity, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled,
-    Window, prelude::FluentBuilder as _, relative,
+    App, DefiniteLength, Entity, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled, Window,
+    prelude::FluentBuilder as _, relative,
 };
 
 use super::{EditorState, Input};
@@ -27,6 +27,8 @@ pub struct Editor {
     tab_index: isize,
     role: RoleOverride,
     aria_label: Option<SharedString>,
+    /// Optional multiplier on the theme caret alpha, for application-owned fades.
+    caret_opacity: Option<f32>,
 
     /// An optional context menu builder to allow a custom context menu.
     ///
@@ -50,6 +52,7 @@ impl Editor {
             tab_index: 0,
             role: RoleOverride::default(),
             aria_label: None,
+            caret_opacity: None,
             context_menu_builder: None,
             paste_handler: None,
         }
@@ -74,6 +77,7 @@ impl Editor {
             .with_size(self.size)
             .when_some(self.height, |this, height| this.h(height))
             .when_some(self.aria_label, |this, label| this.aria_label(label))
+            .when_some(self.caret_opacity, |this, opacity| this.caret_opacity(opacity))
             .when_some(self.context_menu_builder, |this, build| {
                 this.context_menu(move |menu, window, cx| build(menu, window, cx))
             })
@@ -123,16 +127,20 @@ impl Editor {
         self
     }
 
+    /// Multiply the theme caret alpha by `opacity` (clamped to `0.0..=1.0`).
+    /// Applications drive this with a bounded GPUI animation for a soft fade.
+    pub fn caret_opacity(mut self, opacity: f32) -> Self {
+        self.caret_opacity = Some(opacity.clamp(0.0, 1.0));
+        self
+    }
+
     /// Replace the built-in context menu shown on right-click.
     ///
     /// The closure receives an empty menu and returns the one to show, so it
     /// decides entirely what appears — the default items are not added. It
     /// shows only while the state's context menu is enabled, which is the
     /// default.
-    pub fn context_menu(
-        mut self,
-        f: impl Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static,
-    ) -> Self {
+    pub fn context_menu(mut self, f: impl Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static) -> Self {
         self.context_menu_builder = Some(Rc::new(f));
         self
     }
@@ -143,10 +151,7 @@ impl Editor {
     /// to `clipboard.text()`. Copied files arrive as `ExternalPaths` through
     /// the same hook. On web the clipboard reads `None`; image paste needs
     /// async clipboard access and is out of scope.
-    pub fn on_paste(
-        mut self,
-        handler: impl Fn(&gpui::ClipboardItem, &mut Window, &mut App) -> bool + 'static,
-    ) -> Self {
+    pub fn on_paste(mut self, handler: impl Fn(&gpui::ClipboardItem, &mut Window, &mut App) -> bool + 'static) -> Self {
         self.paste_handler = Some(Rc::new(handler));
         self
     }
@@ -188,6 +193,7 @@ impl RenderOnce for Editor {
             .role(self.role)
             .when_some(self.height, |this, height| this.h(height))
             .when_some(self.aria_label, |this, label| this.aria_label(label))
+            .when_some(self.caret_opacity, |this, opacity| this.caret_opacity(opacity))
             .when_some(self.context_menu_builder, |this, build| {
                 this.context_menu(move |menu, window, cx| build(menu, window, cx))
             })
@@ -203,8 +209,8 @@ mod tests {
     use super::*;
     use crate::input::EditorState;
     use gpui::{
-        AppContext as _, Context, InteractiveElement as _, ParentElement as _, Pixels, Render,
-        TestAppContext, VisualTestContext, div, px,
+        AppContext as _, Context, InteractiveElement as _, ParentElement as _, Pixels, Render, TestAppContext,
+        VisualTestContext, div, px,
     };
 
     struct Harness {
@@ -215,10 +221,9 @@ mod tests {
 
     impl Render for Harness {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            div().size_full().child(
-                Editor::new(&self.state)
-                    .when_some(self.text_size, |this, size| this.text_size(size)),
-            )
+            div()
+                .size_full()
+                .child(Editor::new(&self.state).when_some(self.text_size, |this, size| this.text_size(size)))
         }
     }
 
@@ -229,20 +234,12 @@ mod tests {
         let (_, cx) = cx.add_window_view(|window, cx| {
             let editor = cx.new(|cx| EditorState::new(window, cx).default_value("fn main() {}"));
             state = Some(editor.clone());
-            Harness {
-                state: editor,
-                text_size,
-            }
+            Harness { state: editor, text_size }
         });
         let state = state.unwrap();
         VisualTestContext::update(cx, |window, cx| window.draw(cx).clear(cx));
 
-        cx.read(|cx| {
-            state
-                .read(cx)
-                .line_height()
-                .expect("the editor must lay out")
-        })
+        cx.read(|cx| state.read(cx).line_height().expect("the editor must lay out"))
     }
 
     #[gpui::test]
@@ -262,9 +259,10 @@ mod tests {
 
     impl Render for SizedHarness {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            div().debug_selector(|| "frame".into()).size_full().child(
-                Editor::new(&self.state).when_some(self.size, |this, size| this.with_size(size)),
-            )
+            div()
+                .debug_selector(|| "frame".into())
+                .size_full()
+                .child(Editor::new(&self.state).when_some(self.size, |this, size| this.with_size(size)))
         }
     }
 
@@ -276,10 +274,7 @@ mod tests {
         let (_, cx) = cx.add_window_view(|window, cx| {
             let editor = cx.new(|cx| EditorState::new(window, cx).default_value("fn main() {}"));
             state = Some(editor.clone());
-            SizedHarness {
-                state: editor,
-                size,
-            }
+            SizedHarness { state: editor, size }
         });
         let state = state.unwrap();
         VisualTestContext::update(cx, |window, cx| window.draw(cx).clear(cx));
@@ -300,11 +295,7 @@ mod tests {
         assert_eq!(top_inset(cx, None), (medium, rows));
         for size in [Size::XSmall, Size::Small, Size::Large] {
             let (inset, line_height) = top_inset(cx, Some(size));
-            assert_eq!(
-                medium - inset,
-                Size::Medium.input_py() - size.input_py(),
-                "{size:?}"
-            );
+            assert_eq!(medium - inset, Size::Medium.input_py() - size.input_py(), "{size:?}");
             // Only the insets change, not the font.
             assert_eq!(line_height, rows, "{size:?}");
         }
@@ -328,10 +319,7 @@ mod tests {
                 assert_eq!(state.text().to_string(), "[]");
             });
             state = Some(editor.clone());
-            Harness {
-                state: editor,
-                text_size: None,
-            }
+            Harness { state: editor, text_size: None }
         });
         let state = state.unwrap();
         VisualTestContext::update(cx, |_, cx| {
@@ -384,10 +372,7 @@ mod tests {
                 state.replace_text_in_range(None, "(", window, cx);
                 assert_eq!(state.text().to_string(), "(");
             });
-            Harness {
-                state: editor,
-                text_size: None,
-            }
+            Harness { state: editor, text_size: None }
         });
     }
 
@@ -397,11 +382,7 @@ mod tests {
         use gpui::EntityInputHandler as _;
         cx.update(crate::init);
         cx.add_window_view(|window, cx| {
-            let editor = cx.new(|cx| {
-                EditorState::new(window, cx)
-                    .language("python")
-                    .default_value("\"hello world\"")
-            });
+            let editor = cx.new(|cx| EditorState::new(window, cx).language("python").default_value("\"hello world\""));
             editor.update(cx, |state, cx| {
                 state.set_selected_range(6..6, cx);
                 state.replace_text_in_range(None, "(", window, cx);
@@ -416,10 +397,7 @@ mod tests {
                 state.replace_text_in_range(None, "(", window, cx);
                 assert_eq!(state.text().to_string(), "# comment ()");
             });
-            Harness {
-                state: editor,
-                text_size: None,
-            }
+            Harness { state: editor, text_size: None }
         });
     }
 
@@ -439,10 +417,7 @@ mod tests {
             let (_, cx) = cx.add_window_view(|window, cx| {
                 let editor = cx.new(|cx| EditorState::new(window, cx).default_value(before));
                 state = Some(editor.clone());
-                Harness {
-                    state: editor,
-                    text_size: None,
-                }
+                Harness { state: editor, text_size: None }
             });
             let state = state.unwrap();
             VisualTestContext::update(cx, |window, cx| {
@@ -464,8 +439,9 @@ mod tests {
         cx.update(|cx| {
             crate::input::set_language_config(
                 "rust",
-                LanguageConfig::default().auto_closing_pairs([AutoClosingPair::new("/*", "*/")
-                    .not_in([SyntaxContext::String, SyntaxContext::Comment])]),
+                LanguageConfig::default().auto_closing_pairs([
+                    AutoClosingPair::new("/*", "*/").not_in([SyntaxContext::String, SyntaxContext::Comment])
+                ]),
                 cx,
             )
         });
@@ -473,10 +449,7 @@ mod tests {
         let (_, cx) = cx.add_window_view(|window, cx| {
             let editor = cx.new(|cx| EditorState::new(window, cx).language("rust"));
             state = Some(editor.clone());
-            Harness {
-                state: editor,
-                text_size: None,
-            }
+            Harness { state: editor, text_size: None }
         });
         let state = state.unwrap();
         VisualTestContext::update(cx, |window, cx| {

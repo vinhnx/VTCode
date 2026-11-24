@@ -335,6 +335,13 @@ impl DesktopView {
         });
         composer.read(cx).focus_handle(cx).focus(window, cx);
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
+            if matches!(event, InputEvent::Change | InputEvent::Focus) {
+                // Any edit or focus restarts the bounded caret-fade window.
+                view.mark_caret_active(cx);
+            } else if matches!(event, InputEvent::Blur) {
+                // No visible caret while blurred: drop the pulse and its frames.
+                view.mark_caret_inactive(cx);
+            }
             if matches!(event, InputEvent::Change) {
                 // Recall abandonment is NOT reset here: `Change` flushes after
                 // the update, and recall's own writes emit it too, so a reset
@@ -778,6 +785,8 @@ impl DesktopView {
             last_usage: None,
             theme_id: themes::canonical_selection(&start_theme, theme_mode, &preferences.custom_themes),
             preferences,
+            caret_pulse_active: false,
+            caret_pulse_generation: 0,
             login_item_status: None,
             system_motion_baseline,
             sidebar_open: false,

@@ -551,6 +551,7 @@ pub(super) fn settings_switch(
         .flex_shrink_0()
         .checked(checked)
         .accessibility_label(label.into())
+        .cursor_pointer()
         .on_click(on_click)
 }
 

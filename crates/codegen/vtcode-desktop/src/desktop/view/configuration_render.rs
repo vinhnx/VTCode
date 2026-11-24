@@ -612,6 +612,7 @@ impl DesktopView {
                     .small()
                     .checked(enabled)
                     .disabled(!can_edit)
+                    .when(can_edit, |switch| switch.cursor_pointer())
                     .accessibility_label(label.clone())
                     .tooltip(switch_tooltip(enabled))
                     .on_click({

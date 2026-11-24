@@ -14,14 +14,13 @@ use gpui_base::LogicalStyledExt as _;
 use gpui_base::TestSupportExt as _;
 
 use gpui::{
-    AnyElement, App, ElementId, InteractiveElement, Interactivity, IntoElement, MouseButton,
-    ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement as _,
-    StyleRefinement, Styled, ViewElement, Window, div, prelude::FluentBuilder as _, px, rems,
+    AnyElement, App, ElementId, InteractiveElement, Interactivity, IntoElement, MouseButton, ParentElement, RenderOnce,
+    Role, SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled, ViewElement, Window, div,
+    prelude::FluentBuilder as _, px, rems,
 };
 
 use crate::{
-    ActiveTheme as _, Disableable, FocusableExt as _, Icon, Selectable, Sizable, Size,
-    StyleSized as _, StyledExt as _,
+    ActiveTheme as _, Disableable, FocusableExt as _, Icon, Selectable, Sizable, Size, StyleSized as _, StyledExt as _,
     button::{Button, ButtonCustomVariant, ButtonVariant, ButtonVariants},
     h_flex,
     input::{Input, Textarea},
@@ -66,6 +65,16 @@ impl InputGroup {
     /// Set the single-line input or textarea, replacing the previous control.
     pub fn input(mut self, input: impl Into<InputGroupControl>) -> Self {
         self.control = Some(input.into().0);
+        self
+    }
+
+    /// Multiply the caret alpha of the group's input (clamped to `0.0..=1.0`).
+    /// Lets an application animate a soft caret fade without replacing the
+    /// input control this group frames.
+    pub fn caret_opacity(mut self, opacity: f32) -> Self {
+        if let Some(control) = self.control.take() {
+            self.control = Some(control.caret_opacity(opacity));
+        }
         self
     }
 
@@ -139,18 +148,9 @@ struct GroupPresentation {
 impl RenderOnce for InputGroup {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.control.as_ref().map(|input| input.state().clone());
-        let disabled = self.disabled
-            || self
-                .control
-                .as_ref()
-                .is_some_and(|input| input.is_disabled());
-        let focused = !disabled
-            && state
-                .as_ref()
-                .is_some_and(|state| state.has_selection_focus(window, cx));
-        let multiline = state
-            .as_ref()
-            .is_some_and(|state| state.presentation(cx).is_multi_line());
+        let disabled = self.disabled || self.control.as_ref().is_some_and(|input| input.is_disabled());
+        let focused = !disabled && state.as_ref().is_some_and(|state| state.has_selection_focus(window, cx));
+        let multiline = state.as_ref().is_some_and(|state| state.presentation(cx).is_multi_line());
         let has = |alignment| self.addons.iter().any(|addon| addon.alignment == alignment);
         let presentation = GroupPresentation {
             size: self.size,
@@ -174,9 +174,7 @@ impl RenderOnce for InputGroup {
             };
             target.push(addon.render_in_group(presentation, window, cx));
         }
-        let control = self
-            .control
-            .map(|input| render_control(input, presentation, multiline, cx));
+        let control = self.control.map(|input| render_control(input, presentation, multiline, cx));
         let theme = cx.theme();
         let appearance = GroupAppearance::new(theme, focused, disabled, self.invalid);
         let radius = theme.radius;
@@ -191,18 +189,11 @@ impl RenderOnce for InputGroup {
         let (border, background) = window.with_id(self.id.clone(), |window| {
             let transition = || {
                 let easing = easing.clone();
-                gpui_base::Transition::new(duration)
-                    .ease(move |progress| easing.sample(progress).clamp(0., 1.))
+                gpui_base::Transition::new(duration).ease(move |progress| easing.sample(progress).clamp(0., 1.))
             };
             (
                 gpui_base::transition("border-color", appearance.border, transition(), window, cx),
-                gpui_base::transition(
-                    "background-color",
-                    appearance.background,
-                    transition(),
-                    window,
-                    cx,
-                ),
+                gpui_base::transition("background-color", appearance.background, transition(), window, cx),
             )
         });
         v_flex()
@@ -213,10 +204,7 @@ impl RenderOnce for InputGroup {
             .relative()
             .w_full()
             .min_w_0()
-            .when(
-                !multiline && !presentation.block_start && !presentation.block_end,
-                |this| this.input_h(self.size),
-            )
+            .when(!multiline && !presentation.block_start && !presentation.block_end, |this| this.input_h(self.size))
             .rounded(radius)
             .border_1()
             .border_color(border)
@@ -257,10 +245,7 @@ impl RenderOnce for InputGroup {
                     .w_full()
                     .min_w_0()
                     .items_center()
-                    .when(
-                        !multiline && !presentation.block_start && !presentation.block_end,
-                        |this| this.h_full(),
-                    )
+                    .when(!multiline && !presentation.block_start && !presentation.block_end, |this| this.h_full())
                     .children(inline_start)
                     .children(control)
                     .children(inline_end),
@@ -272,12 +257,7 @@ impl RenderOnce for InputGroup {
 /// The control rendered without its own frame: the group draws the border,
 /// background and ring. An inline addon takes over part of the control's
 /// horizontal inset, as in shadcn; the caller's own style still wins.
-fn render_control(
-    mut input: Input,
-    presentation: GroupPresentation,
-    multiline: bool,
-    cx: &App,
-) -> AnyElement {
+fn render_control(mut input: Input, presentation: GroupPresentation, multiline: bool, cx: &App) -> AnyElement {
     let style = std::mem::take(input.style());
     input
         .with_size(presentation.size)
@@ -314,24 +294,13 @@ impl GroupAppearance {
         // Validation remains visible when editing is disabled. Focus alone never
         // reactivates a disabled control, and never replaces its validation color.
         let (border, ring) = if invalid {
-            (
-                theme.danger,
-                Some(
-                    theme
-                        .danger
-                        .opacity(if theme.is_dark() { 0.4 } else { 0.2 }),
-                ),
-            )
+            (theme.danger, Some(theme.danger.opacity(if theme.is_dark() { 0.4 } else { 0.2 })))
         } else if focused && !disabled {
             (theme.ring, Some(theme.ring.opacity(0.5)))
         } else {
             (theme.input, None)
         };
-        Self {
-            background,
-            border,
-            ring,
-        }
+        Self { background, border, ring }
     }
 }
 
@@ -372,12 +341,7 @@ impl InputGroupAddon {
         self
     }
 
-    fn render_in_group(
-        mut self,
-        presentation: GroupPresentation,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> AnyElement {
+    fn render_in_group(mut self, presentation: GroupPresentation, window: &mut Window, cx: &mut App) -> AnyElement {
         for child in &mut self.children {
             if let Some(button) = button_element::InputGroupButtonElement::from_element(child) {
                 button.disable(presentation.disabled);
@@ -405,10 +369,7 @@ impl InputGroupAddon {
             .flex_none()
             .gap_2()
             .py_1p5()
-            .when(
-                matches!(presentation.size, Size::XSmall | Size::Small),
-                |this| this.py_0(),
-            )
+            .when(matches!(presentation.size, Size::XSmall | Size::Small), |this| this.py_0())
             .justify_center()
             .font_medium()
             .input_text_size(presentation.size)
@@ -546,10 +507,7 @@ impl InputGroupButton {
         self
     }
 
-    pub fn on_click(
-        mut self,
-        handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_click(mut self, handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.button = self.button.on_click(handler);
         self
     }
@@ -558,8 +516,7 @@ impl InputGroupButton {
         let disabled = disabled || self.button.is_disabled();
         let selected = self.button.is_selected();
         let icon_only = self.button.is_icon_only();
-        let ghost =
-            matches!(self.button.variant(), ButtonVariant::Ghost) && !self.button.is_outline();
+        let ghost = matches!(self.button.variant(), ButtonVariant::Ghost) && !self.button.is_outline();
         let muted = cx.theme().muted;
         let hover = muted.opacity(if cx.theme().is_dark() { 0.5 } else { 1. });
         let compact = matches!(self.size, Size::XSmall | Size::Small);
@@ -581,8 +538,7 @@ impl InputGroupButton {
             .when(disabled, |this| this.disabled(true))
             .map(|this| {
                 if compact {
-                    this.with_size(Size::Medium)
-                        .content_style(content_style, icon_size)
+                    this.with_size(Size::Medium).content_style(content_style, icon_size)
                 } else {
                     this.with_size(self.size)
                 }
@@ -730,11 +686,7 @@ fn addon_child(mut child: AnyElement) -> AnyElement {
     {
         // An icon without an explicit size follows the addon's one-rem
         // default; an explicit size stays with the icon.
-        div()
-            .flex_none()
-            .text_base()
-            .child(child)
-            .into_any_element()
+        div().flex_none().text_base().child(child).into_any_element()
     } else {
         child
     }

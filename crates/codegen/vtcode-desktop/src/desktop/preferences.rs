@@ -134,10 +134,11 @@ pub(super) fn system_motion_baseline(cx: &mut App) -> bool {
 
 /// Applies a saved override or returns GPUI to the current OS preference.
 ///
-/// The caret follows the effective motion state: steady when reduced, Kit's
-/// default blink otherwise. Component `Theme::update` projects the policy
-/// onto the base theme and survives mode changes; never write the base
-/// global directly (Kit rebuilds it on sync).
+/// The caret stays solid in Kit: the desktop draws its own bounded fade pulse
+/// on the composer when the user opts in and motion is not reduced, so Kit's
+/// binary blink never competes with that fade. Component `Theme::update`
+/// projects the policy onto the base theme and survives mode changes; never
+/// write the base global directly (Kit rebuilds it on sync).
 pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_baseline: bool, cx: &mut App) {
     match preference {
         ReducedMotionPreference::System => {
@@ -147,13 +148,8 @@ pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_b
         ReducedMotionPreference::On => cx.set_reduce_motion(true),
         ReducedMotionPreference::Off => cx.set_reduce_motion(false),
     }
-    let blink = if cx.reduce_motion() {
-        gpui_kit::base::input::CursorBlink::steady()
-    } else {
-        gpui_kit::base::input::CursorBlink::default()
-    };
     gpui_kit::component::theme::Theme::update(cx, |theme| {
-        theme.cursor_blink = blink;
+        theme.cursor_blink = gpui_kit::base::input::CursorBlink::steady();
     });
 }
 
@@ -602,6 +598,8 @@ pub(super) struct Preferences {
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
+    /// Soft composer caret fade; absent in older installs means enabled.
+    pub caret_blink: CaretBlinkPreference,
     pub shortcuts: std::collections::BTreeMap<String, String>,
     /// Experimental vim-style navigation (`j`/`k`/`g`/`G`/`h`/`l`, `i`, `/`).
     /// Missing values keep existing installs on the default off behavior.
@@ -968,6 +966,9 @@ impl Preferences {
             .map_err(|error| rust_i18n::t!("app.errors.preferences_save_failed", error = error.to_string()).to_string())
     }
 }
+
+mod caret;
+pub(super) use caret::{CARET_IDLE_TIMEOUT, CaretBlinkPreference};
 
 mod terminal;
 pub(super) use terminal::{

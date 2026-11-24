@@ -576,8 +576,8 @@ impl DesktopView {
                                     .border_color(cx.theme().colors.primary)
                                     .rounded(cx.theme().radius_lg)
                             })
-                            .child(
-                                InputGroup::new("message-composer")
+                            .child({
+                                let group = InputGroup::new("message-composer")
                                     .with_size(composer_size)
                                     .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                     .w_full()
@@ -595,8 +595,25 @@ impl DesktopView {
                                             // on the transcript spine like the draft.
                                             .px_0()
                                             .child(buttons),
-                                    ),
-                            )
+                                    );
+                                // A soft fade loop exists only while the composer
+                                // is inside its idle window. Capped frame rate and
+                                // a solid reduced-motion fallback keep it cheap.
+                                if self.caret_pulse_active
+                                    && self.preferences.caret_blink.blinks()
+                                    && !cx.reduce_motion()
+                                {
+                                    group
+                                        .with_animation(
+                                            "composer-caret-pulse",
+                                            motion::caret_pulse_animation(),
+                                            |group, delta| group.caret_opacity(motion::caret_pulse_opacity(delta)),
+                                        )
+                                        .into_any_element()
+                                } else {
+                                    group.into_any_element()
+                                }
+                            })
                     }),
             ),
         )

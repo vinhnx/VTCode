@@ -176,6 +176,7 @@ impl DesktopView {
                     .small()
                     .checked(enabled)
                     .disabled(!available)
+                    .when(available, |switch| switch.cursor_pointer())
                     .accessibility_label(row.title.as_str())
                     .tooltip(if blocked {
                         rust_i18n::t!("app.configuration.blocked_in_catalog").to_string()
@@ -200,6 +201,7 @@ impl DesktopView {
                     .small()
                     .checked(enabled)
                     .disabled(!available)
+                    .when(available, |switch| switch.cursor_pointer())
                     .accessibility_label(row.title.as_str())
                     .tooltip(switch_tooltip(enabled))
                     .on_click({
@@ -250,6 +252,7 @@ impl DesktopView {
             let switch = gpui_kit::component::switch::Switch::new(format!("curated-effort-{level}"))
                 .small()
                 .checked(enabled)
+                .cursor_pointer()
                 .accessibility_label(
                     rust_i18n::t!("app.configuration.effort_label", label = label.as_str()).to_string(),
                 )

@@ -175,6 +175,7 @@ impl DesktopView {
             .primary()
             .small()
             .rounded(radius)
+            .cursor_pointer()
             .icon(IconName::Computer)
             .label(rust_i18n::t!("app.settings.computer_use.group").to_string())
             .tooltip("Open Computer Use settings".to_string())
@@ -193,6 +194,7 @@ impl DesktopView {
                     .success()
                     .small()
                     .rounded(radius)
+                    .cursor_pointer()
                     .icon(IconName::ShieldCheck)
                     .label(rust_i18n::t!("app.settings.computer_use.decisions").to_string())
                     .tooltip("Decisions review is on. Open Computer Use settings.".to_string())
@@ -251,6 +253,7 @@ impl DesktopView {
                 gpui_kit::component::switch::Switch::new("computer-use-enabled")
                     .checked(props.enabled)
                     .disabled(!props.can_edit)
+                    .when(props.can_edit, |switch| switch.cursor_pointer())
                     .accessibility_label(title)
                     .on_click({
                         let view = view.clone();
@@ -266,6 +269,7 @@ impl DesktopView {
                 gpui_kit::component::switch::Switch::new("computer-use-decisions")
                     .checked(props.decisions_review)
                     .disabled(!props.can_edit || !props.enabled)
+                    .when(props.can_edit && props.enabled, |switch| switch.cursor_pointer())
                     .accessibility_label(rust_i18n::t!("app.settings.computer_use.decisions").to_string())
                     .on_click({
                         let view = view.clone();

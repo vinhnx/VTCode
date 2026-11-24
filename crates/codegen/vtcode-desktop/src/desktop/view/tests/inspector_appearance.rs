@@ -668,7 +668,7 @@ fn settings_escape_restores_the_previous_focus(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {
-        assert!(window.try_find("settings-dismiss").is_none(), "the settings header has no duplicate close control");
+        assert!(window.try_find("settings-dismiss").is_some(), "the settings header exposes a close control");
         window.press("escape", cx);
         window.render_frame(cx);
     })

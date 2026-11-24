@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, DefiniteLength, Entity, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled,
-    Window, prelude::FluentBuilder as _,
+    App, DefiniteLength, Entity, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled, Window,
+    prelude::FluentBuilder as _,
 };
 
 use super::{Input, TextareaState};
@@ -27,6 +27,8 @@ pub struct Textarea {
     role: RoleOverride,
     accessibility_id: Option<SharedString>,
     aria_label: Option<SharedString>,
+    /// Optional multiplier on the theme caret alpha, for application-owned fades.
+    caret_opacity: Option<f32>,
 
     /// An optional context menu builder to allow a custom context menu.
     ///
@@ -44,9 +46,7 @@ impl Textarea {
         mut self,
         render: impl Fn(&super::InlineTokenContext, &mut Window, &mut App) -> R + 'static,
     ) -> Self {
-        self.token_renderer = Some(Rc::new(move |token, window, cx| {
-            render(token, window, cx).into_any_element()
-        }));
+        self.token_renderer = Some(Rc::new(move |token, window, cx| render(token, window, cx).into_any_element()));
         self
     }
     /// Open a reference after a completed, unconsumed token click.
@@ -81,6 +81,7 @@ impl Textarea {
             role: RoleOverride::default(),
             accessibility_id: None,
             aria_label: None,
+            caret_opacity: None,
             context_menu_builder: None,
             paste_handler: None,
             token_renderer: None,
@@ -140,16 +141,20 @@ impl Textarea {
         self
     }
 
+    /// Multiply the theme caret alpha by `opacity` (clamped to `0.0..=1.0`).
+    /// Applications drive this with a bounded GPUI animation for a soft fade.
+    pub fn caret_opacity(mut self, opacity: f32) -> Self {
+        self.caret_opacity = Some(opacity.clamp(0.0, 1.0));
+        self
+    }
+
     /// Replace the built-in context menu shown on right-click.
     ///
     /// The closure receives an empty menu and returns the one to show, so it
     /// decides entirely what appears — the default items are not added. It
     /// shows only while the state's context menu is enabled, which is the
     /// default.
-    pub fn context_menu(
-        mut self,
-        f: impl Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static,
-    ) -> Self {
+    pub fn context_menu(mut self, f: impl Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static) -> Self {
         self.context_menu_builder = Some(Rc::new(f));
         self
     }
@@ -160,10 +165,7 @@ impl Textarea {
     /// to `clipboard.text()`. Copied files arrive as `ExternalPaths` through
     /// the same hook. On web the clipboard reads `None`; image paste needs
     /// async clipboard access and is out of scope.
-    pub fn on_paste(
-        mut self,
-        handler: impl Fn(&gpui::ClipboardItem, &mut Window, &mut App) -> bool + 'static,
-    ) -> Self {
+    pub fn on_paste(mut self, handler: impl Fn(&gpui::ClipboardItem, &mut Window, &mut App) -> bool + 'static) -> Self {
         self.paste_handler = Some(Rc::new(handler));
         self
     }
@@ -206,6 +208,7 @@ impl Textarea {
             .when_some(self.height, |this, height| this.h(height))
             .when_some(self.accessibility_id, |this, id| this.accessibility_id(id))
             .when_some(self.aria_label, |this, label| this.aria_label(label))
+            .when_some(self.caret_opacity, |this, opacity| this.caret_opacity(opacity))
             .when_some(self.context_menu_builder, |this, build| {
                 this.context_menu(move |menu, window, cx| build(menu, window, cx))
             })
@@ -232,11 +235,7 @@ mod tests {
 
         struct Probe;
         impl Render for Probe {
-            fn render(
-                &mut self,
-                _: &mut Window,
-                _: &mut gpui::Context<Self>,
-            ) -> impl gpui::IntoElement {
+            fn render(&mut self, _: &mut Window, _: &mut gpui::Context<Self>) -> impl gpui::IntoElement {
                 gpui::div()
             }
         }
@@ -257,11 +256,7 @@ mod tests {
 
         struct Probe;
         impl Render for Probe {
-            fn render(
-                &mut self,
-                _: &mut Window,
-                _: &mut gpui::Context<Self>,
-            ) -> impl gpui::IntoElement {
+            fn render(&mut self, _: &mut Window, _: &mut gpui::Context<Self>) -> impl gpui::IntoElement {
                 gpui::div()
             }
         }

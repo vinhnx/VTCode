@@ -77,6 +77,17 @@ Upstream request to carry this in the next release: add a pause-only
 method to `MessageScrollerState`; when published, drop this vendored
 patch and bump `gpui-kit`.
 
+And in `src/input/input.rs`, `src/input/editor.rs`, `src/input/textarea.rs`,
+and `src/input/group.rs` (cursor fade contract):
+
+- `Input`, `Editor`, `Textarea`, and `InputGroup` accept an optional
+  `caret_opacity` multiplier on the theme caret alpha through a new
+  `.caret_opacity(f32)` builder (clamped to `0.0..=1.0`, `None` keeps Kit's
+  solid caret). `Editor` and `Textarea` forward it when they build the shared
+  `Input`; `InputGroup` applies it to its framed control. VT Code drives this
+  with a bounded GPUI animation for a soft caret fade; the framework still
+  owns caret geometry, focus gating, and the actual paint.
+
 Re-vendor procedure (per `=0.10.0` bump): copy the new registry source
 over `src/`, `locales/`, `tests/`, `build.rs`, `Cargo.toml`,
 `LICENSE-APACHE`, and `README.md`, drop `Cargo.lock`, `Cargo.toml.orig`,
@@ -85,10 +96,12 @@ stanza from `Cargo.toml` (unused-dep checks moved to Cargo's built-in
 lint), re-apply the `pause_following_tail` addition, the
 `SidebarMenuItem` / `Tab` cursor changes, the `Select` trigger
 anchoring/width/outline contract, the `Button` open/selected paint
-separation, the `TabBar::keyboard_navigation` opt-out, and the
-`Editor::into_input` addition; then diff `src/message_scroller.rs`,
+separation, the `TabBar::keyboard_navigation` opt-out, the
+`Editor::into_input` addition, and the `caret_opacity` builder on
+`Input`/`Editor`/`Textarea`/`InputGroup`; then diff `src/message_scroller.rs`,
 `src/sidebar/menu.rs`, `src/tab/tab.rs`, `src/tab/tab_bar.rs`,
-`src/select.rs`, `src/button/button.rs`, and `src/input/editor.rs`
+`src/select.rs`, `src/button/button.rs`, `src/input/input.rs`,
+`src/input/textarea.rs`, `src/input/editor.rs`, and `src/input/group.rs`
 against the registry copy to confirm the deltas contain only these
 changes (`diff -u` each file; `Cargo.toml` must differ only by the
 machete stanza). See `.vtcode/memory/gotchas.md` for the general

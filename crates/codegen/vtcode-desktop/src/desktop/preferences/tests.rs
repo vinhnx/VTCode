@@ -432,35 +432,49 @@ fn system_motion_baseline_initializes_once_without_redundant_global_notification
 }
 
 #[gpui_kit::test]
-fn caret_blink_follows_effective_reduced_motion(cx: &mut gpui_kit::TestAppContext) {
+fn caret_stays_solid_in_kit_under_every_motion_state(cx: &mut gpui_kit::TestAppContext) {
     use gpui_kit::base::input::CursorBlink;
-    use gpui_kit::component::theme::Theme;
+    use gpui_kit::component::theme::{Theme, ThemeMode};
 
     cx.update(|cx| {
         gpui_kit::init(cx);
-        // Explicit choices win over a stale opposite baseline (asymmetric).
-        apply_reduced_motion(ReducedMotionPreference::On, false, cx);
-        assert!(cx.reduce_motion());
+        // The desktop owns the soft fade pulse, so Kit never runs its binary
+        // blink timer — not even when reduced motion is off.
+        for (preference, baseline) in [
+            (ReducedMotionPreference::On, false),
+            (ReducedMotionPreference::Off, true),
+            (ReducedMotionPreference::System, true),
+        ] {
+            apply_reduced_motion(preference, baseline, cx);
+            assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
+            assert!(Theme::global(cx).cursor_blink.is_steady());
+            assert_eq!(Theme::global(cx).cursor_blink.idle_timeout(), None);
+            assert_eq!(
+                gpui_kit::base::Theme::global(cx).cursor_blink,
+                CursorBlink::steady(),
+                "component update projects onto the base theme inputs read"
+            );
+        }
+
+        // Theme rebuilds and appearance switches must not resurrect a blink.
+        Theme::update(cx, |_| {});
+        Theme::change(ThemeMode::Dark, None, cx);
         assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
-        assert_eq!(
-            gpui_kit::base::Theme::global(cx).cursor_blink,
-            CursorBlink::steady(),
-            "component update projects onto the base theme inputs read"
-        );
-
-        apply_reduced_motion(ReducedMotionPreference::Off, true, cx);
-        assert!(!cx.reduce_motion());
-        assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::default());
-
-        // The System arm tracks the live OS value, whatever the baseline said.
-        apply_reduced_motion(ReducedMotionPreference::System, true, cx);
-        let expected = if cx.reduce_motion() {
-            CursorBlink::steady()
-        } else {
-            CursorBlink::default()
-        };
-        assert_eq!(Theme::global(cx).cursor_blink, expected);
+        assert_eq!(gpui_kit::base::Theme::global(cx).cursor_blink, CursorBlink::steady());
     });
+}
+
+#[test]
+fn caret_blink_defaults_to_blink_and_round_trips() {
+    let defaults: Preferences = serde_json::from_str("{}").unwrap();
+    assert_eq!(defaults.caret_blink, CaretBlinkPreference::Blink);
+    assert!(defaults.caret_blink.blinks());
+
+    let steady: Preferences = serde_json::from_str(r#"{"caretBlink":"steady"}"#).unwrap();
+    assert!(!steady.caret_blink.blinks());
+    let saved = serde_json::to_string(&steady).unwrap();
+    let loaded: Preferences = serde_json::from_str(&saved).unwrap();
+    assert_eq!(loaded.caret_blink, CaretBlinkPreference::Steady);
 }
 
 #[test]
