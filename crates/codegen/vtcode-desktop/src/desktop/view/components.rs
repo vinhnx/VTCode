@@ -882,9 +882,10 @@ pub(super) fn running_indicator(
 
 /// The shared mount fade: every toggle, panel, and popup that appears fades
 /// opacity 0→1 on mount through the theme's enter motion. All fades go through
-/// `motion::fade_animation`, so the duration/curve policy has one owner.
-/// `with_animation` renders the end state statically under reduced motion and
-/// requests no frames once settled, so no manual gate is needed.
+/// `motion::opacity_fade`, so the animation builder and its duration/curve
+/// policy have one owner. `with_animation` renders the end state statically
+/// under reduced motion and requests no frames once settled, so no manual
+/// gate is needed.
 pub(super) trait FadeInExt: AnimationExt + Sized {
     /// Apply the shared appearance fade with a stable per-mount id. The
     /// element/id types stay fully qualified so the shared import surface
@@ -895,7 +896,7 @@ pub(super) trait FadeInExt: AnimationExt + Sized {
     {
         // `returning` is the decelerating enter curve; a mount reveal has the
         // normal duration and that enter curve.
-        self.with_animation(id, motion::fade_animation(theme, false, true), |el, delta| el.opacity(delta))
+        motion::opacity_fade(self, id, theme, false, true)
     }
 }
 

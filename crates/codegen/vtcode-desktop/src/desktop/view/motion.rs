@@ -5,6 +5,16 @@
 //! [`fade_animation`]. Navigation reveals sample with absolute time, resume
 //! from the last sampled value when retargeted, and request frames only while
 //! the value is still moving.
+//!
+//! Choice of mechanism follows what owns the changing value (GPUI Kit
+//! [animation guide](https://gpui-kit.com/docs/animation/), CC BY 4.0; checked
+//! against pinned `0.10.0`): a mounted one-shot appearance uses GPUI's
+//! [`Animation`] via [`opacity_fade`], while a destination that can change
+//! before settling uses [`NavigationMotion`]'s sampled clock. The wrapper's
+//! `id` is the playback identity — GPUI continues a mounted wrapper with the
+//! same id and starts a fresh playback only when the id changes or the wrapper
+//! remounts. Callers must therefore give each surface a stable id and include
+//! an application-owned generation only when a fresh appearance should replay.
 use std::cell::Cell;
 
 use super::*;
@@ -152,6 +162,24 @@ fn reveal_value(from: f32, eased: f32) -> f32 {
     from + (1.0 - from) * eased
 }
 
+/// The one opacity-reveal wrapper for every one-shot appearance. Both the
+/// mount fade and the navigation fade delegate here so the animation builder
+/// and the animator cannot drift. `id` is the playback identity, not a label
+/// for the content: reusing it keeps a mounted reveal at its current value,
+/// while a new id (or a remount) replays it from transparent.
+pub(super) fn opacity_fade<E>(
+    element: E,
+    id: impl Into<gpui_kit::ElementId>,
+    theme: &Theme,
+    fast: bool,
+    returning: bool,
+) -> gpui_kit::AnimationElement<E>
+where
+    E: AnimationExt + Styled + Sized,
+{
+    element.with_animation(id, fade_animation(theme, fast, returning), |el, delta| el.opacity(delta))
+}
+
 pub(super) trait NavigationFadeExt: AnimationExt + Sized {
     fn navigation_fade(
         self,
@@ -163,7 +191,7 @@ pub(super) trait NavigationFadeExt: AnimationExt + Sized {
     where
         Self: Styled,
     {
-        self.with_animation(id, fade_animation(theme, fast, returning), |el, delta| el.opacity(delta))
+        opacity_fade(self, id, theme, fast, returning)
     }
 }
 
@@ -172,6 +200,24 @@ impl<T: AnimationExt + Sized> NavigationFadeExt for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_opacity_fade_is_a_finite_oneshot() {
+        // Both fade wrappers delegate to `opacity_fade`, whose animation comes
+        // from this one builder. GPUI honors reduced motion by rendering the
+        // one-shot's end state, so the animator must stay in the opacity range
+        // at every phase (the animation guide requires finite easing output).
+        let theme = Theme::default();
+        for (fast, returning) in [(false, true), (true, false), (false, false)] {
+            let animation = fade_animation(&theme, fast, returning);
+            assert!(animation.oneshot, "mount and navigation fades are one-shots");
+            assert_eq!(animation.duration, fade_timing(&theme, fast, returning).0);
+            for step in 0..=20 {
+                let eased = (animation.easing)(step as f32 / 20.0);
+                assert!(eased.is_finite() && (0.0..=1.0).contains(&eased), "eased opacity {eased} left 0..=1");
+            }
+        }
+    }
 
     #[test]
     fn reveal_sampling_is_bounded_and_asymmetric() {
