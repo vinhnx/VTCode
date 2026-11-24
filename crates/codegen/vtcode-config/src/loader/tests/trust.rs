@@ -28,6 +28,89 @@ fn repository_copilot_command_is_rejected_but_explicit_config_is_trusted() {
 
 #[test]
 #[serial]
+fn repository_sandbox_boundary_is_rejected_but_explicit_config_is_trusted() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let workspace_config = workspace.path().join("vtcode.toml");
+    let explicit_config = workspace.path().join("explicit.toml");
+    let content = "[sandbox]\ndefault_policy = 'danger_full_access'\n";
+    fs::write(&workspace_config, content).expect("workspace config");
+    fs::write(&explicit_config, content).expect("explicit config");
+    let paths = StaticWorkspacePaths::new(workspace.path(), workspace.path().join(".vtcode"));
+    let provider = WorkspacePathsDefaults::new(Arc::new(paths)).with_home_paths(Vec::new());
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let error = ConfigManager::load_from_workspace(workspace.path())
+            .err()
+            .expect("repository must not set the sandbox boundary");
+        assert!(format!("{error:#}").contains("sandbox.default_policy"), "{error:#}");
+        let trusted = ConfigManager::load_from_file(&explicit_config).expect("explicit config is trusted");
+        assert_eq!(trusted.config().sandbox.default_policy, crate::core::sandbox::SandboxPolicy::DangerFullAccess);
+    });
+}
+
+#[test]
+#[serial]
+fn repository_cannot_disable_a_trusted_sandbox_or_weaken_seccomp() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let workspace_config = workspace.path().join("vtcode.toml");
+    let user_config = workspace.path().join("home/vtcode.toml");
+    fs::create_dir_all(user_config.parent().expect("user parent")).expect("user directory");
+    fs::write(&user_config, "[sandbox]\nenabled = true\ndefault_policy = 'read_only'\n").expect("user config");
+    let paths = StaticWorkspacePaths::new(workspace.path(), workspace.path().join(".vtcode"));
+    let provider = WorkspacePathsDefaults::new(Arc::new(paths)).with_home_paths(vec![user_config]);
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        for content in ["[sandbox]\nenabled = false\n", "[sandbox.seccomp]\nenabled = false\n"] {
+            fs::write(&workspace_config, content).expect("workspace config");
+            ConfigManager::invalidate_workspace_cache(workspace.path());
+            let error = ConfigManager::load_from_workspace(workspace.path())
+                .err()
+                .expect("repository must not relax a trusted boundary");
+            assert!(format!("{error:#}").contains("cannot relax"), "{error:#}");
+        }
+        // Tighter settings remain legitimate repository configuration.
+        fs::write(&workspace_config, "[sandbox.resource_limits]\npreset = 'conservative'\n")
+            .expect("tighter workspace config");
+        ConfigManager::invalidate_workspace_cache(workspace.path());
+        let manager = ConfigManager::load_from_workspace(workspace.path()).expect("tighter policy is allowed");
+        assert_eq!(
+            manager.config().sandbox.resource_limits.preset,
+            crate::core::sandbox::ResourceLimitsPreset::Conservative
+        );
+    });
+}
+
+#[test]
+#[serial]
+fn project_sandbox_network_policy_cannot_widen_trusted_user_boundary() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let config_dir = workspace.path().join(".vtcode");
+    let user_config = workspace.path().join("home/vtcode.toml");
+    let project_config = config_dir.join("projects/repository/config/vtcode.toml");
+    fs::create_dir_all(user_config.parent().expect("user parent")).expect("user directory");
+    fs::create_dir_all(project_config.parent().expect("project parent")).expect("project directory");
+    fs::write(&user_config, "[sandbox]\ndefault_policy = 'read_only'\n").expect("user config");
+    fs::write(workspace.path().join(".vtcode-project"), "repository\n").expect("project marker");
+    let paths = StaticWorkspacePaths::new(workspace.path(), &config_dir);
+    let provider = WorkspacePathsDefaults::new(Arc::new(paths)).with_home_paths(vec![user_config]);
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let trusted = ConfigManager::load_from_workspace(workspace.path()).expect("user boundary is trusted");
+        assert_eq!(trusted.config().sandbox.default_policy, crate::core::sandbox::SandboxPolicy::ReadOnly);
+
+        for content in [
+            "[sandbox.network]\npolicy = 'allow_all'\n",
+            "sandbox = { network = { policy = 'allow_all' } }\n",
+        ] {
+            fs::write(&project_config, content).expect("project config");
+            ConfigManager::invalidate_workspace_cache(workspace.path());
+            let error = ConfigManager::load_from_workspace(workspace.path())
+                .err()
+                .expect("project must not widen the sandbox network boundary");
+            assert!(format!("{error:#}").contains("sandbox.network.policy"), "{error:#}");
+        }
+    });
+}
+
+#[test]
+#[serial]
 fn project_copilot_command_cannot_override_trusted_user_command() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
     let config_dir = workspace.path().join(".vtcode");

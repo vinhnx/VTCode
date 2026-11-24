@@ -144,6 +144,13 @@ command-backed providers and endpoint/credential overrides in system or user con
 with `--config`. Provider subprocess environment filtering remains defense in depth; it is not approval for
 repository-supplied commands.
 
+A checked-in `vtcode.toml` is untrusted repository input for the sandbox boundary as well. Workspace and project
+layers may carry ordinary (including serialized default) sandbox settings and may tighten limits, but the loader
+rejects values that relax the boundary: `danger_full_access`/`external` policy, network `allow_all`, removed
+sensitive-path defaults or added exceptions, unlimited/generous resource limits, weakened seccomp, and
+`sandbox.enabled = false` when a trusted system/user layer enabled the sandbox. System, user, and explicitly
+selected config files remain authoritative.
+
 ### Native plugin loading
 
 Dynamic libraries are executable code: their initialization routines can run as soon as the library is opened, before VT

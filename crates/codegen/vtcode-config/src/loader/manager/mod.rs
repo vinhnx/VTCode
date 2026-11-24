@@ -157,6 +157,7 @@ impl ConfigManager {
                 .context("Failed to deserialize effective global configuration")?;
             Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
             Self::validate_provider_security_fields(&layer_stack, &origins, &config, false)?;
+            Self::validate_sandbox_security_fields(&layer_stack, &origins, false)?;
             config.validate().context("Global configuration failed validation")?;
             config.workspace_lifecycle_hooks =
                 Some(Self::collect_workspace_lifecycle_hooks(&layer_stack, &config.hooks));
@@ -444,6 +445,7 @@ impl ConfigManager {
         let t3 = std::time::Instant::now();
         Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
         Self::validate_provider_security_fields(&layer_stack, &origins, &config, false)?;
+        Self::validate_sandbox_security_fields(&layer_stack, &origins, false)?;
 
         config.validate().context("Configuration failed validation")?;
         config.workspace_lifecycle_hooks = Some(Self::collect_workspace_lifecycle_hooks(&layer_stack, &config.hooks));
@@ -660,6 +662,7 @@ impl ConfigManager {
         // even though it uses the Workspace source variant for precedence and
         // compatibility with the existing loader.
         Self::validate_provider_security_fields(&layer_stack, &origins, &config, true)?;
+        Self::validate_sandbox_security_fields(&layer_stack, &origins, true)?;
 
         config
             .validate()
@@ -776,6 +779,77 @@ impl ConfigManager {
         }
 
         Ok(())
+    }
+
+    /// Reject *relaxing* sandbox values from repository-controlled layers.
+    ///
+    /// `vtcode.toml` checked into a repository is untrusted input. It may carry
+    /// the ordinary serialized defaults (which are not a widening), but it
+    /// must not turn off a boundary a trusted layer enabled, switch to full
+    /// access, open the network, drop credential path blocking, or weaken
+    /// seccomp/resource limits. System/user config and explicitly selected
+    /// files remain authoritative, matching the provider-security split.
+    fn validate_sandbox_security_fields(
+        layer_stack: &ConfigLayerStack,
+        origins: &hashbrown::HashMap<String, ConfigLayerMetadata>,
+        explicit_config_is_trusted: bool,
+    ) -> Result<()> {
+        if explicit_config_is_trusted {
+            return Ok(());
+        }
+
+        let trusted_enabled = layer_stack.layers().iter().any(|layer| {
+            layer.is_enabled()
+                && matches!(layer.source, ConfigLayerSource::System { .. } | ConfigLayerSource::User { .. })
+                && Self::toml_bool_at(&layer.config, "sandbox.enabled") == Some(true)
+        });
+
+        for (path, origin) in origins {
+            let Some(layer) = Self::enabled_layer_for_origin(layer_stack, origin) else {
+                continue;
+            };
+            if !Self::is_repository_controlled_source(&layer.source) {
+                continue;
+            }
+            let value = Self::toml_value_at(&layer.config, path);
+            let relaxing = match path.as_str() {
+                "sandbox.enabled" => trusted_enabled && value.and_then(toml::Value::as_bool) == Some(false),
+                "sandbox.default_policy" => value
+                    .and_then(toml::Value::as_str)
+                    .is_some_and(|policy| matches!(policy, "danger_full_access" | "external")),
+                "sandbox.network.policy" => value.and_then(toml::Value::as_str) == Some("allow_all"),
+                "sandbox.network.allow_all" => value.and_then(toml::Value::as_bool) == Some(true),
+                "sandbox.sensitive_paths.use_defaults" => value.and_then(toml::Value::as_bool) == Some(false),
+                "sandbox.sensitive_paths.exceptions" => {
+                    value.and_then(toml::Value::as_array).is_some_and(|paths| !paths.is_empty())
+                }
+                "sandbox.resource_limits.preset" => value
+                    .and_then(toml::Value::as_str)
+                    .is_some_and(|preset| matches!(preset, "unlimited" | "generous")),
+                "sandbox.seccomp.enabled" => value.and_then(toml::Value::as_bool) == Some(false),
+                "sandbox.seccomp.profile" => value
+                    .and_then(toml::Value::as_str)
+                    .is_some_and(|profile| matches!(profile, "permissive" | "disabled")),
+                "sandbox.seccomp.log_only" => value.and_then(toml::Value::as_bool) == Some(true),
+                _ => false,
+            };
+            if relaxing {
+                bail!(
+                    "repository-controlled configuration cannot relax `{path}`; the sandbox boundary must come from system, user, or an explicitly selected config file (source: {})",
+                    layer.source.label()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn toml_value_at<'a>(root: &'a toml::Value, path: &str) -> Option<&'a toml::Value> {
+        path.split('.').try_fold(root, |value, part| value.get(part))
+    }
+
+    fn toml_bool_at(root: &toml::Value, path: &str) -> Option<bool> {
+        Self::toml_value_at(root, path).and_then(toml::Value::as_bool)
     }
 
     fn enabled_layer_for_origin<'a>(
