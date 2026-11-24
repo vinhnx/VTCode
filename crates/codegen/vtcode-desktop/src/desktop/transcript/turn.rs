@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::hash_map::Entry;
 
 impl Transcript {
     /// Groups restored archive rows into synthetic turns: each `final_answer`
@@ -372,21 +373,39 @@ fn summarize_turn_files<'a>(
     incomplete: bool,
 ) -> (Vec<TurnFile>, Option<(u64, u64)>, bool) {
     let mut files: Vec<TurnFile> = Vec::new();
+    // A turn can touch many files across several edit rows; index by path so
+    // deduplication stays O(n) instead of rescanning the accumulating vector.
+    // Keys borrow from `items`, which outlive both maps.
+    let mut file_indices: HashMap<&str, usize> = HashMap::new();
     let mut files_incomplete = incomplete;
     for item in items {
         if let Some(diff) = item.diff.as_ref().filter(|diff| !diff.failed) {
             files_incomplete |= diff.incomplete;
             let previews = gpui_kit::component::diff::DiffFile::parse(&diff.patch).unwrap_or_default();
+            // Collect in reverse so the first preview for a path wins on
+            // duplicate keys, matching the old `.find` on the parsed files.
+            let previews_by_path: HashMap<&str, _> = previews
+                .iter()
+                .rev()
+                .map(|preview| (preview.path().as_ref(), preview))
+                .collect();
             for file in &diff.files {
-                if let Some(existing) = files.iter_mut().find(|existing| existing.file.path == file.path) {
-                    existing.counts = None;
-                } else {
-                    let preview = previews.iter().find(|preview| preview.path().as_ref() == file.path.as_str());
-                    let (additions, deletions) = crate::desktop::inspector::preview_counts(preview, diff.incomplete);
-                    files.push(TurnFile {
-                        file: file.clone(),
-                        counts: additions.zip(deletions),
-                    });
+                match file_indices.entry(file.path.as_str()) {
+                    Entry::Occupied(entry) => {
+                        if let Some(existing) = files.get_mut(*entry.get()) {
+                            existing.counts = None;
+                        }
+                    }
+                    Entry::Vacant(entry) => {
+                        let preview = previews_by_path.get(file.path.as_str()).copied();
+                        let (additions, deletions) =
+                            crate::desktop::inspector::preview_counts(preview, diff.incomplete);
+                        let _index = entry.insert(files.len());
+                        files.push(TurnFile {
+                            file: file.clone(),
+                            counts: additions.zip(deletions),
+                        });
+                    }
                 }
             }
         }

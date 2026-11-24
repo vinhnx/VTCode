@@ -93,6 +93,99 @@ fn turn_files_deduplicate_and_exclude_failed_or_other_turns() {
 }
 
 #[test]
+fn turn_files_deduplicate_late_repeats_without_losing_first_seen_order() {
+    use super::super::{DiffCard, DiffFile, DiffFileKind};
+    let patch_for = |path: &str| {
+        format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1,2 @@\n-old\n+new\n+extra\n")
+    };
+    let mut transcript = Transcript::default();
+    // Enough distinct paths that a repeated linear scan would revisit each one
+    // many times, plus one late repeat of the very first path.
+    for index in 1..=32 {
+        let path = format!("file-{index}.rs");
+        let mut row = item(index, "diff", "");
+        row.diff = Some(DiffCard {
+            files: vec![DiffFile { path: path.clone(), kind: DiffFileKind::Update }],
+            additions: None,
+            deletions: None,
+            incomplete: false,
+            failed: false,
+            patch: patch_for(&path),
+        });
+        transcript.push(row);
+        transcript.set_item_turn(&index.to_string(), "a");
+    }
+    let repeat = 33;
+    let mut row = item(repeat, "diff", "");
+    row.diff = Some(DiffCard {
+        files: vec![DiffFile {
+            path: "file-1.rs".into(),
+            kind: DiffFileKind::Update,
+        }],
+        additions: None,
+        deletions: None,
+        incomplete: false,
+        failed: false,
+        patch: patch_for("file-1.rs"),
+    });
+    transcript.push(row);
+    transcript.set_item_turn(&repeat.to_string(), "a");
+    transcript.push(item(34, "assistant", "done"));
+    transcript.set_item_turn("34", "a");
+    transcript.complete_turn_group("a", "34");
+
+    let final_item = transcript.get(33).unwrap();
+    let files = &final_item.turn_files;
+    assert_eq!(files.len(), 32);
+    assert_eq!(files[0].file.path, "file-1.rs");
+    assert_eq!(files[31].file.path, "file-32.rs");
+    // Same parseable patch for both rows; only the repeated path loses counts.
+    assert_eq!(files[0].counts, None);
+    assert_eq!(files[1].counts, Some((2, 1)));
+    assert_eq!(final_item.turn_file_totals, None);
+}
+
+#[test]
+fn turn_file_preview_lookup_keeps_the_first_entry_for_a_repeated_path() {
+    use super::super::{DiffCard, DiffFile, DiffFileKind};
+    // One patch with two sections for the same path: the old `.find` took the
+    // first preview, so counts must come from `+2/-1`, not `+3/-1`.
+    let patch = concat!(
+        "diff --git a/one.rs b/one.rs\n",
+        "--- a/one.rs\n",
+        "+++ b/one.rs\n",
+        "@@ -1 +1,2 @@\n",
+        "-old\n",
+        "+new\n",
+        "+extra\n",
+        "diff --git a/one.rs b/one.rs\n",
+        "--- a/one.rs\n",
+        "+++ b/one.rs\n",
+        "@@ -1 +1,3 @@\n",
+        "-old\n",
+        "+new\n",
+        "+extra\n",
+        "+third\n",
+    );
+    let mut transcript = Transcript::default();
+    let mut row = item(1, "diff", "");
+    row.diff = Some(DiffCard {
+        files: vec![DiffFile { path: "one.rs".into(), kind: DiffFileKind::Update }],
+        additions: None,
+        deletions: None,
+        incomplete: false,
+        failed: false,
+        patch: patch.into(),
+    });
+    transcript.push(row);
+    transcript.set_item_turn("1", "a");
+    transcript.push(item(2, "assistant", "done"));
+    transcript.set_item_turn("2", "a");
+    transcript.complete_turn_group("a", "2");
+    assert_eq!(transcript.get(1).unwrap().turn_files[0].counts, Some((2, 1)));
+}
+
+#[test]
 fn turn_file_counts_require_one_complete_parseable_change() {
     use super::super::{DiffCard, DiffFile, DiffFileKind};
     let patch = "diff --git a/one.rs b/one.rs\n--- a/one.rs\n+++ b/one.rs\n@@ -1 +1,2 @@\n-old\n+new\n+extra\n";
