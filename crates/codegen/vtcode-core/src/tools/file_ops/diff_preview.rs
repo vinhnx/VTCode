@@ -227,42 +227,47 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
         });
     }
 
-    let line_count = formatted.lines().count();
+    // Single pass over the formatted lines: the excerpt carries the head/tail
+    // windows, the hidden count, and the total, replacing both the
+    // `lines().count()` scan and the full `lines().collect()` transient.
+    let excerpt = vtcode_commons::preview::excerpt_text_lines(&formatted, diff::HEAD_LINE_COUNT, diff::TAIL_LINE_COUNT);
+    let line_count = excerpt.total;
     let counts = count_diff_changes(&document.hunks);
     let additions = counts.additions;
     let deletions = counts.deletions;
     if line_count > diff::MAX_PREVIEW_LINES {
-        let lines: Vec<&str> = formatted.lines().collect();
-        let head_count = diff::HEAD_LINE_COUNT.min(lines.len());
-        let base_tail_count = diff::TAIL_LINE_COUNT.min(lines.len().saturating_sub(head_count));
+        // `MAX_PREVIEW_LINES` (160) tops `HEAD + TAIL` (128), so reaching this
+        // branch implies the excerpt overflowed: `head`/`tail` hold exactly
+        // the window slices and `omitted` below is always positive (the old
+        // `omitted == 0` fallback that rejoined every line was unreachable).
+        // The asserts fail loud if the constants ever drift apart.
+        debug_assert!(line_count > diff::HEAD_LINE_COUNT.saturating_add(diff::TAIL_LINE_COUNT));
+        let base_tail_count = excerpt.tail.len();
         let full_display = (document.hunks.len() > 1).then(|| display_lines_from_unified_diff(&formatted));
         let mut tail_count = base_tail_count;
         let mut tail_hunk_header = full_display.as_ref().and_then(|display| {
-            bounded_tail_hunk_header(display, &document.hunks, lines.len().saturating_sub(tail_count))
+            bounded_tail_hunk_header(display, &document.hunks, line_count.saturating_sub(tail_count))
         });
         if tail_hunk_header.is_some() && tail_count > 0 {
             tail_count = tail_count.saturating_sub(1);
             tail_hunk_header = full_display.as_ref().and_then(|display| {
-                bounded_tail_hunk_header(display, &document.hunks, lines.len().saturating_sub(tail_count))
+                bounded_tail_hunk_header(display, &document.hunks, line_count.saturating_sub(tail_count))
             });
             if tail_hunk_header.is_none() {
                 tail_count = base_tail_count;
             }
         }
-        let omitted = lines.len().saturating_sub(head_count + tail_count);
+        let omitted = line_count.saturating_sub(excerpt.head.len() + tail_count);
+        debug_assert!(omitted > 0, "truncation always omits lines; see above");
 
-        let diff_output = if omitted > 0 {
-            let mut result = lines[..head_count].join("\n");
-            result.push_str(&format!("\n... {omitted} lines omitted ...\n"));
-            if let Some(header) = tail_hunk_header {
-                result.push_str(&header);
-                result.push('\n');
-            }
-            result.push_str(&lines[lines.len().saturating_sub(tail_count)..].join("\n"));
-            result
-        } else {
-            lines.join("\n")
-        };
+        let mut diff_output = excerpt.head.join("\n");
+        diff_output.push_str(&format!("\n... {omitted} lines omitted ...\n"));
+        if let Some(header) = tail_hunk_header {
+            diff_output.push_str(&header);
+            diff_output.push('\n');
+        }
+        let tail_start = excerpt.tail.len().saturating_sub(tail_count);
+        diff_output.push_str(&excerpt.tail[tail_start..].join("\n"));
 
         let elapsed = started.elapsed().as_millis();
 

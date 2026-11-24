@@ -156,9 +156,7 @@ pub fn background_record_id(agent_name: &str) -> String {
 // ─── Preview Utilities ─────────────────────────────────────────────────────
 
 pub fn extract_tail_lines(content: &str, max_lines: usize) -> String {
-    let lines: Vec<_> = content.lines().collect();
-    let start = lines.len().saturating_sub(max_lines);
-    lines[start..].join("\n")
+    vtcode_commons::preview::tail_lines(content, max_lines).join("\n")
 }
 
 pub async fn load_archive_preview(path: &Path) -> Result<String> {
@@ -246,5 +244,15 @@ mod tests {
                     .into_owned()
             ]
         );
+    }
+
+    #[test]
+    fn extract_tail_lines_keeps_last_window_joined() {
+        use super::extract_tail_lines;
+
+        assert_eq!(extract_tail_lines("l1\nl2\nl3\nl4", 2), "l3\nl4");
+        assert_eq!(extract_tail_lines("l1\nl2", 9), "l1\nl2");
+        assert_eq!(extract_tail_lines("l1\nl2", 0), "");
+        assert_eq!(extract_tail_lines("", 4), "");
     }
 }

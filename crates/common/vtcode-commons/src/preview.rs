@@ -267,6 +267,22 @@ pub fn excerpt_text_lines_with_limit<'a>(text: &'a str, limit: usize, preferred_
     head_tail_excerpt(text, limit, head, tail)
 }
 
+/// Last `limit` lines of `text` in a single pass.
+///
+/// Memory is O(`limit`), not O(total lines): unlike `text.lines().collect()`
+/// followed by slicing off the tail, large inputs stream through a
+/// limit-sized ring instead of materializing every line transiently.
+pub fn tail_lines(text: &str, limit: usize) -> Vec<&str> {
+    let excerpt = head_tail_excerpt(text, limit, 0, limit);
+    // Fit puts everything in `head` and overflow puts the window in `tail`;
+    // both are empty only when the input is empty or the limit is zero.
+    if excerpt.tail.is_empty() {
+        excerpt.head
+    } else {
+        excerpt.tail
+    }
+}
+
 fn format_hidden_bytes_summary(hidden: usize) -> String {
     format!("… [{hidden} bytes omitted] …")
 }
@@ -586,6 +602,29 @@ mod tests {
                         "total for {total} lines, limit {limit}, preferred {preferred_head}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn tail_lines_keeps_last_window_and_short_inputs_whole() {
+        assert_eq!(tail_lines("l1\nl2\nl3\nl4\nl5", 2), vec!["l4", "l5"]);
+        // Exact fit and under-fit keep every line.
+        assert_eq!(tail_lines("l1\nl2", 2), vec!["l1", "l2"]);
+        assert_eq!(tail_lines("l1\nl2", 9), vec!["l1", "l2"]);
+        // Degenerate shapes keep nothing.
+        assert!(tail_lines("l1\nl2", 0).is_empty());
+        assert!(tail_lines("", 4).is_empty());
+    }
+
+    #[test]
+    fn tail_lines_matches_naive_slicing_for_all_tiny_inputs() {
+        for total in 0..=8usize {
+            let text = (0..total).map(|i| format!("r{i}")).collect::<Vec<_>>().join("\n");
+            let all: Vec<&str> = text.lines().collect();
+            for limit in 0..=5usize {
+                let expected = all[all.len().saturating_sub(limit)..].to_vec();
+                assert_eq!(tail_lines(&text, limit), expected, "tail of {total} lines with limit {limit}");
             }
         }
     }
