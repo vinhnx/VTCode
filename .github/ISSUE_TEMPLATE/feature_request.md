@@ -1,27 +1,23 @@
 ---
 name: Feature Request
-about: Suggest an idea for VT Code
+about: Suggest an improvement or new capability for VT Code
 title: '[Feature]: '
 labels: enhancement
 assignees: ''
 ---
 
-## Description
+## Problem
 
-A clear and concise description of what you want to happen.
+What problem or limitation are you running into? Describe the workflow you were trying to complete.
 
-## Motivation
+## Proposed solution
 
-Why do you need this feature? What problem does it solve?
+What would you like VT Code to do? Include a concrete example if you can.
 
-## Proposed Solution
+## Alternatives considered
 
-Describe the solution you'd like to see implemented.
+What other approaches or workarounds have you tried, and why were they insufficient?
 
-## Alternatives
+## Additional context
 
-A clear and concise description of any alternative solutions or features you've considered.
-
-## Additional Context
-
-Add any other context or screenshots about the feature request here.
+Anything else that helps evaluate the request, such as related issues or docs. Screenshots are optional.

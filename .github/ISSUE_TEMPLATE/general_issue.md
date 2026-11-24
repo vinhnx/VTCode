@@ -1,21 +1,27 @@
 ---
 name: General Issue
-about: Report a general issue or ask a question about VT Code
+about: Report an issue that is not a bug, feature request, or accessibility barrier
 title: ''
 labels: ''
 assignees: ''
 ---
 
-## Description
+## Summary
 
-A clear and concise description of the issue or question.
+Describe the issue in one or two sentences.
+
+## Context
+
+What were you trying to do, and what happened? Add the steps or links needed to understand it.
 
 ## Environment
 
 - **OS:** [e.g. macOS 14.1, Ubuntu 22.04, Windows 11]
-- **VT Code version:** [e.g. 0.31.0 or commit hash]
-- **Rust version:** [e.g. rustc 1.100.0]
+- **VT Code version:** [e.g. 0.185.1 or a commit hash]
 
-## Additional Context
+## Additional context
 
-Add any other context about the issue or question here.
+Anything else that helps us triage this issue.
+
+For questions and discussion, use [GitHub Discussions](https://github.com/vinhnx/VTCode/discussions) instead. Report
+security vulnerabilities privately through [security advisories](https://github.com/vinhnx/VTCode/security/advisories/new).

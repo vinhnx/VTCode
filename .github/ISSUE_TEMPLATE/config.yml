@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussion
+    url: https://github.com/vinhnx/VTCode/discussions
+    about: Ask questions, share ideas, or discuss VT Code with the community.
+  - name: Report a security vulnerability privately
+    url: https://github.com/vinhnx/VTCode/security/advisories/new
+    about: Do not report security vulnerabilities in a public issue.

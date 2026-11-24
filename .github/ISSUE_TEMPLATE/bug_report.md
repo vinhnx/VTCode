@@ -1,59 +1,53 @@
 ---
 name: Bug Report
-about: Create a report to help us improve VT Code
+about: Report unexpected behavior in VT Code
 title: '[Bug]: '
 labels: bug
 assignees: ''
 ---
 
-## Description
+## Summary
 
-A clear and concise description of what the bug is.
+Describe the bug in one or two sentences.
 
-## Steps to Reproduce
+## Steps to reproduce
 
-1. Go to '...'
-2. Click on '...'
-3. Scroll down to '...'
-4. See error
+1. ...
+2. ...
+3. ...
 
-## Expected Behavior
+## Expected behavior
 
-A clear and concise description of what you expected to happen.
+What did you expect to happen?
 
-## Actual Behavior
+## Observed behavior
 
-A clear and concise description of what actually happened.
-
-## Screenshots
-
-If applicable, add screenshots to help explain your problem.
+What actually happened? Include the exact error text if there is one.
 
 ## Environment
 
 - **OS:** [e.g. macOS 14.1, Ubuntu 22.04, Windows 11]
+- **VT Code version:** [e.g. 0.185.1 or a commit hash]
 - **Rust version:** [e.g. rustc 1.100.0]
-- **VT Code version:** [e.g. 0.31.0 or commit hash]
-- **Terminal:** [e.g. iTerm2, GNOME Terminal, Windows Terminal]
+- **Terminal:** [e.g. iTerm2, Ghostty, Windows Terminal] (skip this for the desktop app)
 - **Shell:** [e.g. bash, zsh, PowerShell]
 
 ## Configuration
 
-If applicable, share relevant parts of your `vtcode.toml` configuration file (be sure to remove any sensitive
-information like API keys):
+If relevant, paste the parts of `vtcode.toml` you changed. Remove API keys, tokens, paths, and other secrets first.
 
 ```toml
-# Paste your relevant configuration here
+# Paste redacted configuration here
 ```
 
-## Log/Output
+## Logs or output
 
-If applicable, add terminal output or logs that show the error:
+If relevant, paste terminal output. Redact secrets before sharing; plain text is fine and screenshots are optional.
 
 ```text
-Paste error output here
+Paste redacted output here
 ```
 
-## Additional Context
+## Additional context
 
-Add any other context about the problem here.
+Anything else that helps reproduce the problem, including a workaround you found.
