@@ -79,8 +79,8 @@ use vtcode_desktop_protocol::{
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::{
-    MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepared_markdown, render_code_preview,
-    render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
+    MarkdownViewHeight, code_block_style, has_viewable_plan_markdown, markdown_style, prepared_markdown,
+    render_code_preview, render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
     render_selectable_output_text,
 };
 use super::strings::{app, bundle, display, i18n, key, key_context, keys};

@@ -236,22 +236,31 @@ fn append_separator(output: &mut String, separator: char) {
 /// only scrolls once the code has reached the end.
 const CODE_BLOCK_MAX_HEIGHT_REMS: f32 = 24.0;
 
-pub(super) fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
-    let mut code = div()
+/// The single source of truth for code-block box styling across every
+/// transcript Markdown/HTML surface. Callers needing extra refinements (e.g.
+/// wrapping a long shell command) must refine on top of this; replacing the
+/// `code_block` style wholesale silently drops the height cap and scroll mode.
+pub(super) fn code_block_style(cx: &gpui_kit::App) -> gpui_kit::StyleRefinement {
+    let mut style = div()
         .font_family(cx.theme().mono_font_family.clone())
         .text_size(cx.theme().mono_font_size)
-        .max_h(gpui_kit::rems(CODE_BLOCK_MAX_HEIGHT_REMS));
-    let mut code_style = code.style().clone();
+        .max_h(gpui_kit::rems(CODE_BLOCK_MAX_HEIGHT_REMS))
+        .style()
+        .clone();
     // Kit opts a code block into its own scroll region when `overflow.y` is
     // Scroll: the block gains a scrollbar and consumes the wheel until its
     // edge, so it cannot inflate a row inside the virtualized transcript.
-    code_style.overflow.y = Some(gpui_kit::Overflow::Scroll);
+    style.overflow.y = Some(gpui_kit::Overflow::Scroll);
+    style
+}
+
+pub(super) fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
     let colors = cx.theme().colors;
     let mut table_head = div()
         .bg(colors.table_head)
         .text_color(super::themes::filled_button_foreground(colors.table_head));
     TextViewStyle::from_theme(&gpui_kit::base::Theme::global(cx))
-        .with_code_block(code_style)
+        .with_code_block(code_block_style(cx))
         .with_code_background(colors.muted)
         .with_link(colors.link)
         .with_muted_foreground(super::themes::muted_text(&colors))

@@ -146,6 +146,29 @@ fn long_command_wraps_and_copies_without_overlaying_code(cx: &mut TestAppContext
     .unwrap();
 }
 
+/// The tool-command surface overrides the shared `TextViewStyle`, so it must
+/// refine the capped code-block style rather than replace it. Without that,
+/// a long shell command stays an unbounded row in the virtualized transcript.
+#[gpui_kit::test]
+fn long_command_code_block_keeps_the_shared_height_cap(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1000., 1400.);
+    let command = (0..200).map(|index| format!("echo {index}\n")).collect::<String>();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item =
+                TranscriptItem::new("capped-command".into(), "tool".into(), "Run command".into(), "done".into());
+            item.command = Some(command.into());
+            item.expanded = true;
+            view.transcript.push(item);
+        });
+        window.render_frame(cx);
+        let code = window.find("tool-command-surface-capped-command");
+        // Uncapped, 200 mono lines would be ~4,000px tall.
+        assert!(code.bounds().size.height < px(520.), "long command code block was not capped: {:?}", code.bounds(),);
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn keyboard_can_expand_tool_and_copy_command_without_row_selection(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

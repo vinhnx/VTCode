@@ -11,11 +11,14 @@ impl DesktopView {
     ) -> impl IntoElement {
         let command_copy = command.clone();
         let revealed = self.transcript_row_revealed(item.id.as_str());
-        let mut code_style = div()
-            .font_family(cx.theme().mono_font_family.clone())
-            .text_size(cx.theme().mono_font_size)
+        // Refine the shared capped code-block style: replacing it would drop
+        // the height cap and leave a long command unbounded in the transcript.
+        let code_style = div()
             .whitespace_normal()
-            .rounded_md();
+            .rounded_md()
+            .refine_style(&code_block_style(cx))
+            .style()
+            .clone();
         div()
             .w_full()
             .pl_6()
@@ -44,7 +47,7 @@ impl DesktopView {
                     .aria_label(command.clone())
                     .child(
                         render_code_preview(format!("tool-command-{}", item.id), "command.sh", command.clone(), cx)
-                            .style(markdown_style(cx).with_code_block(code_style.style().clone()))
+                            .style(markdown_style(cx).with_code_block(code_style))
                             .code_block_actions(|_, _, _| div()),
                     ),
             )
