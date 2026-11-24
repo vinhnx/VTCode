@@ -55,6 +55,15 @@ impl Render for SettingsRowSpacingProbe {
                         .child(div().id("probe-padding-child").test_support().w_full().h(px(12.))),
                 ),
             )
+            .child(
+                div().id("probe-footer-group").test_support().child(
+                    settings_group_box_untitled(&colors)
+                        .id("probe-footer-group-surface")
+                        .title(div().id("probe-footer-title").test_support().child("Footnote group"))
+                        .child(div().id("probe-footer-body").test_support().w_full().h(px(12.)))
+                        .footer(div().id("probe-footer-note").test_support().child("Supporting copy")),
+                ),
+            )
             .child(div().id("probe-align-row").test_support().child(settings_row(
                 "Interface language",
                 "Applies immediately",
@@ -195,6 +204,52 @@ fn settings_group_pads_content_evenly_at_p_6(cx: &mut TestAppContext) {
                     "section keeps an even {edge} band at {base_size}px: actual={actual:?} want={pad:?} child={child:?} group={group:?}"
                 );
             }
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
+fn settings_group_footer_sits_below_the_surface_on_the_title_spine(cx: &mut TestAppContext) {
+    let window = open_spacing_probe(cx);
+    // Kit renders a GroupBox footer outside the filled surface: it shares the
+    // title's leading edge, sits one gap_2 (0.5rem) under the surface, and is
+    // not inset by `content_style` padding. This is the contract the
+    // `card_border_style` comment relies on for title/footer seats; pin it at
+    // both rem extremes so a future styler cannot silently move the caption
+    // inside the padded body.
+    for base_size in [14., 24.] {
+        cx.update(|cx| {
+            Theme::update(cx, |theme| {
+                theme.font_size = px(base_size);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let title = window.find("probe-footer-title").bounds();
+            let body = window.find("probe-footer-body").bounds();
+            let note = window.find("probe-footer-note").bounds();
+
+            // p_6 on `content_style` insets only the body; the footer keeps the
+            // title/surface leading edge, so the body starts one p_6 to its right.
+            let pad = px(base_size * 1.5);
+            assert!(
+                (body.origin.x - (note.origin.x + pad)).abs() <= px(1.),
+                "body carries the p_6 inset but the footer stays on the spine: body={body:?} note={note:?}"
+            );
+            assert!(
+                (note.origin.x - title.origin.x).abs() <= px(1.),
+                "footer shares the title's leading edge, not the body's: title={title:?} note={note:?}"
+            );
+
+            // The surface bottom is one p_6 below the body; the footer starts
+            // one gap_2 (0.5rem) after that, outside the surface entirely.
+            let gap = note.origin.y - (body.origin.y + body.size.height + pad);
+            let expected = px(base_size * 0.5);
+            assert!(
+                (gap - expected).abs() <= px(1.),
+                "footer sits {expected:?} below the surface at {base_size}px: gap={gap:?} body={body:?} note={note:?}"
+            );
         })
         .unwrap();
     }

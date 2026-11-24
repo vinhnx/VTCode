@@ -42,6 +42,40 @@ fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
+fn shortcut_usage_hint_is_a_footer_outside_the_group_surface(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
+        window.render_frame(cx);
+        let group = window.find("keyboard-shortcuts-group").bounds();
+        let hint = window.find("shortcut-footer-hint").bounds();
+        let search = window.find("shortcut-search").bounds();
+        // The hint trails the table inside the same accessible group, on the
+        // title's leading edge and flush with the group's bottom edge (a Kit
+        // footer sits outside the padded surface). If it were still a body
+        // child it would be inset by the card's p_6 and sit above its bottom.
+        assert!(
+            hint.origin.y > search.origin.y + search.size.height,
+            "usage hint trails the shortcut table: hint={hint:?} search={search:?}"
+        );
+        assert!(
+            (hint.origin.x - group.origin.x).abs() <= px(1.),
+            "hint shares the title spine, not the body inset: hint={hint:?} group={group:?}"
+        );
+        assert!(
+            (group.origin.y + group.size.height - (hint.origin.y + hint.size.height)).abs() <= px(1.),
+            "hint is the trailing footer of the group: hint={hint:?} group={group:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn shortcut_capture_suppresses_bound_chords_and_rejects_reserved(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));

@@ -176,10 +176,13 @@ impl DesktopView {
                     .text_sm()
                     .child(message.clone())
             }))
-            .child(
+            // Usage guidance for the table above, not part of the card body:
+            // the Kit footer seat keeps it outside the filled surface, on the
+            // title spine, with the shared small muted text treatment.
+            .footer(
                 div()
-                    .text_xs()
-                    .text_color(cx.theme().colors.muted_foreground)
+                    .id("shortcut-footer-hint")
+                    .test_support()
                     .child(rust_i18n::t!("app.shortcuts.footer_hint").to_string()),
             );
         // English literals: new user-visible strings stay untranslated until
