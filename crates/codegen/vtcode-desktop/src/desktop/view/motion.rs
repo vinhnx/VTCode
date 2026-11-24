@@ -16,8 +16,8 @@ pub(super) struct NavigationMotion<T> {
     destination: Option<T>,
     pub(super) started_at: Option<Instant>,
     pub(super) returning: bool,
-    /// Duration used by the last sample, so `update` can tell a running fade
-    /// from a settled one without consulting the theme.
+    /// Base duration from the last sample; `update` pairs it with `sampled`
+    /// to tell a running fade from a settled one without consulting the theme.
     duration: Cell<Duration>,
     /// Last sampled opacity (1.0 when nothing is fading).
     sampled: Cell<f32>,
@@ -47,9 +47,14 @@ impl<T: PartialEq> NavigationMotion<T> {
         if !revisit && self.is_current(&destination) {
             return false;
         }
-        let running = self
-            .started_at
-            .is_some_and(|start| now.saturating_duration_since(start) < self.duration.get());
+        // `sampled` is the authority on what is on screen: it is < 1.0 only
+        // while a reveal is painting. A settled fade's clock can still look
+        // running (shortened reveal, or no fade rendered for the Workspace
+        // route), so resume only when opacity is actually mid-reveal.
+        let running = self.sampled.get() < 1.0
+            && self
+                .started_at
+                .is_some_and(|start| now.saturating_duration_since(start) < self.duration.get());
         // Interruption contract: a running reveal continues from what is on
         // screen instead of flashing back to transparent; a settled surface
         // starts a fresh reveal. The remaining distance also shortens the
@@ -166,7 +171,7 @@ mod tests {
     fn retarget_resumes_from_sampled_value_and_shortens_the_reveal() {
         let mut motion = NavigationMotion::<u8>::default();
         let now = Instant::now();
-        motion.update(1, false, false, now);
+        let _ = motion.update(1, false, false, now);
         assert!(motion.update(2, false, false, now));
         motion.sampled.set(0.6);
         motion.duration.set(Duration::from_millis(180));
@@ -188,10 +193,43 @@ mod tests {
     }
 
     #[test]
+    fn settled_reveal_starts_fresh_while_the_base_clock_is_still_running() {
+        let mut motion = NavigationMotion::<u8>::default();
+        let now = Instant::now();
+        let _ = motion.update(1, false, false, now);
+        assert!(motion.update(2, false, false, now));
+
+        // A resumed reveal settles after 72ms, while the stored base duration
+        // remains 180ms — the clock alone still says "running".
+        motion.sampled.set(0.6);
+        motion.duration.set(Duration::from_millis(180));
+        let resumed = now + Duration::from_millis(10);
+        assert!(motion.update(3, false, false, resumed));
+        assert_eq!(motion.from, 0.6);
+
+        motion.sampled.set(1.0);
+        let settled = resumed + Duration::from_millis(90);
+        assert!(
+            settled < resumed + Duration::from_millis(180),
+            "precondition: the base-duration clock is still inside its window"
+        );
+        assert!(motion.update(4, false, false, settled));
+        assert_eq!(
+            motion.from, 0.0,
+            "a fully opaque surface must start a fresh reveal even when the clock looks active"
+        );
+
+        // A route that resets its start without painting a fade has the same
+        // opaque sample and must not skip the next reveal either.
+        assert!(motion.update(5, true, true, settled + Duration::from_millis(1)));
+        assert_eq!(motion.from, 0.0);
+    }
+
+    #[test]
     fn redraw_of_the_same_destination_keeps_the_reveal_clock() {
         let mut motion = NavigationMotion::<u8>::default();
         let now = Instant::now();
-        motion.update(1, false, false, now);
+        let _ = motion.update(1, false, false, now);
         assert!(motion.update(2, false, false, now));
         assert!(!motion.update(2, false, false, now + Duration::from_millis(20)));
         assert_eq!(motion.started_at, Some(now));
