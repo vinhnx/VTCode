@@ -1,8 +1,11 @@
 //! `vtcode debug` handlers: inspect and exercise the configured OS sandbox.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use vtcode_core::cli::args::DebugCommand;
-use vtcode_core::sandboxing::{LinuxSandboxLauncher, SandboxType, debug_sandbox, sandbox_capabilities_summary};
+use vtcode_core::sandboxing::{
+    DomainPolicy, LinuxSandboxLauncher, SandboxType, debug_sandbox, proxy_enforcement_available,
+    sandbox_capabilities_summary, start_proxy,
+};
 use vtcode_core::tools::registry::sandbox_policy_from_runtime_config;
 
 use crate::startup::StartupContext;
@@ -27,7 +30,19 @@ async fn run_sandboxed(startup: &StartupContext, sandbox_type: SandboxType, comm
     // measures the effective configuration, not a synthetic one.
     let policy = sandbox_policy_from_runtime_config(&startup.config.sandbox, &startup.workspace)?;
     let launcher = LinuxSandboxLauncher::resolve();
-    let result = debug_sandbox(sandbox_type, &policy, command, &startup.workspace, launcher.as_ref()).await?;
+    let proxy = if policy.has_network_allowlist() && proxy_enforcement_available() {
+        Some(
+            start_proxy(DomainPolicy::from_allowlist(policy.network_allowlist()))
+                .await
+                .context("start hostname allowlist proxy for debug command")?,
+        )
+    } else {
+        None
+    };
+    let endpoints = proxy.as_ref().map(|proxy| proxy.endpoints());
+    let result =
+        debug_sandbox(sandbox_type, &policy, command, &startup.workspace, launcher.as_ref(), endpoints.as_ref())
+            .await?;
 
     if !result.sandbox_active() {
         let detail = result.stderr();
@@ -36,6 +51,7 @@ async fn run_sandboxed(startup: &StartupContext, sandbox_type: SandboxType, comm
         }
         bail!("sandbox was not applied: {detail}");
     }
+    print!("{}", result.stdout());
     if !result.success() {
         bail!("sandboxed command failed: {}", result.stderr());
     }

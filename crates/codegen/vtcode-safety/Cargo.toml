@@ -23,7 +23,16 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 shell-words = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = [
+    "fs",
+    "io-util",
+    "macros",
+    "net",
+    "process",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 tokio-util = { workspace = true, features = ["codec"] }
 toml = { workspace = true }
 tree-sitter = "0.27"

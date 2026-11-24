@@ -55,6 +55,18 @@ fn default_protocol() -> String {
 }
 
 impl NetworkAllowlistEntry {
+    /// Domain pattern this entry allows.
+    #[must_use]
+    pub fn domain(&self) -> &str {
+        &self.domain
+    }
+
+    /// Port this entry allows.
+    #[must_use]
+    pub const fn port(&self) -> u16 {
+        self.port
+    }
+
     /// Create a new allowlist entry for HTTPS access to a domain.
     #[must_use]
     pub fn https(domain: impl Into<String>) -> Self {

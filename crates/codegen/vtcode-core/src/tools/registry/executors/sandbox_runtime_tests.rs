@@ -5,7 +5,7 @@ use serde_json::json;
 use super::{
     apply_runtime_sandbox_to_command, build_shell_execution_plan, enforce_sandbox_preflight_guards,
     exec_run_output_config, parse_command_parts, parse_requested_sandbox_permissions, prepare_exec_command,
-    sandbox_policy_from_runtime_config, sandbox_policy_with_additional_permissions,
+    proxy_for_policy, sandbox_policy_from_runtime_config, sandbox_policy_with_additional_permissions,
 };
 use crate::sandboxing::{
     AdditionalPermissions, NetworkAllowlistEntry, SandboxPermissions, SandboxPolicy, SensitivePath,
@@ -444,6 +444,68 @@ async fn preflight_allows_symlink_to_unprotected_dir() {
     enforce_sandbox_preflight_guards(&command, None, &policy, workspace)
         .await
         .expect("benign symlinked argv write must be allowed");
+}
+
+/// A dangling symlink has no provable target, so preflight must reject the
+/// command instead of admitting a write whose destination is unknown. This is
+/// the same fail-closed rule uutils/coreutils applies when traversal meets a
+/// dangling link (e.g. `chmod -R -L` and `install` in the 0.13.0 release).
+#[cfg(unix)]
+#[tokio::test]
+async fn preflight_fails_closed_on_dangling_symlink_in_write_argument() {
+    let temp = tempfile::tempdir().expect("workspace");
+    let workspace = temp.path();
+    let dangling = workspace.join("dangling");
+    std::os::unix::fs::symlink(workspace.join("missing-target"), &dangling).expect("dangling symlink");
+    let policy = SandboxPolicy::workspace_write(vec![workspace.to_path_buf()]);
+    let command = vec!["touch".to_string(), "dangling/file".to_string()];
+
+    let error = enforce_sandbox_preflight_guards(&command, None, &policy, workspace)
+        .await
+        .expect_err("a write through a dangling symlink must fail closed");
+    assert!(error.to_string().contains("resolve sandbox preflight path"), "{error}");
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn hostname_allowlist_starts_proxy_and_no_longer_fails_closed() {
+    let mut config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
+        ..Default::default()
+    };
+    config.network.policy = vtcode_config::NetworkPolicy::AllowlistOnly;
+    config.network.allowlist =
+        vec![vtcode_config::NetworkAllowlistEntryConfig { domain: "api.github.com".to_string(), port: 443 }];
+    let policy = sandbox_policy_from_runtime_config(&config, Path::new("/tmp/ws")).expect("allowlist policy");
+    assert!(policy.has_network_allowlist());
+
+    let proxy = proxy_for_policy(&policy)
+        .await
+        .expect("start proxy")
+        .expect("macOS proxy is available");
+    let endpoints = proxy.endpoints();
+    assert_ne!(endpoints.http.port(), 0);
+    let exec_env = crate::sandboxing::SandboxManager::new()
+        .transform_with_proxy(
+            crate::sandboxing::CommandSpec::new("echo"),
+            &policy,
+            Path::new("/tmp/ws"),
+            None,
+            Some(&endpoints),
+        )
+        .expect("proxy-backed transform");
+    assert!(
+        exec_env.env.get("HTTPS_PROXY").is_some_and(|value| value.contains("localhost")),
+        "proxy env must be injected after sanitization"
+    );
+
+    let command = vec!["curl".to_string(), "https://api.github.com".to_string()];
+    let transformed =
+        apply_runtime_sandbox_to_command(command.clone(), &command, None, Path::new("/tmp/ws"), Some(policy))
+            .await
+            .expect("hostname allowlist must be enforced by the proxy, not rejected");
+    assert_eq!(transformed.first().map(String::as_str), Some("/usr/bin/sandbox-exec"));
 }
 
 #[tokio::test]

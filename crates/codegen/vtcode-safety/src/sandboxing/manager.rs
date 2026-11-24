@@ -5,6 +5,7 @@ use std::path::Path;
 
 use super::child_spawn::build_sanitized_env;
 use super::exec_env::{CommandSpec, ExecEnv, LinuxSandboxLauncher, SandboxType};
+use super::network_proxy::ProxyEndpoints;
 #[cfg(target_os = "macos")]
 use super::policy::NetworkAllowlistEntry;
 use super::policy::SandboxPolicy;
@@ -49,6 +50,20 @@ impl SandboxManager {
         sandbox_cwd: &Path,
         linux_launcher: Option<&LinuxSandboxLauncher>,
     ) -> Result<ExecEnv, SandboxTransformError> {
+        self.transform_with_proxy(spec, policy, sandbox_cwd, linux_launcher, None)
+    }
+
+    /// Transform with a running hostname proxy. Its endpoints are injected
+    /// after environment sanitization and must be permitted by the sandbox
+    /// profile; without a proxy, hostname allowlists fail closed.
+    pub fn transform_with_proxy(
+        &self,
+        spec: CommandSpec,
+        policy: &SandboxPolicy,
+        sandbox_cwd: &Path,
+        linux_launcher: Option<&LinuxSandboxLauncher>,
+        proxy: Option<&ProxyEndpoints>,
+    ) -> Result<ExecEnv, SandboxTransformError> {
         // Determine the sandbox type based on policy and platform
         let sandbox_type = self.determine_sandbox_type(policy)?;
 
@@ -83,14 +98,21 @@ impl SandboxManager {
         }
 
         // Transform based on sandbox type
-        match sandbox_type {
-            SandboxType::MacosSeatbelt => self.transform_seatbelt(spec, policy, sandbox_cwd),
+        let mut exec_env = match sandbox_type {
+            SandboxType::MacosSeatbelt => self.transform_seatbelt(spec, policy, sandbox_cwd, proxy),
             SandboxType::LinuxLandlock => self.transform_landlock(spec, policy, sandbox_cwd, linux_launcher),
             SandboxType::WindowsRestrictedToken => self.transform_windows(spec, policy, sandbox_cwd),
             SandboxType::None => {
-                Err(SandboxTransformError::InvalidPolicy("Cannot transform with SandboxType::None".into()))
+                return Err(SandboxTransformError::InvalidPolicy("Cannot transform with SandboxType::None".into()));
+            }
+        }?;
+
+        if let Some(proxy) = proxy {
+            for (key, value) in proxy.env_vars() {
+                drop(exec_env.env.insert(key.to_string(), value));
             }
         }
+        Ok(exec_env)
     }
 
     /// Determine the appropriate sandbox type for the given policy.
@@ -110,11 +132,12 @@ impl SandboxManager {
         spec: CommandSpec,
         policy: &SandboxPolicy,
         sandbox_cwd: &Path,
+        proxy: Option<&ProxyEndpoints>,
     ) -> Result<ExecEnv, SandboxTransformError> {
         const SEATBELT_EXECUTABLE: &str = "/usr/bin/sandbox-exec";
 
         // Build the seatbelt profile
-        let profile = self.build_seatbelt_profile(policy, sandbox_cwd)?;
+        let profile = self.build_seatbelt_profile(policy, sandbox_cwd, proxy)?;
 
         let mut args = vec!["-p".to_string(), profile, os_string_to_arg(spec.program.clone())];
         args.extend(spec.args);
@@ -136,6 +159,7 @@ impl SandboxManager {
         _spec: CommandSpec,
         _policy: &SandboxPolicy,
         _sandbox_cwd: &Path,
+        _proxy: Option<&ProxyEndpoints>,
     ) -> Result<ExecEnv, SandboxTransformError> {
         Err(SandboxTransformError::UnavailableSandboxType(SandboxType::MacosSeatbelt))
     }
@@ -150,6 +174,7 @@ impl SandboxManager {
         &self,
         policy: &SandboxPolicy,
         sandbox_cwd: &Path,
+        proxy: Option<&ProxyEndpoints>,
     ) -> Result<String, SandboxTransformError> {
         fn seatbelt_path(path: &Path) -> Result<&str, SandboxTransformError> {
             let path = path.to_str().ok_or_else(|| {
@@ -167,12 +192,26 @@ impl SandboxManager {
             profile: &mut String,
             network_access: bool,
             network_allowlist: &[NetworkAllowlistEntry],
+            proxy: Option<&ProxyEndpoints>,
         ) -> Result<(), SandboxTransformError> {
             if !network_allowlist.is_empty() {
-                return Err(SandboxTransformError::InvalidPolicy(
-                    "macOS Seatbelt cannot enforce hostname network allowlists exactly; refusing to widen access"
-                        .to_string(),
-                ));
+                let Some(proxy) = proxy else {
+                    return Err(SandboxTransformError::InvalidPolicy(
+                        "hostname network allowlists require a running local proxy; refusing to widen access"
+                            .to_string(),
+                    ));
+                };
+                // Deny is the default; only the local proxy ports are reachable
+                // from the sandboxed process. Domain rules are enforced by the
+                // proxy after parsing CONNECT/SOCKS requests.
+                // Seatbelt only accepts `localhost` or `*` as the host in a
+                // `remote ip` address; a literal IPv4 host fails profile parsing.
+                profile
+                    .push_str(&format!("(allow network-outbound (remote ip \"localhost:{}\"))\n", proxy.http.port()));
+                profile
+                    .push_str(&format!("(allow network-outbound (remote ip \"localhost:{}\"))\n", proxy.socks5.port()));
+                profile.push_str("(allow network* (local unix))\n");
+                return Ok(());
             }
 
             if !network_access {
@@ -216,14 +255,14 @@ impl SandboxManager {
             SandboxPolicy::ReadOnly { network_access, network_allowlist } => {
                 // Read-only: only allow writing to /dev/null
                 profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
-                append_network_rules(&mut profile, *network_access, network_allowlist)?;
+                append_network_rules(&mut profile, *network_access, network_allowlist, proxy)?;
             }
             SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } => {
                 for root in policy.get_writable_roots_with_cwd(sandbox_cwd) {
                     let path = seatbelt_path(&root.root)?;
                     profile.push_str(&format!("(allow file-write* (subpath \"{path}\"))\n"));
                 }
-                append_network_rules(&mut profile, *network_access, network_allowlist)?;
+                append_network_rules(&mut profile, *network_access, network_allowlist, proxy)?;
             }
             _ => {}
         }
@@ -359,7 +398,7 @@ mod tests {
     fn seatbelt_profile_includes_default_preferences_policy() {
         let manager = SandboxManager::new();
         let profile = manager
-            .build_seatbelt_profile(&SandboxPolicy::read_only(), Path::new("/tmp"))
+            .build_seatbelt_profile(&SandboxPolicy::read_only(), Path::new("/tmp"), None)
             .unwrap();
 
         assert!(profile.contains("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))"));
@@ -375,9 +414,32 @@ mod tests {
         let manager = SandboxManager::new();
         let policy = SandboxPolicy::read_only_with_network(vec![NetworkAllowlistEntry::https("api.example.com")]);
 
-        let result = manager.build_seatbelt_profile(&policy, Path::new("/tmp"));
+        let result = manager.build_seatbelt_profile(&policy, Path::new("/tmp"), None);
 
         assert!(matches!(result, Err(SandboxTransformError::InvalidPolicy(message)) if message.contains("hostname")));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn seatbelt_profile_allows_only_local_proxy_for_hostname_allowlist() {
+        let manager = SandboxManager::new();
+        let policy = SandboxPolicy::read_only_with_network(vec![NetworkAllowlistEntry::https("api.example.com")]);
+        let proxy = ProxyEndpoints {
+            http: "127.0.0.1:3128".parse().expect("http endpoint"),
+            socks5: "127.0.0.1:1080".parse().expect("socks endpoint"),
+        };
+        let profile = manager
+            .build_seatbelt_profile(&policy, Path::new("/tmp"), Some(&proxy))
+            .expect("proxy-backed allowlist profile");
+        assert!(profile.contains("localhost:3128"));
+        assert!(profile.contains("localhost:1080"));
+        assert!(!profile.contains("(allow network*)"), "direct network must stay denied");
+
+        let transform = manager
+            .transform_with_proxy(CommandSpec::new("echo"), &policy, Path::new("/tmp"), None, Some(&proxy))
+            .expect("transform");
+        assert_eq!(transform.env.get("HTTPS_PROXY").map(String::as_str), Some("http://localhost:3128"));
+        assert_eq!(transform.env.get("ALL_PROXY").map(String::as_str), Some("socks5://localhost:1080"));
     }
 
     #[cfg(target_os = "macos")]
@@ -387,11 +449,11 @@ mod tests {
         let injected = Path::new("/tmp/\")(allow file-write*) ;");
         let policy = SandboxPolicy::workspace_write(vec![injected.to_path_buf()]);
         assert!(matches!(
-            manager.build_seatbelt_profile(&policy, Path::new("/tmp/safe")),
+            manager.build_seatbelt_profile(&policy, Path::new("/tmp/safe"), None),
             Err(SandboxTransformError::InvalidPolicy(_))
         ));
         assert!(matches!(
-            manager.build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), injected),
+            manager.build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), injected, None),
             Err(SandboxTransformError::InvalidPolicy(_))
         ));
         let mut sensitive_policy = SandboxPolicy::workspace_write(vec![]);
@@ -399,26 +461,32 @@ mod tests {
             *sensitive_paths = Some(vec![super::super::policy::SensitivePath::new("/tmp/\") (allow network*) ;")]);
         }
         assert!(matches!(
-            manager.build_seatbelt_profile(&sensitive_policy, Path::new("/tmp/safe")),
+            manager.build_seatbelt_profile(&sensitive_policy, Path::new("/tmp/safe"), None),
             Err(SandboxTransformError::InvalidPolicy(_))
         ));
         for path in ["/tmp/back\\slash", "/tmp/new\nline"] {
             assert!(matches!(
-                manager
-                    .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![path.into()]), Path::new("/tmp/safe")),
+                manager.build_seatbelt_profile(
+                    &SandboxPolicy::workspace_write(vec![path.into()]),
+                    Path::new("/tmp/safe"),
+                    None
+                ),
                 Err(SandboxTransformError::InvalidPolicy(_))
             ));
         }
         use std::os::unix::ffi::OsStringExt;
         let non_utf8 = OsString::from_vec(b"/tmp/invalid-\xff".to_vec());
         assert!(matches!(
-            manager
-                .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![non_utf8.into()]), Path::new("/tmp/safe")),
+            manager.build_seatbelt_profile(
+                &SandboxPolicy::workspace_write(vec![non_utf8.into()]),
+                Path::new("/tmp/safe"),
+                None
+            ),
             Err(SandboxTransformError::InvalidPolicy(_))
         ));
         assert!(
             manager
-                .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), Path::new("/tmp/safe"))
+                .build_seatbelt_profile(&SandboxPolicy::workspace_write(vec![]), Path::new("/tmp/safe"), None)
                 .is_ok()
         );
     }

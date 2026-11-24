@@ -16,6 +16,8 @@ use super::{CommandSpec, LinuxSandboxLauncher, SandboxManager, SandboxPolicy, Sa
 pub struct SandboxDebugResult {
     /// Whether the command succeeded.
     success: bool,
+    /// Standard output from the wrapped command.
+    stdout: String,
     /// Standard error.
     stderr: String,
     /// Whether the sandbox was actually applied.
@@ -38,6 +40,12 @@ impl SandboxDebugResult {
         self.sandbox_active
     }
 
+    /// Captured standard output from the wrapped command.
+    #[must_use]
+    pub fn stdout(&self) -> &str {
+        &self.stdout
+    }
+
     /// Captured standard error from the wrapped command (or availability error).
     #[must_use]
     pub fn stderr(&self) -> &str {
@@ -48,6 +56,7 @@ impl SandboxDebugResult {
     fn unavailable(sandbox_type: SandboxType) -> Self {
         Self {
             success: false,
+            stdout: String::new(),
             stderr: format!("Sandbox type {sandbox_type:?} is not available on this platform"),
             sandbox_active: false,
         }
@@ -67,6 +76,7 @@ pub async fn debug_sandbox(
     command: &[String],
     cwd: &Path,
     linux_launcher: Option<&LinuxSandboxLauncher>,
+    proxy: Option<&super::network_proxy::ProxyEndpoints>,
 ) -> Result<SandboxDebugResult> {
     if !sandbox_type.is_available() {
         return Ok(SandboxDebugResult::unavailable(sandbox_type));
@@ -82,12 +92,13 @@ pub async fn debug_sandbox(
 
     let manager = SandboxManager::new();
     let exec_env = manager
-        .transform(spec, policy, cwd, linux_launcher)
+        .transform_with_proxy(spec, policy, cwd, linux_launcher, proxy)
         .context("Failed to transform command for sandbox")?;
 
     let mut cmd = Command::new(&exec_env.program);
     cmd.args(&exec_env.args)
         .current_dir(&exec_env.cwd)
+        .env_clear()
         .envs(&exec_env.env)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -96,6 +107,7 @@ pub async fn debug_sandbox(
 
     Ok(SandboxDebugResult {
         success: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         sandbox_active: exec_env.sandbox_active,
     })
@@ -115,7 +127,8 @@ pub async fn test_path_writable(
         format!("touch '{}' && rm -f '{}'", test_file.display(), test_file.display()),
     ];
 
-    let result = debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, linux_launcher).await?;
+    let result =
+        debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, linux_launcher, None).await?;
 
     Ok(result.success)
 }
@@ -132,7 +145,8 @@ pub async fn test_network_blocked(
         "curl -s --connect-timeout 2 https://example.com > /dev/null 2>&1".to_string(),
     ];
 
-    let result = debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, linux_launcher).await?;
+    let result =
+        debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, linux_launcher, None).await?;
 
     Ok(!result.success)
 }

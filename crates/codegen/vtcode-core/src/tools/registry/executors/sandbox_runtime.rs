@@ -1,16 +1,19 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 #[cfg(all(test, target_os = "linux"))]
 use std::sync::{LazyLock, Mutex};
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
+use tokio::sync::Mutex as AsyncMutex;
 use vtcode_config::{ResourceLimitsPreset, SandboxPolicy as RuntimeSandboxPolicy, SeccompProfilePreset};
 
 use crate::sandboxing::{
-    AdditionalPermissions, CommandSpec as SandboxCommandSpec, LinuxSandboxLauncher, NetworkAllowlistEntry,
-    ResourceLimits, SandboxManager, SandboxPermissions, SandboxPolicy, SandboxTransformError, SeccompProfile,
-    SensitivePath, WritableRoot, default_sensitive_paths,
+    AdditionalPermissions, CommandSpec as SandboxCommandSpec, DomainPolicy, LinuxSandboxLauncher,
+    NetworkAllowlistEntry, NetworkProxy, ProxyEndpoints, ResourceLimits, SandboxManager, SandboxPermissions,
+    SandboxPolicy, SandboxTransformError, SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,
+    proxy_enforcement_available, start_proxy,
 };
 use crate::tools::tool_intent;
 
@@ -645,13 +648,49 @@ pub(super) async fn apply_runtime_sandbox_to_command(
     }
 
     enforce_sandbox_preflight_guards(requested_command, shell_script, &policy, working_dir).await?;
-    transform_command_with_sandbox_policy(command, &policy, working_dir)
+    let proxy = proxy_for_policy(&policy).await?;
+    transform_command_with_sandbox_policy(command, &policy, working_dir, proxy.as_ref().map(|proxy| proxy.endpoints()))
+}
+
+/// One proxy per distinct allowlist, kept alive for the process so descendants
+/// outliving the command can still reach their permitted destinations.
+type ProxyAllowlistKey = Vec<(String, u16)>;
+type ProxyCache = AsyncMutex<HashMap<ProxyAllowlistKey, Arc<NetworkProxy>>>;
+
+static NETWORK_PROXIES: OnceLock<ProxyCache> = OnceLock::new();
+
+pub(super) async fn proxy_for_policy(policy: &SandboxPolicy) -> Result<Option<Arc<NetworkProxy>>> {
+    if !policy.has_network_allowlist() || !proxy_enforcement_available() {
+        // On platforms without exact enforcement the transform fails closed;
+        // starting a proxy there would not make the policy enforceable.
+        return Ok(None);
+    }
+    let key: ProxyAllowlistKey = policy
+        .network_allowlist()
+        .iter()
+        .map(|entry| (entry.domain().to_string(), entry.port()))
+        .collect();
+    let cache = NETWORK_PROXIES.get_or_init(|| AsyncMutex::new(HashMap::new()));
+    let guard = cache.lock().await;
+    if let Some(existing) = guard.get(&key) {
+        return Ok(Some(Arc::clone(existing)));
+    }
+    drop(guard);
+
+    let proxy = Arc::new(
+        start_proxy(DomainPolicy::from_allowlist(policy.network_allowlist()))
+            .await
+            .context("start hostname allowlist proxy")?,
+    );
+    let mut guard = cache.lock().await;
+    Ok(Some(Arc::clone(guard.entry(key).or_insert(proxy))))
 }
 
 fn transform_command_with_sandbox_policy(
     command: Vec<String>,
     policy: &SandboxPolicy,
     sandbox_cwd: &Path,
+    proxy: Option<ProxyEndpoints>,
 ) -> Result<Vec<String>> {
     if command.is_empty() {
         return Err(anyhow!("Sandbox transform received an empty command"));
@@ -663,7 +702,7 @@ fn transform_command_with_sandbox_policy(
     let manager = SandboxManager::new();
     let linux_sandbox_launcher = resolve_linux_sandbox_launcher();
     let exec_env = manager
-        .transform(spec, policy, sandbox_cwd, linux_sandbox_launcher.as_ref())
+        .transform_with_proxy(spec, policy, sandbox_cwd, linux_sandbox_launcher.as_ref(), proxy.as_ref())
         .map_err(|err| map_sandbox_transform_error(err, policy))?;
 
     let executable = exec_env.program.to_string_lossy().to_string();

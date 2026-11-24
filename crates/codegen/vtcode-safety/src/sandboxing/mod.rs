@@ -56,6 +56,7 @@ mod linux;
 #[cfg(target_os = "linux")]
 mod linux_seccomp;
 mod manager;
+pub mod network_proxy;
 mod permissions;
 mod policy;
 
@@ -72,6 +73,10 @@ pub use exec_env::{CommandSpec, ExecEnv, ExecExpiration, LinuxSandboxLauncher, S
 #[cfg(target_os = "linux")]
 pub use linux::{apply_sandbox_restrictions, landlock_supported};
 pub use manager::{SandboxManager, SandboxTransformError};
+pub use network_proxy::{
+    DomainPolicy, DomainRule, DomainRuleAction, NetworkProxy, ProxyDecision, ProxyEndpoints,
+    proxy_enforcement_available, start_proxy,
+};
 pub use permissions::{AdditionalPermissions, SandboxPermissions, ValidatedSandboxRequest};
 pub use policy::{
     BLOCKED_SYSCALLS, DEFAULT_SENSITIVE_PATHS, FILTERED_SYSCALLS, NetworkAllowlistEntry, ResourceLimits,

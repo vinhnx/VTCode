@@ -181,8 +181,13 @@ Platform behavior is explicit:
   `clone` flags, `clone3`), and terminal injection ioctls (`TIOCSTI`, `TIOCSCTTY`); blocked numbers cover their
   x32-aliased variants and mismatched architectures are killed outright. Hostname allowlists fail closed because BPF
   cannot inspect `connect()` destinations.
-- macOS preserves full-network and blocked-network modes. Hostname allowlists are rejected unless exact enforcement is
-  available; Seatbelt profiles are not treated as a reliable third-party domain-filtering contract.
+- macOS preserves full-network and blocked-network modes. Hostname allowlists are enforced by a local HTTP CONNECT /
+  SOCKS5 proxy started for the policy: the Seatbelt profile denies all outbound traffic except the proxy's loopback
+  ports, and the proxy applies default-deny domain rules (explicit deny wins) before resolving DNS. Standard and
+  application-specific `*_PROXY` variables are injected after environment sanitization. Without a running proxy the
+  allowlist still fails closed. `vtcode debug seatbelt --cmd …` exercises the same proxy path.
+- Linux and Windows keep hostname allowlists fail-closed: seccomp cannot inspect `connect()` destinations and this
+  build has no network-namespace relay, so permitting IP sockets for a proxy would also permit direct egress.
 - Windows restrictive policies fail closed because native restricted-token isolation is not yet implemented. Native
   Windows isolation remains outside this release's scope.
 - `DangerFullAccess` intentionally preserves the unsandboxed compatibility path.
