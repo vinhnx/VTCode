@@ -30,6 +30,7 @@ fn shortcut_search_filters_rows_and_reports_empty_results(cx: &mut TestAppContex
         window.render_frame(cx);
         assert!(window.try_find("shortcut-row-zen_mode").is_none());
         assert_eq!(window.find("shortcut-empty").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(window.find("shortcut-empty").label(), Some("No shortcuts match \"toggle palette\"."));
         view.update(cx, |view, cx| {
             view.shortcut_search_input
                 .update(cx, |input, cx| input.set_value("", window, cx));

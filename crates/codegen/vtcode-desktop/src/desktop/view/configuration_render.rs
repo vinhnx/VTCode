@@ -212,6 +212,7 @@ impl DesktopView {
                     .id("config-write-notice")
                     .test_support()
                     .role(gpui_kit::Role::Status)
+                    .aria_label(notice.clone())
                     .text_sm()
                     .text_color(colors.foreground)
                     .child(notice.clone()),

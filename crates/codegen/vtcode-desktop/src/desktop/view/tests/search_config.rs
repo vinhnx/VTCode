@@ -522,6 +522,10 @@ fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext)
         });
         window.render_frame(cx);
         assert_eq!(window.find("config-write-notice").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(
+            window.find("config-write-notice").label(),
+            Some("Saved agent.default_model to workspace configuration.")
+        );
         assert!(window.try_find("config-reset-hint").is_some());
         assert!(window.try_find("cli-config-footer").is_some());
     })

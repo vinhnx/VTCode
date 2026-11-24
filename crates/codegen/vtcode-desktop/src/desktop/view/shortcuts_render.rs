@@ -135,14 +135,16 @@ impl DesktopView {
             ));
         }
         if visible.is_empty() {
+            let empty_label = rust_i18n::t!("app.shortcuts.no_match", query = query.as_str()).to_string();
             children.push(
                 div()
                     .id("shortcut-empty")
                     .test_support()
                     .role(gpui_kit::Role::Status)
+                    .aria_label(empty_label.clone())
                     .text_sm()
                     .text_color(themes::muted_text(colors))
-                    .child(rust_i18n::t!("app.shortcuts.no_match", query = query.as_str()).to_string())
+                    .child(empty_label)
                     .into_any_element(),
             );
         }

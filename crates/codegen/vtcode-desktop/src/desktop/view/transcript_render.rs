@@ -107,21 +107,20 @@ impl DesktopView {
                     history_bar = history_bar.child(warning_alert("history-page-error", error.clone(), &colors));
                 }
                 if self.history_has_earlier && remaining_history_capacity == 0 {
+                    let limit_label = rust_i18n::t!("app.transcript.history_limit_reached").to_string();
                     history_bar = history_bar.child(
                         div()
                             .id("history-page-limit")
                             .test_support()
                             .role(gpui_kit::Role::Status)
+                            .aria_label(limit_label.clone())
                             .w_full()
                             .child(
                                 Marker::new()
                                     .with_variant(MarkerVariant::Separator)
                                     .text_xs()
                                     .text_color(colors.muted_foreground)
-                                    .content(
-                                        MarkerContent::new()
-                                            .text(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
-                                    ),
+                                    .content(MarkerContent::new().text(limit_label)),
                             ),
                     );
                 } else if self.history_has_earlier {

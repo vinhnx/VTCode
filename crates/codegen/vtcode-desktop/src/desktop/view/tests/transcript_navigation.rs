@@ -682,6 +682,7 @@ fn history_limit_boundary_renders_a_labeled_separator(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let boundary = window.find("history-page-limit");
         assert_eq!(boundary.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(boundary.label(), Some("The 2,000-message local transcript limit has been reached."));
         assert!(boundary.bounds().size.height > px(0.));
         assert!(
             window.try_find("load-earlier-history").is_none(),
