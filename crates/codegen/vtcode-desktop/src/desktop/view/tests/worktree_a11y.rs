@@ -1,8 +1,6 @@
 use super::super::themes;
 use super::*;
 
-mod caret;
-
 #[gpui_kit::test]
 fn menu_bar_setting_keeps_the_window_and_draft_when_closed(cx: &mut TestAppContext) {
     cx.update(|cx| cx.set_reduce_motion(true));

@@ -438,8 +438,9 @@ fn caret_stays_solid_in_kit_under_every_motion_state(cx: &mut gpui_kit::TestAppC
 
     cx.update(|cx| {
         gpui_kit::init(cx);
-        // The desktop owns the soft fade pulse, so Kit never runs its binary
-        // blink timer — not even when reduced motion is off.
+        // The caret is always solid: Kit's binary blink timer never runs, and
+        // the desktop no longer draws a fade pulse — not even when reduced
+        // motion is off.
         for (preference, baseline) in [
             (ReducedMotionPreference::On, false),
             (ReducedMotionPreference::Off, true),
@@ -462,19 +463,6 @@ fn caret_stays_solid_in_kit_under_every_motion_state(cx: &mut gpui_kit::TestAppC
         assert_eq!(Theme::global(cx).cursor_blink, CursorBlink::steady());
         assert_eq!(gpui_kit::base::Theme::global(cx).cursor_blink, CursorBlink::steady());
     });
-}
-
-#[test]
-fn caret_blink_defaults_to_blink_and_round_trips() {
-    let defaults: Preferences = serde_json::from_str("{}").unwrap();
-    assert_eq!(defaults.caret_blink, CaretBlinkPreference::Blink);
-    assert!(defaults.caret_blink.blinks());
-
-    let steady: Preferences = serde_json::from_str(r#"{"caretBlink":"steady"}"#).unwrap();
-    assert!(!steady.caret_blink.blinks());
-    let saved = serde_json::to_string(&steady).unwrap();
-    let loaded: Preferences = serde_json::from_str(&saved).unwrap();
-    assert_eq!(loaded.caret_blink, CaretBlinkPreference::Steady);
 }
 
 #[test]

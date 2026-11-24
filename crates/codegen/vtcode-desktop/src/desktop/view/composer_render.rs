@@ -577,9 +577,6 @@ impl DesktopView {
                                     .rounded(cx.theme().radius_lg)
                             })
                             .child({
-                                // The caret is the focus indicator, so the
-                                // fade never crosses the theme's 3:1 floor.
-                                let fade_min = themes::caret_fade_min_opacity(&cx.theme().colors);
                                 let group = InputGroup::new("message-composer")
                                     .with_size(composer_size)
                                     .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
@@ -599,26 +596,7 @@ impl DesktopView {
                                             .px_0()
                                             .child(buttons),
                                     );
-                                // A soft fade loop exists only while the composer
-                                // is inside its idle window. Capped frame rate and
-                                // a solid reduced-motion fallback keep it cheap.
-                                if self.caret_pulse_active
-                                    && self.preferences.caret_blink.blinks()
-                                    && !cx.reduce_motion()
-                                    && fade_min < 1.0
-                                {
-                                    group
-                                        .with_animation(
-                                            "composer-caret-pulse",
-                                            motion::caret_pulse_animation(),
-                                            move |group, delta| {
-                                                group.caret_opacity(motion::caret_pulse_opacity(delta, fade_min))
-                                            },
-                                        )
-                                        .into_any_element()
-                                } else {
-                                    group.into_any_element()
-                                }
+                                group.into_any_element()
                             })
                     }),
             ),

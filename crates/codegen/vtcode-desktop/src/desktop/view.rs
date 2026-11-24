@@ -127,7 +127,6 @@ mod composer_highlight;
 mod composer_history;
 mod composer_render;
 use composer_render::ComposerPillBounds;
-mod caret_pulse;
 mod computer_preview;
 mod config_editor_copy;
 mod config_search;
@@ -941,12 +940,6 @@ struct DesktopView {
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,
-    /// Whether the composer's bounded caret pulse is inside its idle window.
-    caret_pulse_active: bool,
-    caret_pulse_generation: u64,
-    /// The single idle timer; replacing it drops (cancels) the previous one, so
-    /// continuous typing never accumulates detached timers.
-    caret_pulse_task: Option<Task<()>>,
     /// Cached login-item status. None means the launch query can still apply.
     login_item_status: Option<login_items::LoginItemStatus>,
     system_motion_baseline: bool,

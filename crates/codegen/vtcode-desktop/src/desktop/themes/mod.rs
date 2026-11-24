@@ -866,44 +866,6 @@ pub(super) fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
     contrast_ratio_luminance(relative_luminance(a), relative_luminance(b))
 }
 
-/// Smallest caret alpha a soft fade may reach while keeping the 3:1 non-text
-/// contrast floor on every surface the composer can sit on. Themes whose caret
-/// only just clears that floor stay solid rather than fading below it.
-///
-/// Blending happens in RGB (GPUI colors are Hsla); the result is converted
-/// back only to reuse `contrast_ratio`'s luminance math.
-pub(super) fn caret_fade_min_opacity(colors: &ThemeColor) -> f32 {
-    const FLOOR: f32 = 0.25;
-    const STEPS: u8 = 15;
-    const CONTRAST_FLOOR: f32 = 3.0;
-
-    let caret = gpui_kit::Rgba::from(colors.caret);
-    let mut required = FLOOR;
-    for surface in [colors.background, colors.secondary, colors.popover] {
-        let surface_rgb = gpui_kit::Rgba::from(surface);
-        let mut smallest = 1.0;
-        for step in 0..=STEPS {
-            let opacity = FLOOR + (1.0 - FLOOR) * f32::from(step) / f32::from(STEPS);
-            // Kit's `caret_opacity` multiplies the theme color's own alpha, so
-            // the composited alpha is the product. A translucent caret (e.g. an
-            // imported custom accent) must fade less than an opaque one.
-            let alpha = caret.a * opacity;
-            let blended = Hsla::from(gpui_kit::Rgba {
-                r: caret.r * alpha + surface_rgb.r * (1.0 - alpha),
-                g: caret.g * alpha + surface_rgb.g * (1.0 - alpha),
-                b: caret.b * alpha + surface_rgb.b * (1.0 - alpha),
-                a: 1.0,
-            });
-            if contrast_ratio(blended, surface) >= CONTRAST_FLOOR {
-                smallest = opacity;
-                break;
-            }
-        }
-        required = required.max(smallest);
-    }
-    required
-}
-
 /// Ratio from two already-measured luminances. Lets callers that compare one
 /// color against a fixed reference (e.g. `hairline`'s binary search) measure
 /// that reference once instead of once per iteration, bit-identically.
