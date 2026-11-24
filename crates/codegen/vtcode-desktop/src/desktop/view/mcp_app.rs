@@ -208,7 +208,7 @@ impl DesktopView {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                        .child(accessible_error(format!("mcp-app-error-{}-{index}", item.id), error.clone(), &colors))
                         .child(
                             desktop_ghost_button(format!("retry-mcp-app-{}-{index}", item.id))
                                 .label(rust_i18n::t!("app.preview.retry").to_string())

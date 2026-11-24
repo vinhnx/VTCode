@@ -403,6 +403,9 @@ impl DesktopView {
                 .child(
                     desktop_secondary_button("open-webmcp-app")
                         .label(rust_i18n::t!("app.webmcp.open_app").to_string())
+                        // External destination: a Link role, though it keeps the
+                        // secondary button treatment of the footer row.
+                        .role(gpui_kit::Role::Link)
                         .on_click(|_, _, cx| cx.open_url(WEBMCP_APP_URL)),
                 )
                 .when(status.is_some_and(|status| status.running), |row| {

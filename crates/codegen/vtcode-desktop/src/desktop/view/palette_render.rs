@@ -248,7 +248,7 @@ impl DesktopView {
                     .justify_between()
                     .gap_3()
                     .when(history_page_failed, |footer| {
-                        footer.child(div().text_xs().text_color(colors.danger).child(history_error))
+                        footer.child(accessible_error("history-load-error", history_error, &colors))
                     })
                     .child(
                         desktop_ghost_button("conversation-search-load-earlier")

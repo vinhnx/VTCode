@@ -141,6 +141,9 @@ fn computer_preview_error_row_retries_through_the_button(cx: &mut TestAppContext
             );
         });
         window.render_frame(cx);
+        let error = window.find("computer-preview-error-cua-1");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(error.label(), Some("Could not load the screenshot. Try again."));
         assert!(window.try_find("retry-computer-preview-cua-1").is_some());
         window.click("retry-computer-preview-cua-1", cx);
         window.render_frame(cx);

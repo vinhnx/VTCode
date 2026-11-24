@@ -31,6 +31,28 @@ pub(super) fn accessible_group_box(
         .into_any_element()
 }
 
+/// Inline error text for errors that arrive after a request. The danger color
+/// is only the visual cue; the same string is the `Alert` node's accessible
+/// name, so assistive technology can discover the failure and recover without
+/// relying on hue or on a neighboring label. One owner with the shared error
+/// size prevents a new error site from shipping color-only.
+pub(super) fn accessible_error(
+    id: impl Into<gpui_kit::ElementId>,
+    message: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    let message = message.into();
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Alert)
+        .aria_label(message.clone())
+        .text_sm()
+        .text_color(colors.danger)
+        .child(message)
+        .into_any_element()
+}
+
 /// The `(resting, highlight)` pair every shimmer label uses.
 ///
 /// One owner so a label cannot pick a tone in one place and let Kit default the

@@ -408,6 +408,9 @@ fn storage_error_shows_retry_and_recovers_on_demand(cx: &mut TestAppContext) {
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        let error = window.find("storage-summary-error");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(error.label(), Some("disk walk failed"));
         assert_eq!(window.find("storage-retry").label(), Some("Retry"));
         assert!(requests.try_recv().is_err(), "no second request before the retry click");
         window.click("storage-retry", cx);

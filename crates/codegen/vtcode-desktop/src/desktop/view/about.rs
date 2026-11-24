@@ -250,6 +250,8 @@ impl DesktopView {
                         HELP_URL,
                         desktop_secondary_button("about-settings-website")
                             .label(rust_i18n::t!("app.menus.help_website").to_string())
+                            // External destinations announce as links, not commands.
+                            .role(gpui_kit::Role::Link)
                             .on_click(|_, _, cx: &mut App| cx.open_url(HELP_URL)),
                         &colors,
                     )),
@@ -482,6 +484,7 @@ impl DesktopView {
                             .child(
                                 desktop_secondary_button("about-website")
                                     .label(rust_i18n::t!("app.menus.help_website").to_string())
+                                    .role(gpui_kit::Role::Link)
                                     .on_click(cx.listener(|view, _, window, cx| {
                                         view.close_about(window, cx);
                                         cx.open_url(HELP_URL);

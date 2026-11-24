@@ -42,6 +42,7 @@ fn about_surfaces_use_the_monochrome_brand_mark(cx: &mut TestAppContext) {
     open_about(window, &view, cx);
     cx.update_window(window, |_, window, _| {
         assert!(window.try_find("about-dialog-mark").is_some(), "the dialog paints the ink mark");
+        assert_eq!(window.find("about-website").role(), Some(gpui_kit::Role::Link));
     })
     .unwrap();
     cx.update_window(window, |_, window, cx| {

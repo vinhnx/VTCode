@@ -455,7 +455,7 @@ impl DesktopView {
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                .child(accessible_error("storage-summary-error", error.clone(), colors))
                 .child(retry)
                 .into_any_element();
         }
@@ -562,7 +562,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                    .child(accessible_error("storage-review-error", error.clone(), &colors))
                     .child(
                         desktop_secondary_button("storage-review-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())
@@ -684,7 +684,7 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                    .child(accessible_error("storage-worktrees-error", error.clone(), &colors))
                     .child(
                         desktop_secondary_button("storage-worktrees-retry")
                             .label(rust_i18n::t!("app.settings.storage.retry").to_string())

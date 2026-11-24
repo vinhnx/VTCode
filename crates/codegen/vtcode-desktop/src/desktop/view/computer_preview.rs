@@ -206,7 +206,7 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                    .child(accessible_error(format!("computer-preview-error-{}", item.id), error.clone(), &colors))
                     .child(
                         desktop_ghost_button(format!("retry-computer-preview-{}", item.id))
                             .label(rust_i18n::t!("app.preview.retry").to_string())

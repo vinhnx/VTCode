@@ -526,6 +526,7 @@ fn release_notes_banner_view_opens_current_changelog(cx: &mut TestAppContext) {
         assert!(!view.read(cx).release_notes_banner_visible(), "viewing retires the banner");
         assert!(window.try_find("changelog-subtitle").is_none(), "installed notes carry no upgrade arrow");
         assert!(window.try_find("open-release-notes").is_some(), "current notes link out");
+        assert_eq!(window.find("open-release-notes").role(), Some(gpui_kit::Role::Link));
     })
     .unwrap();
 }

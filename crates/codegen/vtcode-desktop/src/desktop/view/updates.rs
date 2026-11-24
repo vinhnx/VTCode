@@ -439,6 +439,7 @@ impl DesktopView {
                                 row.child(
                                     desktop_secondary_button("open-release-notes")
                                         .label(rust_i18n::t!("app.changelog.view_full_notes").to_string())
+                                        .role(gpui_kit::Role::Link)
                                         .on_click(move |_, _, cx| {
                                             cx.open_url(&url);
                                         }),

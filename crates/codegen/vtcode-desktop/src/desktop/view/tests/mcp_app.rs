@@ -170,6 +170,36 @@ fn mcp_app_expand_fetches_once_and_skips_settled_uris(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn multiple_failed_previews_get_distinct_alert_ids(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
+            let mut item = preview_item();
+            let mut second = item.app_previews[0].clone();
+            second.uri = "ui://demo/second.html".into();
+            item.app_previews.push(second);
+            view.transcript.push(item);
+            for (index, uri) in ["ui://demo/app.html", "ui://demo/second.html"].into_iter().enumerate() {
+                assert_eq!(
+                    view.mcp_app_errors.insert(
+                        McpAppBodyKey { item_id: "app-1".into(), uri: uri.into() },
+                        format!("Failed {index}").into(),
+                    ),
+                    None
+                );
+            }
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("mcp-app-error-app-1-0").label(), Some("Failed 0"));
+        assert_eq!(window.find("mcp-app-error-app-1-1").label(), Some("Failed 1"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
@@ -190,6 +220,9 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
             );
         });
         window.render_frame(cx);
+        let error = window.find("mcp-app-error-app-1-0");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(error.label(), Some("Could not load the app preview. Try again."));
         assert!(window.try_find("retry-mcp-app-app-1-0").is_some());
         window.click("retry-mcp-app-app-1-0", cx);
         window.render_frame(cx);

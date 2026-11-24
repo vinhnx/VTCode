@@ -56,6 +56,7 @@ fn license_settings_are_discoverable_and_have_an_accessible_action(cx: &mut Test
         assert_eq!(window.find("about-settings-license").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("about-settings-license").label(), Some("VT Code license"));
         assert_eq!(window.find("about-settings-acknowledgments").label(), Some("Acknowledgments"));
+        assert_eq!(window.find("about-settings-website").role(), Some(gpui_kit::Role::Link));
     })
     .unwrap();
     reopen_settings_search(window, &view, cx);

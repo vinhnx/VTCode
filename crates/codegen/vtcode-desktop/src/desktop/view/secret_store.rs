@@ -90,16 +90,7 @@ impl DesktopView {
                     .child(rust_i18n::t!("app.secrets.stored_as", var = info.env_var.as_str()).to_string()),
             )
             .when_some(props.error.as_ref(), |form, error| {
-                form.child(
-                    div()
-                        .id("secret-error")
-                        .test_support()
-                        .role(gpui_kit::Role::Alert)
-                        .aria_label(error.clone())
-                        .text_sm()
-                        .text_color(colors.danger)
-                        .child(error.clone()),
-                )
+                form.child(accessible_error("secret-error", error.clone(), &colors))
             })
             .into_any_element()
     }

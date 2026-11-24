@@ -341,16 +341,7 @@ impl DesktopView {
                             .w_full(),
                     )
                     .when_some(state.error.as_ref(), |dialog, error| {
-                        dialog.child(
-                            div()
-                                .id("file-rename-error")
-                                .test_support()
-                                .role(gpui_kit::Role::Alert)
-                                .aria_label(error.clone())
-                                .text_sm()
-                                .text_color(colors.danger)
-                                .child(error.clone()),
-                        )
+                        dialog.child(accessible_error("file-rename-error", error.clone(), &colors))
                     })
                     .child(
                         div()
