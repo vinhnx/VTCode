@@ -253,6 +253,66 @@ fn live_history_excludes_prepended_archived_prefix() {
 }
 
 #[test]
+fn history_is_bounded_and_evicts_oldest_prompts() {
+    let mut manager = InputManager::new();
+    for i in 0..(MAX_INPUT_HISTORY_ENTRIES + 25) {
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(format!("prompt-{i}"), Vec::new()));
+    }
+
+    assert_eq!(manager.history().len(), MAX_INPUT_HISTORY_ENTRIES);
+    assert_eq!(manager.history().first().expect("entries").content(), "prompt-25");
+    assert_eq!(manager.history().last().expect("entries").content(), "prompt-1024");
+    assert_eq!(manager.live_history().len(), MAX_INPUT_HISTORY_ENTRIES);
+}
+
+#[test]
+fn prepending_archived_history_beyond_limit_evicts_oldest_archived() {
+    let mut manager = InputManager::new();
+    let now = Utc::now();
+    manager.add_to_history(InputHistoryEntry::from_content_and_attachments("session-prompt".to_owned(), Vec::new()));
+
+    // Newest-first input, so `archived-{count - 1}` is the most recent archived
+    // prompt and `archived-0` is the oldest.
+    let count = MAX_INPUT_HISTORY_ENTRIES + 5;
+    let archived: Vec<_> = (0..count)
+        .rev()
+        .map(|i| InputHistoryEntry::from_content_and_timestamp(format!("archived-{i}"), now))
+        .collect();
+    manager.prepend_archived_history(archived);
+
+    assert_eq!(manager.history().len(), MAX_INPUT_HISTORY_ENTRIES);
+    assert_eq!(manager.live_history().len(), 1);
+    assert_eq!(manager.live_history()[0].content(), "session-prompt");
+    assert_eq!(manager.history().first().expect("entries").content(), "archived-6");
+    // Recall still walks the newest session prompt, then the newest archived one.
+    assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some("session-prompt".to_owned()));
+    assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some(format!("archived-{}", count - 1)));
+}
+
+#[test]
+fn history_bound_evicts_archived_prefix_before_session_prompts() {
+    let mut manager = InputManager::new();
+    let now = Utc::now();
+    manager.prepend_archived_history(vec![
+        InputHistoryEntry::from_content_and_timestamp("archived-1".to_owned(), now),
+        InputHistoryEntry::from_content_and_timestamp("archived-2".to_owned(), now),
+    ]);
+    for i in 0..MAX_INPUT_HISTORY_ENTRIES {
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(format!("session-{i}"), Vec::new()));
+    }
+
+    assert_eq!(manager.history().len(), MAX_INPUT_HISTORY_ENTRIES);
+    // Both archived entries were dropped first, so the whole remaining trail
+    // is live session history and `live_history()` exposes all of it.
+    assert_eq!(manager.history().first().expect("entries").content(), "session-0");
+    assert_eq!(manager.live_history().len(), MAX_INPUT_HISTORY_ENTRIES);
+    assert_eq!(
+        manager.go_to_previous_history().map(|e| e.content.clone()),
+        Some(format!("session-{}", MAX_INPUT_HISTORY_ENTRIES - 1))
+    );
+}
+
+#[test]
 fn up_arrow_cycles_session_first_then_archived() {
     let mut manager = InputManager::new();
     let now = Utc::now();

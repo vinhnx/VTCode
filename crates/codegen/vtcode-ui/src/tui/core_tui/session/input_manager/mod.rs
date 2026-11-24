@@ -34,6 +34,11 @@ fn configure_textarea(textarea: &mut TextArea<'static>) {
     textarea.set_tab_length(4);
 }
 
+/// Upper bound for the in-memory submitted-prompt trail. Text undo is already
+/// bounded by [`configure_textarea`]; without this cap a long-running session
+/// could grow `history` (and its attachment payloads) without limit.
+const MAX_INPUT_HISTORY_ENTRIES: usize = 1000;
+
 /// Manages user input state including text, cursor, and history.
 ///
 /// The text buffer and cursor are managed by [`TextArea`], giving us
@@ -767,6 +772,20 @@ impl InputManager {
     // History (command submission, NOT undo/redo)
     // ------------------------------------------------------------------
 
+    /// Drop the oldest entries once the trail exceeds [`MAX_INPUT_HISTORY_ENTRIES`].
+    ///
+    /// Archived prompts live at the front, so they are evicted before prompts
+    /// submitted in this session. Callers reset navigation first, so no live
+    /// `history_index` can be invalidated by the removed prefix.
+    fn trim_history_to_limit(&mut self) {
+        let excess = self.history.len().saturating_sub(MAX_INPUT_HISTORY_ENTRIES);
+        if excess == 0 {
+            return;
+        }
+        self.history.drain(..excess);
+        self.archived_count = self.archived_count.saturating_sub(excess);
+    }
+
     pub fn add_to_history(&mut self, entry: InputHistoryEntry) {
         if !entry.is_empty() {
             if let Some(last) = self.history.last()
@@ -779,6 +798,7 @@ impl InputManager {
             self.history.push(entry);
         }
         self.reset_history_navigation();
+        self.trim_history_to_limit();
     }
 
     /// Prepend archived history entries from previous sessions.
@@ -801,16 +821,16 @@ impl InputManager {
         if to_prepend.is_empty() {
             return;
         }
-        // Caller provides newest-first; insert each at position 0 so the final
-        // order is [oldest_archived, ..., newest_archived, session_entries...].
-        // Up-arrow (which walks from the tail) therefore hits session entries
-        // first, then the most recent archived entry, then older ones.
+        // Caller provides newest-first; repeated `insert(0)` used to reverse
+        // the batch into [oldest_archived, ..., newest_archived, session...],
+        // so up-arrow (walking from the tail) hits session entries first, then
+        // the most recent archived entry. Splice the batch once, reversed, to
+        // keep that order in O(n) instead of O(n^2).
         let count = to_prepend.len();
-        for entry in to_prepend {
-            self.history.insert(0, entry);
-        }
+        self.history.splice(0..0, to_prepend.into_iter().rev());
         self.archived_count += count;
         self.reset_history_navigation();
+        self.trim_history_to_limit();
     }
 
     pub fn go_to_next_history(&mut self) -> Option<InputHistoryEntry> {
