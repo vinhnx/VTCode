@@ -53,7 +53,8 @@ re-verified against `gpui-base 0.10.0` `src/text_selection.rs`, `src/selectable_
 vendored `patches/gpui-component/src/root.rs`). The window layer, scopes, snapshots, multi-click boundaries,
 touch handles and advanced participant adapters are already Kit-owned: `gpui_kit::open_window` mounts `base::Root`,
 whose render installs one `TextSelectionLayer` per window (`gpui-base/root.rs:261`), `RootPlugin::prepare`
-activates the scope stack and clears selection when a Kit dialog or sheet opens (vendored `root.rs:415-417`), and
+activates the scope stack (vendored `root.rs:722-727`) while `present_dialog`/`present_sheet` clear selection on
+open (`root.rs:415-417`, `:548-552`), and
 `TextView` retains a stable handle and projects runs into UTF-8-safe byte ranges. Kept as-is: terminal drag
 selection stays rio-vt-owned (VT grid cells and semantic word/line expansion have no `TextSelectionRun`
 equivalent); app-owned scrim modals keep their own focus/copy flow because Kit scopes cover Kit dialogs/sheets
