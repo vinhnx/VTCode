@@ -27,7 +27,7 @@
 
 ## Gotchas
 
-- Icons outside Kit's default bundle must join `ExtraIcons`/`DESKTOP_ICONS` in `assets.rs` or they render blank with no headless failure.
+- Non-default icons must join `ExtraIcons` in `assets.rs` (blank, no headless failure); a source-scan test rejects unregistered `IconName::`.
 - Composer popups mount at the composer panel, never inside a trigger pill subtree (focus traps detach); they anchor to `composer_trigger_pill` bounds via `anchored().attach` (Kit `open` is paint-free).
 - Keep the window interactive during startup. The `INITIALIZE` request gates backend actions and drives inline connection status.
 - `app_owns_titlebar_drag` disables all native drag (zen needs its own drag strip); headless `start_window_move` is unimplemented (guard `#[cfg(not(test))]`).

@@ -47,6 +47,44 @@ opacity wrappers (`FadeInExt`, `NavigationFadeExt`) now delegate to the single `
 animation and its animator cannot drift; `fade_animation` clamps the eased value to 0..=1 because opacity is narrower
 than GPUI's easing output, and `shared_opacity_fade_is_a_finite_oneshot` pins that contract with an overshooting curve.
 
+Icons & Assets reviewed 2026-11-24 against the
+[GPUI Kit assets guide](https://gpui-kit.com/docs/assets/) (site v0.11.0,
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims re-verified against pinned
+`gpui-kit-assets 0.10.0` generated `IconName`/`icon_assets!` and the desktop asset source). "Depending on the crate
+does not embed every icon" is ALREADY HONORED: `with_assets(DesktopAssets)` is registered before any window opens,
+and the composite source checks `ExtraIcons` before falling back to the 101 default `KitAssets`, merging/sorting/
+deduping `list` so every served key is listed. `Icon::data` for the one-off brand V monogram, `svg()` for the
+monochrome mark and `img()` for full-color app-icon art are already correct — no changes. `AllAssets` (1,830 SVGs)
+and a `rust-embed` asset folder stay SKIPPED: the app uses 73 named glyphs and its app icons already ship via
+`include_bytes!`. The 0.11.0 shared-vs-legacy `IconName` compatibility note is moot — the desktop imports
+`assets::IconName` everywhere. APPLIED (root cause, DRY): the hand-maintained `DESKTOP_ICONS` catalog could not catch
+a new `IconName::X` used in UI code without a matching registration — an unregistered path renders blank with no
+headless failure. `desktop/assets.rs` now derives the set from a recursive scan of `src/**/*.rs`, resolves names
+through `IconName::ALL`, and asserts each `path()` loads through `DesktopAssets`; the scan unit test pins variant
+extraction and the exclusion of line comments and the `ALL` associated const. The helper uses `.get(..).expect()`
+rather than a raw slice because strict `-D warnings --all-targets` clippy rejects unprovable UTF-8 boundaries.
+
+Images reviewed 2026-11-24 against the
+[GPUI Kit images guide](https://gpui-kit.com/docs/image/) (site v0.11.0,
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims re-verified against pinned
+`gpui-fast 0.1.17` `elements/img.rs`, `image_cache.rs` and `platform.rs::Image`). ALREADY PRESENT: both desktop image
+holders (`files::Preview::image`, `computer_preview::Body::image`) are `Arc<gpui_kit::Image>` — encoded bytes already
+held — so there is no URL, asset-key, filesystem-path or custom-loader path to fix, and no native `HttpClient` is
+needed. `brand_mark` sets both `.text_color(...)` and `.size(...)` on the `svg()` element itself; full-color art uses
+`img()` with explicit bounds; no animated image or `with_loading`/`with_fallback` consumer needs `.id(...)`. SKIPPED:
+HTTP-layer caching (no remote images), scoped caches (the App cache already keys by source), and reserving a box for
+the screenshot preview (bytes are already held and the card sets width; a fixed height would letterbox varying aspect
+ratios — a design decision, not a code fix).
+
+Focus reviewed 2026-11-24 against the
+[GPUI Kit focus guide](https://gpui-kit.com/docs/focus/) (site v0.11.0; claims re-verified against the pinned
+`gpui-fast`/`gpui-pre` sources). ALREADY PRESENT: `view/bootstrap.rs:217` registers one `cx.on_focus_lost` per window
+on the root view and restores through `window.focus_lost_restore_target(cx).unwrap_or(root.focus_handle)` — the guide's
+exact recipe for "focused element stops rendering". Retained handles get `tab_stop(true)` in bootstrap and are
+re-attached with `.track_focus(...)` each render; overlay flows save `window.focused(cx)` and restore on dismissal;
+`contains_focused` drives region activity. SKIPPED: no new trap or restore path — every custom surface already pairs
+`.focus_trap(...)` with entry/dismissal focus ownership.
+
 Base plot reviewed 2026-11-24 against the
 [GPUI Kit plot guide](https://gpui-kit.com/base/plot/) (site v0.11.0; the pinned
 [`v0.10.0` page](https://gpui-kit.com/versions/v0.10.0/base/plot) carries identical prose, re-verified against

@@ -72,108 +72,122 @@ impl AssetSource for DesktopAssets {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeSet, HashMap};
+    use std::path::{Path, PathBuf};
+
     use gpui_kit::AssetSource;
+    use gpui_kit::SharedString;
     use gpui_kit::assets::IconName;
 
     use super::DesktopAssets;
 
-    const DESKTOP_ICONS: &[IconName] = &[
-        IconName::Activity,
-        IconName::ALargeSmall,
-        IconName::ArrowDown,
-        IconName::ArrowLeft,
-        IconName::ArrowRight,
-        IconName::ArrowUp,
-        IconName::AtSign,
-        IconName::Bell,
-        IconName::BookOpen,
-        IconName::Bot,
-        IconName::Check,
-        IconName::ChevronDown,
-        IconName::ChevronLeft,
-        IconName::ChevronRight,
-        IconName::CircleAlert,
-        IconName::Clock,
-        IconName::Computer,
-        IconName::Copy,
-        IconName::CopyX,
-        IconName::Download,
-        IconName::Ellipsis,
-        IconName::ExternalLink,
-        IconName::Eye,
-        IconName::File,
-        IconName::FileCode,
-        IconName::FileImage,
-        IconName::FileText,
-        IconName::FileUp,
-        IconName::Folder,
-        IconName::FolderClosed,
-        IconName::FolderGit2,
-        IconName::FolderOpen,
-        IconName::GitBranch,
-        IconName::GitCompare,
-        IconName::Globe,
-        IconName::HardDrive,
-        IconName::House,
-        IconName::Info,
-        IconName::Keyboard,
-        IconName::LaptopMinimal,
-        IconName::Leaf,
-        IconName::ListChecks,
-        IconName::ListTree,
-        IconName::Maximize2,
-        IconName::Minimize2,
-        IconName::MessageSquare,
-        IconName::ChevronsDown,
-        IconName::Palette,
-        IconName::PanelLeft,
-        IconName::PanelRight,
-        IconName::Paperclip,
-        IconName::Pause,
-        IconName::Pencil,
-        IconName::PersonStanding,
-        IconName::Play,
-        IconName::Plug,
-        IconName::Plus,
-        IconName::RefreshCw,
-        IconName::Search,
-        IconName::Settings2,
-        IconName::Shield,
-        IconName::ShieldCheck,
-        IconName::ShieldAlert,
-        IconName::Slash,
-        IconName::Square,
-        IconName::SquareTerminal,
-        IconName::SunMoon,
-        IconName::Target,
-        IconName::Terminal,
-        IconName::Trash,
-        IconName::TriangleAlert,
-        IconName::Wrench,
-        IconName::X,
-    ];
+    /// Collect `IconName::Variant` tokens from one line of source. Asset
+    /// lookups happen at runtime, so an unregistered glyph is blank with no
+    /// headless failure; the only reliable oracle is the source itself.
+    /// `IconName::ALL` is an associated const enumerating every name, not a
+    /// glyph the asset source must serve, so it is deliberately skipped.
+    fn collect_icon_names(line: &str, names: &mut BTreeSet<String>) {
+        let code = line.split("//").next().unwrap_or_default();
+        let mut rest = code;
+        while let Some(pos) = rest.find("IconName::") {
+            let after = rest
+                .get(pos + "IconName::".len()..)
+                .expect("ASCII prefix ends on a char boundary");
+            let name: String = after
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+                .collect();
+            if !name.is_empty() && name != "ALL" {
+                let _ = names.insert(name);
+            }
+            // The prefix is consumed; keep scanning the remainder for more.
+            rest = after;
+        }
+    }
+
+    /// Walk every Rust source under `src/` (the asset registry itself owns no
+    /// glyph usages, so it is excluded) and return the variants the UI names.
+    fn referenced_icon_names() -> BTreeSet<String> {
+        fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
+            let mut entries = std::fs::read_dir(dir)
+                .expect("read desktop source dir")
+                .filter_map(Result::ok)
+                .collect::<Vec<_>>();
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, files);
+                } else if path.extension().is_some_and(|ext| ext == "rs")
+                    && path.file_name().is_some_and(|name| name != "assets.rs")
+                {
+                    files.push(path);
+                }
+            }
+        }
+
+        let mut files = Vec::new();
+        walk(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+        assert!(!files.is_empty(), "source scan must find Rust files");
+
+        let mut names = BTreeSet::new();
+        for file in files {
+            let content = std::fs::read_to_string(&file).expect("read desktop source file");
+            for line in content.lines() {
+                collect_icon_names(line, &mut names);
+            }
+        }
+        names
+    }
+
+    /// `IconName::ALL` is the authoritative name → enum table shipped by the
+    /// pinned assets crate; `path()` is the exact key the source is asked for.
+    fn referenced_icon_paths() -> Vec<(String, SharedString)> {
+        let by_name: HashMap<String, IconName> =
+            IconName::ALL.iter().map(|icon| (format!("{icon:?}"), *icon)).collect();
+        referenced_icon_names()
+            .into_iter()
+            .map(|name| {
+                let icon = *by_name
+                    .get(&name)
+                    .unwrap_or_else(|| panic!("{name} is not an IconName variant"));
+                (name, icon.path())
+            })
+            .collect()
+    }
 
     #[test]
-    fn desktop_assets_include_every_icon_referenced_by_the_ui() {
+    fn icon_reference_scan_reads_variants_and_ignores_comments_and_all() {
+        let mut names = BTreeSet::new();
+        collect_icon_names("let a = IconName::Activity; // IconName::NotRegistered", &mut names);
+        collect_icon_names("for name in IconName::ALL { let _ = IconName::X; }", &mut names);
+        assert_eq!(names, BTreeSet::from(["Activity".to_string(), "X".to_string()]));
+    }
+
+    #[test]
+    fn every_icon_referenced_by_the_ui_resolves_through_desktop_assets() {
+        let referenced = referenced_icon_paths();
+        assert!(referenced.len() > 50, "source scan must discover UI glyphs, found {}", referenced.len());
         let assets = DesktopAssets;
-        for icon in DESKTOP_ICONS {
+        for (name, path) in referenced {
+            let loaded = assets
+                .load(&path)
+                .unwrap_or_else(|err| panic!("IconName::{name} ({path}) cannot be resolved: {err}"));
             assert!(
-                assets.load(&icon.path()).expect("load icon asset").is_some(),
-                "desktop asset source must include {}",
-                icon.path()
+                loaded.is_some(),
+                "UI references IconName::{name}, but {path} is not registered in ExtraIcons/KitAssets"
             );
         }
     }
 
     #[test]
-    fn desktop_asset_listing_is_sorted_and_contains_default_and_extra_icons() {
+    fn desktop_asset_listing_is_sorted_and_contains_every_referenced_icon() {
         let paths = DesktopAssets.list("icons/").expect("list icon assets");
         let names: Vec<_> = paths.iter().map(|path| path.as_ref()).collect();
 
         assert!(names.windows(2).all(|pair| pair[0] <= pair[1]), "asset paths stay sorted");
         assert_eq!(names.len(), names.iter().copied().collect::<std::collections::HashSet<_>>().len());
-        for icon in DESKTOP_ICONS {
-            let path = icon.path();
+        for (_, path) in referenced_icon_paths() {
             assert!(names.contains(&path.as_ref()), "asset listing must include {path}");
         }
     }
