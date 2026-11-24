@@ -173,6 +173,13 @@ async fn run_install(
     notifications: &tokio::sync::mpsc::Sender<vtcode_desktop_protocol::Notification>,
 ) -> Result<DesktopInstallOutcome> {
     let updater = Updater::new(env!("CARGO_PKG_VERSION")).context("failed to initialize updater")?;
+    // Pin the install to the release the status snapshot offered. The service
+    // owns update policy and feeds the UI that snapshot, so reading the same
+    // cache here keeps consent and installation about one version even when a
+    // new release is published between the check and the download.
+    let expected_version = updater
+        .offered_update_version()
+        .context("failed to read the offered update version")?;
     // Updates install in place so a system-wide install is never duplicated
     // per-user; a fresh install lands in ~/Applications.
     let install_dir = existing_install_dir()
@@ -180,7 +187,7 @@ async fn run_install(
         .context("could not resolve a desktop app install directory")?;
 
     let mut last_download = UpdateInstallState::Downloading { downloaded: 0, total: None };
-    let outcome = install_desktop_app_with_progress(&updater, &install_dir, |progress| {
+    let outcome = install_desktop_app_with_progress(&updater, &install_dir, expected_version.as_ref(), |progress| {
         let state = match progress {
             UpdateProgress::Downloading { downloaded, total } => UpdateInstallState::Downloading { downloaded, total },
             UpdateProgress::VerifyingChecksum => UpdateInstallState::Verifying,

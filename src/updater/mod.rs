@@ -159,6 +159,14 @@ impl Updater {
         })
     }
 
+    /// The release `update/status` is currently offering, read from the same
+    /// cache that backs that snapshot. An in-app install must pin this version:
+    /// re-resolving "latest" at install time could swap in a release published
+    /// after the user consented to the one on screen.
+    pub(crate) fn offered_update_version(&self) -> Result<Option<Version>> {
+        Ok(self.startup_update_check()?.cached_notice.map(|notice| notice.latest_version))
+    }
+
     pub(crate) async fn refresh_startup_update_cache(&self) -> Result<Option<StartupUpdateNotice>> {
         if self.config.check_interval_hours == 0 || self.config.is_pinned() {
             return Ok(None);

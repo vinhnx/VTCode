@@ -78,7 +78,7 @@ fn parse_macos_major(output: &str) -> Option<u32> {
 /// Re-checks the installed version against the live latest release so a stale
 /// prompt-time check never triggers a redundant download.
 pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -> Result<DesktopInstallOutcome> {
-    install_desktop_app_with_progress(updater, install_dir, |_| {}).await
+    install_desktop_app_with_progress(updater, install_dir, None, |_| {}).await
 }
 
 /// [`install_desktop_app`] with per-phase progress reporting.
@@ -86,9 +86,15 @@ pub(crate) async fn install_desktop_app(updater: &Updater, install_dir: &Path) -
 /// The desktop app drives its install UI from these events instead of a bare
 /// spinner, so a multi-minute download stays legible. The CLI passes a no-op
 /// and keeps its own byte-progress rendering.
+///
+/// `expected_version` is the release the user was offered. When present, the
+/// release resolved at install time must be exactly that version: a check and
+/// an install are separate requests, and silently upgrading to a release
+/// published in between would bypass the consent the UI obtained.
 pub(crate) async fn install_desktop_app_with_progress<F>(
     updater: &Updater,
     install_dir: &Path,
+    expected_version: Option<&Version>,
     mut on_progress: F,
 ) -> Result<DesktopInstallOutcome>
 where
@@ -110,6 +116,9 @@ where
     let release =
         github::fetch_latest_release_metadata(updater.config().download_timeout_secs, &updater.config().channel)
             .await?;
+    // Pin before the up-to-date check: a release yanked between check and
+    // install is a drift, not a reason to report that nothing needs doing.
+    validate_selected_release(&release.version, expected_version)?;
 
     if let Some((installed, path)) = installed_desktop_bundle()
         .await
@@ -170,6 +179,23 @@ where
         path: installed.path,
         needs_gatekeeper_approval: installed.needs_gatekeeper_approval,
     })
+}
+
+/// Fail closed when the release resolved at install time differs from the one
+/// the user was shown at check time. A release published between the two
+/// requests must never be installed under consent given for a different one;
+/// the caller re-checks and the user confirms the new offer explicitly.
+fn validate_selected_release(release: &Version, expected: Option<&Version>) -> Result<()> {
+    if let Some(expected) = expected
+        && release != expected
+    {
+        bail!(
+            "the available update changed from v{} to v{} after the check; check for updates again before installing",
+            expected,
+            release
+        );
+    }
+    Ok(())
 }
 
 /// Resolve the installed bundle and read its version from the bundled helper,

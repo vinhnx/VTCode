@@ -116,6 +116,34 @@ fn parses_helper_version_output() {
 }
 
 #[test]
+fn install_accepts_the_offered_release_or_no_pin() {
+    let offered = Version::parse("0.181.8").expect("semver");
+    let resolved = Version::parse("0.181.8").expect("semver");
+
+    validate_selected_release(&resolved, Some(&offered)).expect("the consented release installs");
+    validate_selected_release(&resolved, None).expect("an explicit CLI install has no offer to pin");
+}
+
+#[test]
+fn install_rejects_a_release_that_changed_after_the_check() {
+    let offered = Version::parse("0.181.8").expect("semver");
+    let published = Version::parse("0.181.9").expect("semver");
+
+    // Both directions: a newer release published meanwhile, an older one left
+    // after a release was removed, and a pre-release of the same patch are
+    // equally unauthorized substitutions (full semver identity is the pin).
+    for resolved in [
+        &published,
+        &Version::parse("0.181.7").expect("semver"),
+        &Version::parse("0.181.8-rc.1").expect("semver"),
+    ] {
+        let error = validate_selected_release(resolved, Some(&offered)).expect_err("drift must fail closed");
+        assert!(error.to_string().contains("changed from v0.181.8"), "{error}");
+        assert!(error.to_string().contains("check for updates again"), "{error}");
+    }
+}
+
+#[test]
 fn accepts_well_formed_desktop_archive() {
     let temp = tempfile::tempdir().expect("temp");
     let archive = temp.path().join("desktop.zip");

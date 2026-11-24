@@ -101,6 +101,63 @@ fn startup_update_check_shows_undismissed_newer_version() {
 }
 
 #[test]
+fn offered_update_version_names_the_cached_offer() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+    // The in-app install pins whatever `update/status` offers. Both read the
+    // same cache, so an explicit check's newer release is the consented one.
+    let latest = Version::parse("99.0.0").expect("latest");
+    assert_ne!(latest.to_string(), env!("CARGO_PKG_VERSION"));
+    cache::record_successful_check(Some(&latest), true).expect("write cache");
+
+    let updater = Updater {
+        current_version: Version::parse(env!("CARGO_PKG_VERSION")).expect("current"),
+        config: UpdateConfig::default(),
+    };
+    assert_eq!(updater.offered_update_version().expect("offered"), Some(latest));
+
+    cache::set_cache_dir_override_for_tests(previous);
+}
+
+#[test]
+fn offered_update_version_is_none_without_an_active_offer() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let previous = cache::set_cache_dir_override_for_tests(Some(temp_dir.path().to_path_buf()));
+
+    let updater = Updater {
+        current_version: Version::parse(env!("CARGO_PKG_VERSION")).expect("current"),
+        config: UpdateConfig::default(),
+    };
+    assert_eq!(updater.offered_update_version().expect("empty cache"), None, "no cache means nothing to pin");
+
+    // An older cached release is not an offer, even with the newer flag set
+    // inconsistently — pinning to it would refuse a legitimate install.
+    let older = Version::parse("0.1.0").expect("older");
+    cache::record_successful_check(Some(&older), false).expect("write older cache");
+    assert_eq!(updater.offered_update_version().expect("older cache"), None);
+
+    // A dismissed offer stays readable for notes but must not authorize an
+    // install the user already declined.
+    let newer = Version::parse("99.0.0").expect("newer");
+    cache::record_successful_check(Some(&newer), true).expect("write newer cache");
+    cache::record_dismissed_version(&newer).expect("record dismissal");
+    assert_eq!(updater.offered_update_version().expect("dismissed cache"), None);
+
+    // A pin disables offers entirely, so no version may be pinned into an
+    // install either.
+    let mut pinned = updater;
+    pinned.config.set_pin(newer, None, false);
+    assert_eq!(pinned.offered_update_version().expect("pinned cache"), None);
+
+    cache::set_cache_dir_override_for_tests(previous);
+}
+
+#[test]
 fn explicit_check_records_the_fetched_release_into_the_cache() {
     use tempfile::TempDir;
 
