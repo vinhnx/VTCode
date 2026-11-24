@@ -23,6 +23,17 @@ is already adequate; flipping the default would re-render existing transcripts),
 baseline for the deterministic restore tests). Every release-note API below was confirmed against the 0.10.0 sources
 before adoption; the vendored patch carries seven deltas (see `patches/gpui-component/PATCH.md`).
 
+Base motion reviewed 2026-11-24 against the
+[GPUI Kit motion guide](https://gpui-kit.com/base/motion/) (site v0.11.0; claims re-verified against pinned
+`gpui-base 0.10.0` and `gpui-fast 0.1.17`). Keyed reduced-motion-aware animations, absolute-time sampling and
+frame scheduling are already supplied by `with_animation`, and the OS/app preference stays in
+`desktop/preferences.rs`. Adopted from the interruption/reversal guidance: `view/motion.rs` is now the single
+timing/animation builder for mount and navigation fades, and `NavigationMotion` resumes a retarget from the last
+sampled opacity with a proportionally shortened duration instead of flashing to transparent — keyed on the sampled
+value, not the clock, since a shortened reveal settles before its base duration and the Workspace route resets the
+clock without painting a fade. `transition`/`spring`/`Keyframes`/`Presence`/`Sequence`/`Stagger`/`MotionReveal` remain
+SKIPPED: no desktop consumer needs them and the recorded reduced-motion preference decision stands.
+
 The supplied VT Code concept guides the design: quiet navigation,
 conversation-first hierarchy, recessed inspector surfaces, compact native actions,
 and a branded composer. Reuse behavior without replacing the existing runtime,
