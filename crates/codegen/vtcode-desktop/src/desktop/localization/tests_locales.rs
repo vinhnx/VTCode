@@ -53,6 +53,67 @@ fn locale_files_stay_slim_versioned_and_grouped() {
     assert!(files > 1, "locales must stay split, one file per namespace");
 }
 
+/// Yield the contents of each double-quoted value on a line, honouring `\"`.
+/// `split('"')` breaks inside escaped quotes and skips part of values such as
+/// `"No shortcuts match \"%{query}\"."`, hiding copy from the checks below.
+fn quoted_values(line: &str) -> impl Iterator<Item = &str> {
+    let mut rest = line;
+    std::iter::from_fn(move || {
+        let open = rest.find('"')?;
+        let after_open = rest.get(open + 1..).expect("ASCII quote ends on a char boundary");
+        let mut escaped = false;
+        for (ix, ch) in after_open.char_indices() {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                let value = after_open.get(..ix).expect("char_indices yields char boundaries");
+                rest = after_open.get(ix + 1..).expect("ASCII quote ends on a char boundary");
+                return Some(value);
+            }
+        }
+        rest = "";
+        None
+    })
+}
+
+/// UI copy uses one ellipsis character (U+2026), never three ASCII periods.
+/// Three periods render as a cramped run and silently disagree with every
+/// other translation of the same key.
+#[test]
+fn locale_values_use_a_single_ellipsis_character() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("locales");
+    let mut entries = std::fs::read_dir(&dir)
+        .expect("locales dir exists")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("locales dir is readable");
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("yml") {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let content = std::fs::read_to_string(&path).expect("locale file is readable");
+        for (line_ix, line) in content.lines().enumerate() {
+            for value in quoted_values(line) {
+                assert!(!value.contains("..."), "{name}:{} uses three periods instead of `…`", line_ix + 1);
+            }
+        }
+    }
+}
+
+/// The guard must see copy inside escaped quotes, not just the fragments a
+/// naive `split('"')` would check (see `app.shortcuts.yml::no_match`).
+#[test]
+fn locale_ellipsis_scan_sees_text_inside_escaped_quotes() {
+    let line = r#"    no_match: {en: "No shortcuts match \"foo...\"."}"#;
+    let values: Vec<_> = quoted_values(line).collect();
+    assert_eq!(values, vec![r#"No shortcuts match \"foo...\"."#]);
+    assert!(values[0].contains("..."), "the scan must reach a run inside an escaped quote");
+}
+
 fn assert_not_trailing_space(name: &str, index: usize, line: &str, close: usize) {
     let trailing = line
         .get(..close)

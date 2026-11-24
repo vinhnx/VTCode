@@ -475,7 +475,7 @@ fn captured_output_text_selects_and_copies_from_a_drag(cx: &mut TestAppContext) 
     let (window, _) = cx.update(|cx| {
         gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| OutputSelectionFixture)).unwrap()
     });
-    let _ = cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         use gpui_kit::{InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, point, px};
 
         window.render_frame(cx);
@@ -520,7 +520,8 @@ fn captured_output_text_selects_and_copies_from_a_drag(cx: &mut TestAppContext) 
 
         window.render_frame(cx);
         assert_eq!(TextSelection::selected_text(window, cx), "alpha beta gamma");
-    });
+    })
+    .unwrap();
 }
 
 struct CappedCodeFixture {
