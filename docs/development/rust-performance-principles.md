@@ -591,6 +591,11 @@ traversals/s that is ~500M atomics/s — the lock bookkeeping, not the data, bec
   reads but doubles memory — only use it when the map fits twice in memory.
 - **Match the lock to the context.** `parking_lot` for short sync sections (no poisoning, no async
   yield); `tokio::sync` only in async code and never held across `.await` in a per-item loop.
+- **Poison policy for `std::sync::Mutex`.** Poisoning is advisory: panicking on every later `lock()`
+  turns one failure into a cascade. Use `vtcode_commons::sync::lock_or_recover` (single canonical
+  home) instead of `.lock().unwrap()` outside tests and instead of hand-rolling
+  `unwrap_or_else(|e| e.into_inner())`. Callers with a real mid-critical-section invariant should
+  model poison explicitly; if poisoning is not needed at all, use `parking_lot::Mutex`.
 
 ## Per-Unit Cost of Expensive Work
 

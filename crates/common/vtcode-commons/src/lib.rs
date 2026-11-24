@@ -78,6 +78,7 @@ pub mod slug;
 pub mod startup_trace;
 pub mod stop_hints;
 pub mod styling;
+pub mod sync;
 pub mod task_guard;
 pub mod telemetry;
 pub mod terminal_capabilities;

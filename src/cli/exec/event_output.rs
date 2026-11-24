@@ -8,7 +8,6 @@ use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard};
 use vtcode_commons::sanitizer::sanitize_terminal_text;
 use vtcode_core::core::agent::task::TaskResults;
 use vtcode_core::exec::events::{CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus};
@@ -459,13 +458,6 @@ pub(super) fn open_events_writer(path: &Path) -> Result<BufWriter<File>> {
 
     let file = File::create(path).with_context(|| format!("Failed to write exec events: {}", path.display()))?;
     Ok(BufWriter::new(file))
-}
-
-pub(super) fn lock_or_recover<T>(mutex: &Arc<Mutex<T>>) -> MutexGuard<'_, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    }
 }
 
 pub(super) fn exec_archive_transcript(messages: &[vtcode_core::llm::provider::Message]) -> Vec<String> {

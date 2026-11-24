@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::task::spawn_blocking;
+use vtcode_commons::sync::lock_or_recover;
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::events::SessionStoreSink;
@@ -22,7 +23,7 @@ use vtcode_core::review::ReviewTarget;
 use vtcode_core::utils::file_utils::write_file_with_context;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
-use super::event_output::{ExecEventProcessor, exec_archive_transcript, lock_or_recover, open_events_writer};
+use super::event_output::{ExecEventProcessor, exec_archive_transcript, open_events_writer};
 use super::{ExecCommandKind, ExecCommandOptions, prep};
 use crate::codex_app_server::{
     CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget, run_codex_noninteractive_with_instructions,

@@ -1,4 +1,5 @@
 use super::*;
+use vtcode_commons::sync::lock_or_recover;
 
 pub(super) type CachedManager = Arc<ConfigManager>;
 
@@ -21,16 +22,14 @@ static WORKSPACE_CACHE: Mutex<Option<HashMap<PathBuf, CachedManager>>> = Mutex::
 
 #[cfg(not(test))]
 pub(super) fn with_cache_mut(f: impl FnOnce(&mut HashMap<PathBuf, CachedManager>)) {
-    let mut guard = WORKSPACE_CACHE.lock().expect("config cache lock poisoned");
+    let mut guard = lock_or_recover(&WORKSPACE_CACHE);
     guard.get_or_insert_with(HashMap::new);
     f(guard.as_mut().expect("cache initialized"))
 }
 
 #[cfg(not(test))]
 pub(super) fn cache_get(workspace: &Path) -> Option<CachedManager> {
-    WORKSPACE_CACHE
-        .lock()
-        .expect("config cache lock poisoned")
+    lock_or_recover(&WORKSPACE_CACHE)
         .as_ref()
         .and_then(|map| map.get(workspace).cloned())
 }
