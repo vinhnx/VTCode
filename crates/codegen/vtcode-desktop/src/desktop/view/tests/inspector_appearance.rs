@@ -682,6 +682,46 @@ fn settings_escape_restores_the_previous_focus(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn welcome_signature_is_one_compact_row_on_the_composer_spine(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.workspace = Some(PathBuf::from("/projects/vtcode"));
+            view.welcome_period = WelcomePeriod::Afternoon;
+        });
+        window.render_frame(cx);
+
+        let signature = window.find("welcome-signature").bounds();
+        let mark = window.find("welcome-brand-mark").bounds();
+        let divider = window.find("welcome-signature-divider").bounds();
+        let heading = window.find("welcome-prompt").bounds();
+        let workspace = window.find("welcome-workspace").bounds();
+        let composer = window.find("message-composer-frame").bounds();
+
+        // One row: V, hairline, greeting share a single center line, in that
+        // reading order — not merely overlapping vertical ranges.
+        assert!((mark.center().y - divider.center().y).abs() <= px(1.));
+        assert!((mark.center().y - heading.center().y).abs() <= px(1.));
+        assert!(mark.right() <= divider.left() && divider.right() <= heading.left());
+        assert_eq!(divider.size.width, px(1.), "the signature separator is a 1px hairline");
+        assert!(
+            mark.left() >= composer.left() && heading.right() <= composer.right(),
+            "the signature stays inside the composer column: mark={mark:?} heading={heading:?} composer={composer:?}"
+        );
+        assert_eq!(signature.origin.x, mark.origin.x);
+
+        // The workspace context and composer keep their original placement
+        // below the signature; the compact row does not move the draft.
+        assert!(workspace.top() >= heading.bottom());
+        assert!(composer.top() >= workspace.bottom());
+        assert_eq!(window.find("welcome-prompt").label(), Some("Good afternoon!"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn welcome_keeps_a_long_workspace_name_action_within_the_composer_column(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
     let workspace_name = "A workspace with a deliberately long name for responsive welcome typography".repeat(3);

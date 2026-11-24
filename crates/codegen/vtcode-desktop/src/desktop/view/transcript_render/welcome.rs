@@ -32,35 +32,50 @@ impl DesktopView {
             })
         };
 
-        // Prelude: the bare brand V, then one generous step to the greeting at
-        // the page-title tier. The mark owns the measured id so it keeps one
-        // leading spine with the greeting and the composer below in both normal
-        // and Zen modes.
-        let mark_size = gpui_kit::rems(1.5).to_pixels(window.rem_size()).as_f32();
-        let prelude = div()
+        // Compact signature: the brand V, a quiet hairline, and the greeting
+        // share one row on the composer's leading spine. The mark owns the
+        // measured id so the row still starts exactly where the draft below
+        // starts in both normal and Zen modes; the workspace context keeps its
+        // own row underneath so validation cannot shift the heading.
+        let mark_size = gpui_kit::rems(1.25).to_pixels(window.rem_size()).as_f32();
+        let signature = div()
+            .id("welcome-signature")
+            .test_support()
+            .w_full()
+            .min_w_0()
             .flex()
-            .flex_col()
-            .items_start()
+            .items_center()
             .gap_3()
-            .pb_6()
-            .child(div().id("welcome-brand-mark").test_support().child(brand_mark(
+            .child(div().id("welcome-brand-mark").test_support().flex_shrink_0().child(brand_mark(
                 "welcome-brand-glyph",
                 mark_size,
                 colors.primary,
             )))
             .child(
                 div()
+                    .id("welcome-signature-divider")
+                    .test_support()
+                    .w(px(1.))
+                    .h(px(mark_size))
+                    .flex_shrink_0()
+                    .bg(themes::soft_edge_color(&colors)),
+            )
+            .child(
+                div()
                     .id(title_id)
                     .test_support()
                     .role(gpui_kit::Role::Heading)
                     .aria_label(title.clone())
-                    .w_full()
-                    .text_2xl()
+                    .min_w_0()
+                    .truncate()
+                    .text_xl()
                     .font_semibold()
                     .text_color(colors.foreground)
                     .child(title),
-            )
-            .when(workspace_context.is_some() || self.workspace_selection_pending, |prelude| {
+            );
+        let prelude = div().flex().flex_col().items_start().gap_3().pb_6().child(signature).when(
+            workspace_context.is_some() || self.workspace_selection_pending,
+            |prelude| {
                 // Keep the heading steady as folder validation gives way to
                 // initialization and then the workspace name.
                 prelude.child(
@@ -73,7 +88,8 @@ impl DesktopView {
                         .text_color(colors.muted_foreground)
                         .children(workspace_context),
                 )
-            });
+            },
+        );
 
         div()
             .id(group_id)

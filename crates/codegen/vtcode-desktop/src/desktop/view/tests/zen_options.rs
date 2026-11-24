@@ -495,10 +495,16 @@ fn welcome_greeting_stays_aligned_with_the_composer_when_toggling_zen(cx: &mut T
             let composer = window.find("message-composer-frame").bounds();
             let transcript = window.find("transcript-scroll").bounds();
             let mark = window.find("welcome-brand-mark").bounds();
+            let divider = window.find("welcome-signature-divider").bounds();
             assert_eq!(title.label(), Some("Good evening!"));
-            assert!((title.bounds().left() - composer.left()).abs() <= px(1.));
+            // One compact signature row: the mark starts on the composer
+            // spine, the hairline follows it, and the greeting follows the
+            // hairline with all three sharing the same row center.
             assert!((mark.left() - composer.left()).abs() <= px(1.));
-            assert!(mark.bottom() <= title.bounds().top());
+            assert_eq!(divider.size.width, px(1.));
+            assert!(mark.right() <= divider.left() && divider.right() <= title.bounds().left());
+            assert!((mark.center().y - divider.center().y).abs() <= px(1.));
+            assert!((mark.center().y - title.bounds().center().y).abs() <= px(1.));
             assert!(title.bounds().top() > transcript.center().y);
             assert!(title.bounds().bottom() < composer.top());
         }
