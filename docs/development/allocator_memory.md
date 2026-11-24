@@ -33,6 +33,28 @@ cargo run --release --bin vtcode --features allocator-jemalloc -- bench-allocato
 - **macOS (dev):** keep the `mimalloc` default — it is lower-latency, and jemalloc's `background_thread` is unsupported
   on this platform (it prints `background_thread currently supports pthread only` and pins like mimalloc).
 
+## Memory-bounding caveats
+
+Lessons from [Memory-bounded systems and backpressure in Rust](https://totodore.github.io/memory-backpressure/)
+(2026-11-22), mapped to this codebase:
+
+- **THP.** On Linux hosts with transparent hugepages set to `always`, small allocations get promoted to 2 MiB pages
+  that jemalloc does not report as resident: RSS climbs and never falls after a burst, and no allocator metric
+  correlates. The jemalloc build therefore exports `thp:never` in its `malloc_conf` (Linux only — jemalloc rejects the
+  option where `MADV_HUGEPAGE`/`memcntl` are unavailable). `MALLOC_CONF` still overrides the compiled-in string.
+- **What is counted.** VT Code builds jemalloc with prefixed symbols, so allocations from C dependencies (e.g. bundled
+  SQLite when the optional `sqlite` feature is on) bypass jemalloc. Enabling
+  `unprefixed_malloc_on_supported_platforms` would cover them, but it also interposes unprefixed `malloc` for the whole
+  process and changes the exported config symbol name, so it is not enabled here. Revisit if memory accounting starts
+  driving admission decisions.
+- **Arenas.** jemalloc sizes its arena pool from CPU affinity, not cgroup quota: a 64-core host with a 1-CPU limit can
+  create 256 arenas. Check `narenas` before attributing container memory overhead to the workload; tune via
+  `MALLOC_CONF` only with benchmark data (fewer arenas mean more lock contention).
+- **RSS is a lagging, lossy signal.** Freed memory lingers in dirty pages and only a fresh sample sees new peaks, so
+  any reactive limiter needs a margin and a concurrency cap behind it; it is not a hard bound. VT Code's count-based
+  concurrency limits are that backstop. Pressure classification lives in `vtcode-core::memory`, and peak sampling
+  happens in `vtcode-commons::memory` (`spawn_blocking` in `bench-allocator` — never on a Tokio worker).
+
 ## Allocation throughput trade-off (measured)
 
 `jemalloc` trades allocation speed for better memory behavior. Measured on macOS

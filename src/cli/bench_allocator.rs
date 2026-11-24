@@ -9,12 +9,13 @@
 //! pinned near peak (mimalloc/glibc).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Result;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
-use vtcode_commons::memory::{sample_peak_rss_mb, sample_rss_mb};
+use vtcode_commons::memory::{sample_peak_rss_mb_while, sample_rss_mb};
 
 use vtcode_core::cli::args::BenchAllocatorArgs;
 
@@ -90,11 +91,26 @@ pub async fn handle_bench_allocator_command(args: BenchAllocatorArgs) -> Result<
     println!("------+-------------+---------------+--------------+------------------------");
 
     for b in 1..=bursts {
-        // Sample peak RSS concurrently while the burst runs.
-        let poll_handle =
-            tokio::spawn(async move { sample_peak_rss_mb(Duration::from_secs(60), Duration::from_millis(25)) });
-        run_burst(concurrency, tokens_per_task, payload_bytes).await?;
-        let peak = poll_handle.await?;
+        // Sample peak RSS concurrently while the burst runs. The sampler is
+        // blocking (syscall + sleep), so it belongs on a blocking thread: running
+        // it inside `tokio::spawn` parks a worker for the whole burst and skews
+        // both the workload and the peak it measures. The stop flag releases it
+        // as soon as the burst ends instead of waiting out the 60 s safety cap.
+        let stop = Arc::new(AtomicBool::new(false));
+        let sampler_stop = Arc::clone(&stop);
+        let poll_handle = tokio::task::spawn_blocking(move || {
+            sample_peak_rss_mb_while(Duration::from_secs(60), Duration::from_millis(25), || {
+                !sampler_stop.load(Ordering::Relaxed)
+            })
+        });
+        let burst_result = run_burst(concurrency, tokens_per_task, payload_bytes).await;
+        // Always release and join the sampler, even when the burst failed, and
+        // fold in a guaranteed post-burst sample: a burst shorter than the poll
+        // interval (or a sampler that had not started yet) could otherwise
+        // report a 0.0 MB peak instead of the real RSS.
+        stop.store(true, Ordering::Relaxed);
+        let peak = poll_handle.await?.max(sample_rss_mb());
+        burst_result?;
         let post_burst = sample_rss_mb();
 
         // Let Tokio workers go idle between bursts — this is the condition that

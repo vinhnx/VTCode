@@ -78,14 +78,49 @@ pub fn sample_rss_mb() -> f64 {
 /// Sample RSS repeatedly, returning the maximum observed value in MB.
 /// Useful for capturing peak memory during a burst of activity.
 pub fn sample_peak_rss_mb(duration: Duration, poll_interval: Duration) -> f64 {
+    sample_peak_rss_mb_while(duration, poll_interval, || true)
+}
+
+/// Like [`sample_peak_rss_mb`], but stops early once `should_continue` returns
+/// `false`. The predicate is checked before each sample, so a caller measuring a
+/// burst can release the sampler as soon as the burst ends instead of waiting out
+/// a worst-case timeout. Intended for blocking threads (e.g. `spawn_blocking`):
+/// each poll is a syscall followed by `thread::sleep`, which must not run on a
+/// Tokio worker.
+pub fn sample_peak_rss_mb_while(
+    duration: Duration,
+    poll_interval: Duration,
+    mut should_continue: impl FnMut() -> bool,
+) -> f64 {
     let start = std::time::Instant::now();
-    let mut peak = 0.0;
-    while start.elapsed() < duration {
-        let v = sample_rss_mb();
-        if v > peak {
-            peak = v;
-        }
+    let mut peak: f64 = 0.0;
+    while should_continue() && start.elapsed() < duration {
+        peak = peak.max(sample_rss_mb());
         std::thread::sleep(poll_interval);
     }
     peak
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn peak_sampler_stops_before_first_sample_when_predicate_is_false() {
+        let peak = sample_peak_rss_mb_while(Duration::from_secs(60), Duration::from_millis(1), || false);
+        assert_eq!(peak, 0.0);
+    }
+
+    #[test]
+    fn peak_sampler_observes_every_iteration_until_predicate_flips() {
+        let mut polls = 0;
+        let peak = sample_peak_rss_mb_while(Duration::from_secs(60), Duration::from_millis(1), || {
+            polls += 1;
+            polls <= 3
+        });
+        // Asymmetric predicate: three `true` answers, then `false`; the loop must
+        // not take a fourth sample even though the duration has not elapsed.
+        assert_eq!(polls, 4);
+        assert!(peak >= 0.0);
+    }
 }
