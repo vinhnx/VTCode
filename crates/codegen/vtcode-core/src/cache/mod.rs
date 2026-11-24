@@ -413,7 +413,15 @@ where
         if !factor.is_finite() {
             return inner.ttl;
         }
-        inner.ttl = inner.base_ttl.mul_f64(factor.clamp(0.0, 1.0));
+        let factor = factor.clamp(0.0, 1.0);
+        // `Duration::mul_f64(1.0)` can panic for a near-`Duration::MAX` base
+        // because `u64::MAX as f64` rounds past the representable limit. Return
+        // the configured value directly so the restore contract is exact.
+        inner.ttl = if factor >= 1.0 {
+            inner.base_ttl
+        } else {
+            inner.base_ttl.mul_f64(factor)
+        };
         inner.ttl
     }
 
@@ -728,6 +736,13 @@ mod tests {
         // Out-of-range factors clamp to the documented [0, 1] interval.
         assert_eq!(cache.reduce_ttl(-1.0), Duration::ZERO);
         assert_eq!(cache.reduce_ttl(2.0), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn pressure_ttl_restore_never_panics_for_max_duration() {
+        let cache: UnifiedCache<TestKey, String> = UnifiedCache::new(1, Duration::MAX, EvictionPolicy::Lru);
+        assert_eq!(cache.reduce_ttl(0.5), Duration::from_secs(1 << 63));
+        assert_eq!(cache.reduce_ttl(1.0), Duration::MAX);
     }
 
     #[test]
