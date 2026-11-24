@@ -687,21 +687,21 @@ impl DesktopView {
         ] {
             let link = DeepLink::Route(route);
             let mut entry = command(label, PaletteAction::OpenDeepLink(Box::new(link.clone())));
-            entry.description = link.path();
+            entry.description = link.path().map(Into::into);
             entry.keywords = vec![link.path().unwrap_or_default(), "route".to_string()];
             destinations.push(entry);
         }
         for kind in PaletteLink::ALL {
             let link = DeepLink::Palette(kind);
             let mut entry = command(palette_link_label(kind), PaletteAction::OpenDeepLink(Box::new(link.clone())));
-            entry.description = link.path();
+            entry.description = link.path().map(Into::into);
             entry.keywords = vec![link.path().unwrap_or_default(), "palette".to_string()];
             destinations.push(entry);
         }
         let mut settings = Vec::new();
         for tab in settings::SettingsTab::ALL {
             let mut entry = command(tab.label(), PaletteAction::SelectSettingsTab(tab));
-            entry.description = DeepLink::SettingsTab(tab).path();
+            entry.description = DeepLink::SettingsTab(tab).path().map(Into::into);
             entry.keywords = tab.search_keywords().iter().map(|keyword| (*keyword).to_string()).collect();
             entry.keywords.push(DeepLink::SettingsTab(tab).path().unwrap_or_default());
             settings.push(entry);
@@ -710,14 +710,14 @@ impl DesktopView {
             rust_i18n::t!("app.configuration.page_title").to_string(),
             PaletteAction::OpenDeepLink(Box::new(DeepLink::ConfigPage)),
         );
-        config.description = DeepLink::ConfigPage.path();
+        config.description = DeepLink::ConfigPage.path().map(Into::into);
         config.keywords = vec!["config".to_string(), "configuration".to_string(), "cli".to_string()];
         settings.push(config);
         let mut commands = Vec::new();
         for shortcut in shortcuts::COMMANDS {
             let link = DeepLink::Command(shortcut.id);
             let mut entry = command(shortcut.label(), PaletteAction::OpenDeepLink(Box::new(link.clone())));
-            entry.description = Some(shortcut.description());
+            entry.description = Some(shortcut.description().into());
             entry.keywords = vec![shortcut.id.as_str().to_string(), link.path().unwrap_or_default()];
             let staged = shortcuts::staged_value(&self.preferences.shortcuts, &shortcut);
             if !staged.is_empty() {

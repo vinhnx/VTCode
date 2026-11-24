@@ -199,7 +199,8 @@ impl DesktopView {
                                 add = file.additions(),
                                 del = file.deletions()
                             )
-                            .to_string(),
+                            .to_string()
+                            .into(),
                         );
                         entry.keywords = vec!["working tree".into(), "changed file".into()];
                         entry

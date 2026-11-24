@@ -12,17 +12,23 @@ mod model_helpers;
 pub(super) use model_helpers::*;
 
 /// One executable entry in the command palette.
+///
+/// Displayed text is retained as `SharedString`: the palette re-renders on every
+/// query keystroke and passes labels into `'static` row closures, so cloning an
+/// entry must bump a refcount rather than copy message/config text per frame.
 #[derive(Debug)]
 pub(super) struct PaletteCommand {
-    pub(super) label: String,
-    pub(super) description: Option<String>,
+    pub(super) label: gpui_kit::SharedString,
+    pub(super) description: Option<gpui_kit::SharedString>,
     pub(super) keywords: Vec<String>,
     pub(super) shared_keywords: Vec<gpui_kit::SharedString>,
     pub(super) action: PaletteAction,
 }
 
 /// Immutable entries shared by the owning palette and its rendered callbacks.
-pub(super) type PaletteGroups = Vec<(String, Vec<Rc<PaletteCommand>>)>;
+/// Group labels are shared too — [`crate::desktop::view::palette_render`] clones
+/// the whole table on each render frame.
+pub(super) type PaletteGroups = Vec<(gpui_kit::SharedString, Vec<Rc<PaletteCommand>>)>;
 
 /// Conversation-search entries per group. Each entry clones full message text
 /// into its keywords, so the palette keeps the newest rows instead of cloning
@@ -35,10 +41,13 @@ pub(super) const MAX_CONVERSATION_SEARCH_ROWS: usize = 200;
 /// every open.
 pub(super) const MAX_FILE_ROWS: usize = 200;
 
+/// The one ingestion boundary for palette groups: builders keep owning plain
+/// `String`s, while the table retained by the view holds shared text so the
+/// render path never copies it.
 pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> PaletteGroups {
     groups
         .into_iter()
-        .map(|(label, entries)| (label, entries.into_iter().map(Rc::new).collect()))
+        .map(|(label, entries)| (label.into(), entries.into_iter().map(Rc::new).collect()))
         .collect()
 }
 
@@ -205,7 +214,7 @@ impl DesktopView {
                     settings::SettingsTab::Shortcuts.label(),
                     PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts),
                 );
-                entry.description = Some(rust_i18n::t!("app.shortcuts.group_label").to_string());
+                entry.description = Some(rust_i18n::t!("app.shortcuts.group_label").to_string().into());
                 entry.keywords = settings::SettingsTab::Shortcuts
                     .search_keywords()
                     .iter()
@@ -240,7 +249,7 @@ impl DesktopView {
             .map(|entry| {
                 let mut item =
                     command(format!("/{}", entry.name), PaletteAction::InsertDraft(format!("/{} ", entry.name)));
-                item.description = Some(entry.description.clone());
+                item.description = Some(entry.description.clone().into());
                 item.keywords = vec![entry.name.clone(), format!("/{}", entry.name)];
                 item
             })
@@ -874,7 +883,7 @@ impl DesktopView {
 
 pub(super) fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
     PaletteCommand {
-        label: label.into(),
+        label: label.into().into(),
         description: None,
         keywords: Vec::new(),
         shared_keywords: Vec::new(),
@@ -890,5 +899,53 @@ pub(super) fn permission_palette_mode(kind: PaletteKind, action: &PaletteAction)
     match action {
         PaletteAction::SelectSessionOptions(params) => params.permission_mode,
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The render path clones the whole group table on every frame to hand it
+    /// to `'static` row closures. A `String` field would copy these bytes each
+    /// time; `SharedString` must keep one backing allocation across clones.
+    #[test]
+    fn palette_group_clone_shares_display_text_without_copying_bytes() {
+        let mut entry = command(
+            "A retained palette label that is long enough to live on the heap".to_string(),
+            PaletteAction::ChooseWorkspace,
+        );
+        entry.description = Some(
+            "A retained palette description that is long enough to live on the heap"
+                .to_string()
+                .into(),
+        );
+        let groups = share_palette_commands(vec![(
+            "A retained group label that is long enough to live on the heap".to_string(),
+            vec![entry],
+        )]);
+        let cloned = groups.clone();
+
+        let (label, entries) = &groups[0];
+        let (cloned_label, cloned_entries) = &cloned[0];
+        assert_eq!(label.as_str(), cloned_label.as_str());
+        assert_eq!(
+            label.as_str().as_ptr(),
+            cloned_label.as_str().as_ptr(),
+            "group labels must share their backing text when the table is cloned"
+        );
+        assert_eq!(entries[0].label.as_str(), cloned_entries[0].label.as_str());
+        assert_eq!(
+            entries[0].label.as_str().as_ptr(),
+            cloned_entries[0].label.as_str().as_ptr(),
+            "entry labels must share their backing text when the table is cloned"
+        );
+        let description = entries[0].description.as_ref().expect("description retained");
+        let cloned_description = cloned_entries[0].description.as_ref().expect("description retained");
+        assert_eq!(
+            description.as_str().as_ptr(),
+            cloned_description.as_str().as_ptr(),
+            "entry descriptions must share their backing text when the table is cloned"
+        );
     }
 }

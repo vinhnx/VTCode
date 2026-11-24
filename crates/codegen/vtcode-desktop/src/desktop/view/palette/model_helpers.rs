@@ -45,7 +45,7 @@ pub(in crate::desktop::view) fn model_palette_command(model: &protocol::ModelInf
     if !current.is_empty() {
         details.push(current.trim_start_matches(display::MIDDOT).to_string());
     }
-    entry.description = Some(details.join(display::MIDDOT));
+    entry.description = Some(details.join(display::MIDDOT).into());
     entry.keywords = vec![model.provider.clone(), provider_label, model.id.clone()];
     entry
         .keywords

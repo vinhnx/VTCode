@@ -826,6 +826,7 @@ mod review_diff_mode;
 mod review_output;
 mod running_confirm;
 mod search_config;
+mod search_config_conversation;
 mod secret_store;
 mod service_navigation;
 mod session_link;

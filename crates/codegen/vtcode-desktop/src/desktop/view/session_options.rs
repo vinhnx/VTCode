@@ -123,7 +123,7 @@ impl DesktopView {
                     ..Default::default()
                 }),
             );
-            entry.description = Some(description);
+            entry.description = Some(description.into());
             entry
         })
         .collect();
@@ -184,7 +184,7 @@ impl DesktopView {
                         ..Default::default()
                     }),
                 );
-                entry.description = Some(mode.description.clone());
+                entry.description = Some(mode.description.clone().into());
                 entry
             })
             .collect();

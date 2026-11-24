@@ -392,9 +392,9 @@ impl DesktopView {
                 let enabled = self.palette_action_available(&entry.action, cx);
                 let id = palette_entry_element_id(&entry.action);
                 let shortcut = self.palette_action_keystroke(&entry.action);
-                let accessible_label = description
+                let accessible_label: gpui_kit::SharedString = description
                     .as_ref()
-                    .map(|details| format!("{label} · {details}"))
+                    .map(|details| format!("{label} · {details}").into())
                     .unwrap_or_else(|| label.clone());
                 let permission_icon = permission_palette_mode(self.palette_kind, &entry.action)
                     .map(|mode| composer_controls::permission_indicator(Some(mode), colors));
@@ -412,8 +412,8 @@ impl DesktopView {
                         .disabled(!enabled)
                         .label(label.clone())
                         .checked(selected)
-                        .keywords(entry.keywords.clone())
-                        .keywords(entry.shared_keywords.clone())
+                        .keywords(entry.keywords.iter())
+                        .keywords(entry.shared_keywords.iter())
                         .child(move |_, _| {
                             div()
                                 .id(id.clone())

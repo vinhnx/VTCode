@@ -39,7 +39,12 @@ fn model_palette_groups_show_labels_in_picker_order(cx: &mut TestAppContext) {
         window.render_frame(cx);
         view.update(cx, |view, cx| view.open_model_palette(window, cx));
 
-        let labels: Vec<String> = view.read(cx).palette_groups.iter().map(|(label, _)| label.clone()).collect();
+        let labels: Vec<String> = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .map(|(label, _)| label.to_string())
+            .collect();
         assert_eq!(labels, ["OpenAI", "Anthropic", "Hugging Face", "Ollama", "mycorp"]);
 
         let (description, keywords) = view

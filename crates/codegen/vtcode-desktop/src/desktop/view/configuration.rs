@@ -829,7 +829,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
             let joined = setting.options.join(", ");
             rust_i18n::t!("app.configuration.options_hint", options = joined.as_str()).to_string()
         };
-        entry.description = Some(format!("{summary}{origin}{action_hint} · {description}{default}{options}"));
+        entry.description = Some(format!("{summary}{origin}{action_hint} · {description}{default}{options}").into());
         entry.keywords = vec![setting.path.clone(), summary];
         entry.keywords.extend(setting.options.iter().cloned());
         if let Some(origin) = setting.origin.as_ref() {

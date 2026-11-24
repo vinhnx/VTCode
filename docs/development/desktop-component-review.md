@@ -158,6 +158,42 @@ one cosmetic gap is `view/updates.rs::changelog-highlights`, which tracks a `Scr
 scrollbar affordance to assert and no report that the scroll is undiscoverable. No production styling change
 followed from this review.
 
+Coding guides reviewed 2026-11-24 against the
+[Coding Guides](https://gpui-kit.com/docs/coding-guides/) page (site v0.11.0 prose,
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the supplied text is
+newer than the vendored `gpui-kit` skill copy, which was updated with the three
+new sections). Claims re-verified against pinned `gpui-kit 0.10.0` /
+`gpui-pre-util 0.3.12` `SharedString`. "Own persistent UI text with `SharedString`"
+and "make the common path inexpensive" found one real hot-path gap:
+`view/palette.rs` retained each entry's label/description and each group label as
+`String`, while `palette_render.rs::render_command_palette` clones the whole group
+table on every frame to feed `'static` Kit row closures — for conversation search
+that copies full message text per rendered row. APPLIED (single ingestion
+boundary, DRY): `PaletteCommand::{label, description}` and `PaletteGroups`' group
+labels are now `SharedString`, converted once in `share_palette_commands` and at
+the `command()` builder, so per-frame clones are refcount bumps. `accessible_label`
+became `SharedString` too, and the two per-row keyword `Vec` clones now pass
+`.iter()` into Kit's `keywords()` builder (which copies into its own state),
+removing two more allocations per row per frame. "Keep ownership links and subscriptions bounded" is
+ALREADY PRESENT: child→parent references are `WeakEntity`, subscriptions live in
+explicit owners, and all 12 `.detach()` calls are one-shot `Task`s (allowed) with
+no `Subscription::detach()`. "Bind keys before `set_menus`", stable domain IDs,
+rem-size-synced cached geometry, and controlled-value feedback rules are already
+recorded as applied above. SKIPPED with reason: converting
+`vtcode-desktop-protocol` response fields to `SharedString` would add a GPUI type
+to the published, GUI-agnostic wire crate; the desktop-only interaction/curated
+projections are individual short strings, not a measured hot path. Pinned by
+`view/palette.rs::palette_group_clone_shares_display_text_without_copying_bytes`
+(pointer identity across a group-table clone; fails with `String` fields) and the
+existing `model_palette`/`prompt_history`/`search_config_conversation` suites.
+Repairing the pre-existing 1003-line `search_config.rs` hard-ceiling violation
+split its 7 cohesive `conversation_search_*` tests into
+`view/tests/search_config_conversation.rs` (same `super::super::` depth because it
+is a sibling, not a child). Re-verify: `cargo fmt --all -- --check`,
+`RUSTFLAGS="-D warnings" cargo clippy --locked -p vtcode-desktop --bin vtcode-desktop --all-targets`,
+`cargo nextest run --locked -p vtcode-desktop` (1916/1916 passed, 1 skipped),
+`./scripts/check-dev.sh --changed` (all checks passed).
+
 The supplied VT Code concept guides the design: quiet navigation,
 conversation-first hierarchy, recessed inspector surfaces, compact native actions,
 and a branded composer. Reuse behavior without replacing the existing runtime,

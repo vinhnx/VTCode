@@ -358,7 +358,7 @@ impl DesktopView {
                         }
                     };
                     let mut entry = command(resource.name.clone(), PaletteAction::InsertDraft(text));
-                    entry.description = Some(resource.description.clone());
+                    entry.description = Some(resource.description.clone().into());
                     entry
                 })
                 .collect::<Vec<_>>();
@@ -385,7 +385,7 @@ impl DesktopView {
             .map(|entry| {
                 let mut command =
                     command(format!("/{}", entry.name), PaletteAction::CompleteSlashCommand(entry.name.clone()));
-                command.description = Some(entry.description.clone());
+                command.description = Some(entry.description.clone().into());
                 command.keywords = vec![entry.name.clone(), format!("/{}", entry.name)];
                 command
             })
@@ -435,7 +435,8 @@ impl DesktopView {
                         }
                         let mention = file_mention_token(&entry.rel_path)?;
                         let mut command = command(mention, PaletteAction::InsertFileMention(entry.rel_path.clone()));
-                        command.description = Some(rust_i18n::t!("app.palette.command.workspace_file").to_string());
+                        command.description =
+                            Some(rust_i18n::t!("app.palette.command.workspace_file").to_string().into());
                         Some(command)
                     })
                     .take(48)
@@ -461,7 +462,7 @@ impl DesktopView {
                             format!("/{}", entry.name),
                             PaletteAction::CompleteSlashCommand(entry.name.clone()),
                         );
-                        command.description = Some(entry.description.clone());
+                        command.description = Some(entry.description.clone().into());
                         command.keywords = vec![entry.name.clone(), format!("/{}", entry.name)];
                         command
                     })

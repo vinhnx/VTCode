@@ -184,7 +184,9 @@ fn selected_row(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Option<gpui_k
     view.read(cx).palette.as_ref().and_then(|state| state.read(cx).selected_index())
 }
 
-fn section_contents(groups: &[(String, Vec<std::rc::Rc<super::super::PaletteCommand>>)]) -> Vec<(String, Vec<String>)> {
+fn section_contents(
+    groups: &[(gpui_kit::SharedString, Vec<std::rc::Rc<super::super::PaletteCommand>>)],
+) -> Vec<(String, Vec<String>)> {
     groups
         .iter()
         .map(|(label, entries)| {
@@ -195,7 +197,7 @@ fn section_contents(groups: &[(String, Vec<std::rc::Rc<super::super::PaletteComm
                     _ => None,
                 })
                 .collect();
-            (label.clone(), prompts)
+            (label.to_string(), prompts)
         })
         .collect()
 }
@@ -684,7 +686,7 @@ fn history_rows_report_hidden_lines(cx: &mut TestAppContext) {
             .read(cx)
             .palette_groups
             .iter()
-            .flat_map(|(_, entries)| entries.iter().map(|entry| entry.label.clone()))
+            .flat_map(|(_, entries)| entries.iter().map(|entry| entry.label.to_string()))
             .collect();
         assert!(
             labels.iter().any(|label| label.contains("+2 lines")),
