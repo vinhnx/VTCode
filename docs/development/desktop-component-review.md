@@ -35,7 +35,8 @@ clock without painting a fade. `transition`/`spring`/`Keyframes`/`Presence`/`Seq
 SKIPPED: no desktop consumer needs them and the recorded reduced-motion preference decision stands.
 
 Animation reviewed 2026-11-24 against the
-[GPUI Kit animation guide](https://gpui-kit.com/docs/animation/) (site v0.11.0, CC BY 4.0; claims re-verified against pinned
+[GPUI Kit animation guide](https://gpui-kit.com/docs/animation/) (site v0.11.0,
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims re-verified against pinned
 `gpui-fast 0.1.17` `Animation`/`AnimationExt` and `gpui-base 0.10.0` `Easing`). The three-level choice (mounted
 one-shot → GPUI `Animation`, retargetable target → Base motion, styled control → `motion_tokens()`), one-shot ID and
 replay semantics, interruption/reversal, domain-derived channel ids, reduced-motion endpoints, and "a spinner needs a
@@ -43,8 +44,8 @@ static text cue" are ALREADY PRESENT in `view/motion.rs`, `NavigationMotion`, `s
 `components.rs::shimmer_label`, `preferences.rs`, and every spinner call site. `Presence`, `with_spring`,
 `with_animations` and `repeat_synced` stay SKIPPED: no consumer and the recorded decisions stand. APPLIED: both
 opacity wrappers (`FadeInExt`, `NavigationFadeExt`) now delegate to the single `motion::opacity_fade` builder, so the
-animation and its animator cannot drift; `shared_opacity_fade_is_a_finite_oneshot` pins its one-shot and 0..=1 easing
-contract.
+animation and its animator cannot drift; `fade_animation` clamps the eased value to 0..=1 because opacity is narrower
+than GPUI's easing output, and `shared_opacity_fade_is_a_finite_oneshot` pins that contract with an overshooting curve.
 
 Base plot reviewed 2026-11-24 against the
 [GPUI Kit plot guide](https://gpui-kit.com/base/plot/) (site v0.11.0; the pinned
