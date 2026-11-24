@@ -172,7 +172,7 @@ impl DesktopView {
                     // a native-quality translation for this control.
                     .child(
                         gpui_kit::component::switch::Switch::new("caret-blink")
-                            .label("Blink text cursor".to_string())
+                            .label("Blink composer caret".to_string())
                             .checked(props.caret_blink.blinks())
                             .cursor_pointer()
                             .on_click({

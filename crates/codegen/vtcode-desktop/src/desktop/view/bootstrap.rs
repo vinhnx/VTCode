@@ -216,6 +216,10 @@ impl DesktopView {
         let welcome_activation_subscription = cx.observe_window_activation(window, |view, window, cx| {
             if window.is_window_active() {
                 view.refresh_welcome_period(cx);
+            } else {
+                // Kit hides the caret for an inactive window; stop our fade
+                // frames too instead of repainting an invisible caret.
+                view.mark_caret_inactive(cx);
             }
         });
         focus_handle.focus(window, cx);
@@ -333,11 +337,13 @@ impl DesktopView {
             state.set_highlighter_factory(composer_highlight::prompt_highlighter_factory(styles), cx);
             state
         });
-        composer.read(cx).focus_handle(cx).focus(window, cx);
         let composer_subscription = cx.subscribe_in(&composer, window, |view, _, event, window, cx| {
             if matches!(event, InputEvent::Change | InputEvent::Focus) {
-                // Any edit or focus restarts the bounded caret-fade window.
-                view.mark_caret_active(cx);
+                // Programmatic writes emit Change too; only a focused caret
+                // can fade, so never restart the pulse for a blurred composer.
+                if view.composer.read(cx).focus_handle(cx).is_focused(window) {
+                    view.mark_caret_active(cx);
+                }
             } else if matches!(event, InputEvent::Blur) {
                 // No visible caret while blurred: drop the pulse and its frames.
                 view.mark_caret_inactive(cx);
@@ -350,6 +356,10 @@ impl DesktopView {
                 view.update_composer_suggestions(window, cx);
             }
         });
+        // Focus after the subscription is installed so the initial Focus event
+        // starts the pulse; with Blink as the default the caret should not stay
+        // solid until the first keystroke.
+        composer.read(cx).focus_handle(cx).focus(window, cx);
         let language = preferences.ui_language();
         let ui_language_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
@@ -787,6 +797,7 @@ impl DesktopView {
             preferences,
             caret_pulse_active: false,
             caret_pulse_generation: 0,
+            caret_pulse_task: None,
             login_item_status: None,
             system_motion_baseline,
             sidebar_open: false,

@@ -16,6 +16,7 @@ impl DesktopView {
         }
         self.caret_pulse_active = false;
         self.caret_pulse_generation = self.caret_pulse_generation.wrapping_add(1);
+        self.caret_pulse_task = None;
         true
     }
 
@@ -53,7 +54,8 @@ impl DesktopView {
         }
         // Continuous typing emits one event per keystroke. Only a transition
         // from idle to active needs a repaint; extending an open idle window
-        // just refreshes the timer, so avoid dirtying the whole DesktopView.
+        // just refreshes its single timer, so avoid dirtying the DesktopView
+        // and avoid accumulating a detached timer per keystroke.
         let was_active = self.caret_pulse_active;
         self.caret_pulse_active = true;
         let generation = self.caret_pulse_generation.wrapping_add(1);
@@ -61,7 +63,8 @@ impl DesktopView {
         if !was_active {
             cx.notify();
         }
-        cx.spawn(async move |view, cx| {
+        // Assigning drops the previous Task, which cancels its pending timer.
+        self.caret_pulse_task = Some(cx.spawn(async move |view, cx| {
             cx.background_executor().timer(preferences::CARET_IDLE_TIMEOUT).await;
             let _updated = view.update(cx, |view, cx| {
                 if view.caret_pulse_active && view.caret_pulse_generation == generation {
@@ -69,7 +72,6 @@ impl DesktopView {
                     cx.notify();
                 }
             });
-        })
-        .detach();
+        }));
     }
 }

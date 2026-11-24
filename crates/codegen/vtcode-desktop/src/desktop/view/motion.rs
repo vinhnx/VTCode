@@ -125,17 +125,20 @@ pub(super) fn fade_animation(theme: &Theme, fast: bool, returning: bool) -> Anim
 /// drops the animation element as soon as that window closes.
 const CARET_PULSE_CYCLE: Duration = Duration::from_millis(1200);
 const CARET_PULSE_FPS: f32 = 8.0;
-const CARET_PULSE_MIN_OPACITY: f32 = 0.25;
+/// Absolute floor; the effective minimum is theme-derived so the caret keeps
+/// its 3:1 focus contrast (see `themes::caret_fade_min_opacity`).
+const CARET_PULSE_FLOOR: f32 = 0.25;
 
 pub(super) fn caret_pulse_animation() -> Animation {
     Animation::new(CARET_PULSE_CYCLE).repeat().with_max_fps(CARET_PULSE_FPS)
 }
 
 /// Fully opaque at phase 0 (also the static reduced-motion value), dipping to
-/// `CARET_PULSE_MIN_OPACITY` at the midpoint and returning to full opacity.
-pub(super) fn caret_pulse_opacity(delta: f32) -> f32 {
+/// `min_opacity` at the midpoint and returning to full opacity.
+pub(super) fn caret_pulse_opacity(delta: f32, min_opacity: f32) -> f32 {
+    let min = min_opacity.clamp(CARET_PULSE_FLOOR, 1.0);
     let wave = (1.0 + (std::f32::consts::TAU * delta).cos()) * 0.5;
-    CARET_PULSE_MIN_OPACITY + (1.0 - CARET_PULSE_MIN_OPACITY) * wave
+    min + (1.0 - min) * wave
 }
 
 /// A reveal that resumes partway covers less distance, so it finishes sooner
@@ -193,12 +196,16 @@ mod tests {
         assert_eq!(animation.duration, CARET_PULSE_CYCLE);
 
         // Phase 0 is also the value GPUI supplies under reduced motion.
-        assert_eq!(caret_pulse_opacity(0.0), 1.0);
-        assert_eq!(caret_pulse_opacity(1.0), 1.0);
-        assert!((caret_pulse_opacity(0.5) - CARET_PULSE_MIN_OPACITY).abs() < 1e-6);
+        assert_eq!(caret_pulse_opacity(0.0, 0.6), 1.0);
+        assert_eq!(caret_pulse_opacity(1.0, 0.6), 1.0);
+        assert!((caret_pulse_opacity(0.5, 0.6) - 0.6).abs() < 1e-6);
+        // A theme that cannot afford any fade stays solid; an out-of-range
+        // minimum never pushes the caret below the absolute floor.
+        assert_eq!(caret_pulse_opacity(0.5, 1.0), 1.0);
+        assert!((caret_pulse_opacity(0.5, 0.0) - CARET_PULSE_FLOOR).abs() < 1e-6);
         for step in 0..=20 {
-            let opacity = caret_pulse_opacity(step as f32 / 20.0);
-            assert!((CARET_PULSE_MIN_OPACITY..=1.0).contains(&opacity));
+            let opacity = caret_pulse_opacity(step as f32 / 20.0, 0.4);
+            assert!((0.4..=1.0).contains(&opacity));
         }
     }
 

@@ -938,6 +938,9 @@ struct DesktopView {
     /// Whether the composer's bounded caret pulse is inside its idle window.
     caret_pulse_active: bool,
     caret_pulse_generation: u64,
+    /// The single idle timer; replacing it drops (cancels) the previous one, so
+    /// continuous typing never accumulates detached timers.
+    caret_pulse_task: Option<Task<()>>,
     /// Cached login-item status. None means the launch query can still apply.
     login_item_status: Option<login_items::LoginItemStatus>,
     system_motion_baseline: bool,

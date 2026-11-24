@@ -386,6 +386,37 @@ fn caret_follows_theme_accent_with_foreground_fallback(cx: &mut gpui_kit::TestAp
 }
 
 #[gpui_kit::test]
+fn caret_fade_keeps_the_focus_contrast_floor_on_every_theme(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut any_theme_fades = false;
+        for palette in all_themes() {
+            let _mode = apply_by_id(palette.id, None, cx);
+            let colors = cx.theme().colors;
+            let min = caret_fade_min_opacity(&colors);
+            any_theme_fades |= min < 1.0;
+            let caret = gpui_kit::Rgba::from(colors.caret);
+            for (name, surface) in [
+                ("canvas", colors.background),
+                ("panel", colors.secondary),
+                ("popover", colors.popover),
+            ] {
+                let surface_rgb = gpui_kit::Rgba::from(surface);
+                let blended = Hsla::from(gpui_kit::Rgba {
+                    r: caret.r * min + surface_rgb.r * (1.0 - min),
+                    g: caret.g * min + surface_rgb.g * (1.0 - min),
+                    b: caret.b * min + surface_rgb.b * (1.0 - min),
+                    a: 1.0,
+                });
+                let ratio = contrast_ratio(blended, surface);
+                assert!(ratio >= 3.0, "{}: faded caret on {name} is {ratio:.2} at alpha {min:.2}", palette.id);
+            }
+        }
+        assert!(any_theme_fades, "the fade must be available on at least one theme");
+    });
+}
+
+#[gpui_kit::test]
 fn caret_falls_back_to_foreground_for_unreadable_accents(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
