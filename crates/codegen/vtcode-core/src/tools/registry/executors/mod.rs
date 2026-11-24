@@ -406,7 +406,8 @@ impl ToolRegistry {
             Some(&prepared_command.shell_script),
             &sandbox_request.working_dir_path,
             sandbox_plan.sandbox_policy,
-        )?;
+        )
+        .await?;
 
         let rows = match backend {
             ExecRunBackendKind::Pty => {

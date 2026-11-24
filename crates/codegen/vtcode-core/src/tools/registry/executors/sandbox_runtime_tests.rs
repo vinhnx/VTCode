@@ -179,8 +179,8 @@ fn recursive_rm_after_shell_or_wrapper_directory_change_requests_approval() {
     }
 }
 
-#[test]
-fn inline_interpreter_code_runs_under_restrictive_sandbox_without_prompt() {
+#[tokio::test]
+async fn inline_interpreter_code_runs_under_restrictive_sandbox_without_prompt() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,
@@ -203,8 +203,8 @@ fn inline_interpreter_code_runs_under_restrictive_sandbox_without_prompt() {
     assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
 }
 
-#[test]
-fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
+#[tokio::test]
+async fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
     for config in [
         vtcode_config::SandboxConfig { enabled: false, ..Default::default() },
         vtcode_config::SandboxConfig {
@@ -234,17 +234,18 @@ fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
     }
 }
 
-#[test]
-fn preflight_blocks_network_commands_when_network_disabled() {
+#[tokio::test]
+async fn preflight_blocks_network_commands_when_network_disabled() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
     let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
+        .await
         .expect_err("network command should be denied");
     assert!(error.to_string().contains("denies network"));
 }
 
-#[test]
-fn workspace_write_allow_all_network_is_not_blocked() {
+#[tokio::test]
+async fn workspace_write_allow_all_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::WorkspaceWrite,
@@ -257,11 +258,12 @@ fn workspace_write_allow_all_network_is_not_blocked() {
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
     enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
+        .await
         .expect("allow_all network should permit network commands");
 }
 
-#[test]
-fn read_only_allow_all_network_is_not_blocked() {
+#[tokio::test]
+async fn read_only_allow_all_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,
@@ -274,11 +276,12 @@ fn read_only_allow_all_network_is_not_blocked() {
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
     enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
+        .await
         .expect("read-only allow_all network should permit network commands");
 }
 
-#[test]
-fn read_only_allowlist_network_is_not_blocked() {
+#[tokio::test]
+async fn read_only_allowlist_network_is_not_blocked() {
     let mut config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::ReadOnly,
@@ -294,32 +297,35 @@ fn read_only_allowlist_network_is_not_blocked() {
 
     let command = vec!["curl".to_string(), "https://api.github.com".to_string()];
     enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
+        .await
         .expect("read-only allowlist network should permit network commands");
 }
 
-#[test]
-fn preflight_blocks_sensitive_path_arguments() {
+#[tokio::test]
+async fn preflight_blocks_sensitive_path_arguments() {
     let policy = SandboxPolicy::workspace_write_with_sensitive_paths(
         vec![PathBuf::from("/tmp/ws")],
         vec![SensitivePath::new("/tmp/blocked")],
     );
     let command = vec!["cat".to_string(), "/tmp/blocked/secret.txt".to_string()];
     let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from(".").as_path())
+        .await
         .expect_err("sensitive path should be denied");
     assert!(error.to_string().contains("sensitive path"));
 }
 
-#[test]
-fn preflight_blocks_writes_to_protected_workspace_metadata() {
+#[tokio::test]
+async fn preflight_blocks_writes_to_protected_workspace_metadata() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["touch".to_string(), "/tmp/ws/.vtcode/session.json".to_string()];
     let error = enforce_sandbox_preflight_guards(&command, None, &policy, PathBuf::from("/tmp/ws").as_path())
+        .await
         .expect_err("protected workspace metadata should be denied");
     assert!(error.to_string().contains("blocked for writes"));
 }
 
-#[test]
-fn preflight_blocks_redirection_writes_to_editor_and_git_config() {
+#[tokio::test]
+async fn preflight_blocks_redirection_writes_to_editor_and_git_config() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["bash".to_string(), "-lc".to_string()];
 
@@ -342,13 +348,14 @@ fn preflight_blocks_redirection_writes_to_editor_and_git_config() {
     ] {
         let error =
             enforce_sandbox_preflight_guards(&command, Some(script), &policy, PathBuf::from("/tmp/ws").as_path())
+                .await
                 .expect_err("redirection to protected config must be denied");
         assert!(error.to_string().contains("redirects output"), "unexpected error for {script}: {error}");
     }
 }
 
-#[test]
-fn preflight_allows_benign_redirections() {
+#[tokio::test]
+async fn preflight_allows_benign_redirections() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec!["bash".to_string(), "-lc".to_string()];
     let cwd = PathBuf::from("/tmp/ws");
@@ -361,12 +368,13 @@ fn preflight_allows_benign_redirections() {
         "cat < .git/config",
     ] {
         enforce_sandbox_preflight_guards(&command, Some(script), &policy, cwd.as_path())
+            .await
             .unwrap_or_else(|error| panic!("benign redirection must be allowed: {script}: {error}"));
     }
 }
 
-#[test]
-fn preflight_blocks_bare_relative_writes_to_protected_config() {
+#[tokio::test]
+async fn preflight_blocks_bare_relative_writes_to_protected_config() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let cwd = PathBuf::from("/tmp/ws");
 
@@ -377,6 +385,7 @@ fn preflight_blocks_bare_relative_writes_to_protected_config() {
     ] {
         let command: Vec<String> = argv.iter().map(|arg| (*arg).to_string()).collect();
         let error = enforce_sandbox_preflight_guards(&command, None, &policy, cwd.as_path())
+            .await
             .expect_err("bare relative write to protected config must be denied");
         assert!(error.to_string().contains("blocked for writes"), "{argv:?}: {error}");
     }
@@ -384,12 +393,61 @@ fn preflight_blocks_bare_relative_writes_to_protected_config() {
     for argv in [vec!["touch", "src/new.rs"], vec!["tee", "build.log"]] {
         let command: Vec<String> = argv.iter().map(|arg| (*arg).to_string()).collect();
         enforce_sandbox_preflight_guards(&command, None, &policy, cwd.as_path())
+            .await
             .unwrap_or_else(|error| panic!("benign write must be allowed: {argv:?}: {error}"));
     }
 }
 
-#[test]
-fn redirection_guard_runs_in_the_runtime_transform() {
+#[cfg(unix)]
+fn workspace_with_symlink(link_name: &str, target_name: &str) -> tempfile::TempDir {
+    let temp = tempfile::tempdir().expect("workspace");
+    let root = temp.path();
+    std::fs::create_dir_all(root.join(target_name)).expect("symlink target dir");
+    std::os::unix::fs::symlink(root.join(target_name), root.join(link_name)).expect("symlink");
+    temp
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn preflight_blocks_symlink_to_protected_dir_via_redirection_and_argv() {
+    let temp = workspace_with_symlink("link", ".git");
+    let workspace = temp.path();
+    let policy = SandboxPolicy::workspace_write(vec![workspace.to_path_buf()]);
+    let shell = vec!["bash".to_string(), "-lc".to_string()];
+
+    for script in ["cat > link/config", "sh -c 'cat > link/config'"] {
+        let error = enforce_sandbox_preflight_guards(&shell, Some(script), &policy, workspace)
+            .await
+            .expect_err("redirection through symlink to .git must be denied");
+        assert!(error.to_string().contains("redirects output"), "{script}: {error}");
+    }
+
+    let command = vec!["touch".to_string(), "link/config".to_string()];
+    let error = enforce_sandbox_preflight_guards(&command, None, &policy, workspace)
+        .await
+        .expect_err("bare argv write through symlink to .git must be denied");
+    assert!(error.to_string().contains("blocked for writes"), "{error}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn preflight_allows_symlink_to_unprotected_dir() {
+    let temp = workspace_with_symlink("link", "src");
+    let workspace = temp.path();
+    let policy = SandboxPolicy::workspace_write(vec![workspace.to_path_buf()]);
+    let shell = vec!["bash".to_string(), "-lc".to_string()];
+
+    enforce_sandbox_preflight_guards(&shell, Some("cat > link/new.rs"), &policy, workspace)
+        .await
+        .expect("benign symlinked redirection must be allowed");
+    let command = vec!["touch".to_string(), "link/new.rs".to_string()];
+    enforce_sandbox_preflight_guards(&command, None, &policy, workspace)
+        .await
+        .expect("benign symlinked argv write must be allowed");
+}
+
+#[tokio::test]
+async fn redirection_guard_runs_in_the_runtime_transform() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
     let command = vec![
         "bash".to_string(),
@@ -403,12 +461,13 @@ fn redirection_guard_runs_in_the_runtime_transform() {
         PathBuf::from("/tmp/ws").as_path(),
         Some(policy),
     )
+    .await
     .expect_err("runtime transform must apply the redirection guard");
     assert!(error.to_string().contains("redirects output"));
 }
 
-#[test]
-fn external_mode_is_rejected_for_local_pty_execution() {
+#[tokio::test]
+async fn external_mode_is_rejected_for_local_pty_execution() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::External,
@@ -429,6 +488,7 @@ fn external_mode_is_rejected_for_local_pty_execution() {
     .expect("sandbox plan");
     let error =
         apply_runtime_sandbox_to_command(command, &requested, None, PathBuf::from(".").as_path(), plan.sandbox_policy)
+            .await
             .expect_err("external sandbox should not be allowed in local PTY flow");
     assert!(error.to_string().contains("not supported"));
 }
@@ -521,9 +581,9 @@ async fn with_additional_permissions_requires_non_empty_permissions() {
     assert!(err.to_string().contains("missing `additional_permissions`"));
 }
 
-#[test]
+#[tokio::test]
 #[serial_test::serial(linux_sandbox_executable)]
-fn with_additional_permissions_widens_read_only_for_write_roots() {
+async fn with_additional_permissions_widens_read_only_for_write_roots() {
     #[cfg(target_os = "linux")]
     let (_temp_dir, _sandbox_helper_guard) = {
         let temp_dir = tempfile::tempdir().expect("temp sandbox helper dir");
@@ -563,6 +623,7 @@ fn with_additional_permissions_widens_read_only_for_write_roots() {
         PathBuf::from("/tmp/ws").as_path(),
         plan.sandbox_policy,
     )
+    .await
     .expect("sandbox transform should succeed");
     let needle = extra_path.to_string_lossy().to_string();
 

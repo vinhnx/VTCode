@@ -1,7 +1,7 @@
 use super::*;
 
-#[test]
-fn require_escalated_bypasses_runtime_sandbox_enforcement() {
+#[tokio::test]
+async fn require_escalated_bypasses_runtime_sandbox_enforcement() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::External,
@@ -27,6 +27,7 @@ fn require_escalated_bypasses_runtime_sandbox_enforcement() {
         PathBuf::from(".").as_path(),
         plan.sandbox_policy,
     )
+    .await
     .expect("require_escalated should bypass sandbox transform");
     assert_eq!(out, command);
 }

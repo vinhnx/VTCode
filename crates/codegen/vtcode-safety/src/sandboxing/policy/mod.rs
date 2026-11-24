@@ -847,8 +847,11 @@ impl SandboxPolicy {
     }
 
     /// Get the list of writable roots including the current working directory.
+    ///
+    /// Consumers that re-check canonical (symlink-resolved) paths use this to
+    /// build a policy whose roots are in the same representation.
     #[must_use]
-    pub(crate) fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
+    pub fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
         match self {
             Self::ReadOnly { .. } => vec![],
             Self::WorkspaceWrite { writable_roots, .. } => {

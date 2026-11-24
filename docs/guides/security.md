@@ -118,9 +118,10 @@ relative write arguments against the same policy before launch (`cat > .git/hook
 guessed here. The preflight resolves nested `sh`/`bash`/`zsh -c` scripts and common runner prefixes (`env`, `sudo`,
 `command`) so a hidden interpreter cannot bypass the check.
 
-Residual Linux limitation: the preflight check is lexical, so a symlink inside the workspace pointing at a protected
-directory (`link -> .git`, then `cat > link/config`) can still reach the protected file; Seatbelt resolves the final
-path and denies it. Closing that on Linux needs symlink-aware, race-tolerant canonicalization in the preflight.
+Every candidate is also checked after symlink resolution (`link -> .git`, then `cat > link/config`), with the policy's
+writable roots canonicalized to the same representation so a symlinked workspace root does not cause false positives.
+This is a preflight check, not a kernel guarantee: a symlink swapped between the check and the command's `open` remains
+an inherent time-of-check/time-of-use gap. Seatbelt denies the resolved path at the kernel layer on macOS.
 
 Provider-owned subprocesses use the same inherited-environment filter. Local Ollama, LM Studio, and llama.cpp helpers,
 plus custom provider authentication commands, do not receive unrelated API keys, cloud credentials, tokens, linker
