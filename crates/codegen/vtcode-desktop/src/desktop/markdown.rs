@@ -407,6 +407,17 @@ pub(super) fn render_output_text(tail: &SharedString) -> AnyElement {
     div().child(tail.clone()).into_any_element()
 }
 
+/// Window-selectable output for the inspector body.
+///
+/// `SelectableText` registers one stable participant per render and projects
+/// the laid-out text back to UTF-8 byte ranges, so a drag selects and copies
+/// exactly the captured output on screen. The compact transcript excerpt
+/// keeps the plain renderer: its row already owns the click-to-expand gesture
+/// and a full-output copy button.
+pub(super) fn render_selectable_output_text(id: impl Into<gpui_kit::ElementId>, tail: &SharedString) -> AnyElement {
+    gpui_kit::base::SelectableText::new(id, tail.clone()).into_any_element()
+}
+
 fn harden_transcript_text_view(text_view: TextView) -> TextView {
     text_view
         // Shared by the Markdown and HTML transcript paths so conversation

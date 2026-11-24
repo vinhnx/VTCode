@@ -81,6 +81,7 @@ use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, Changes
 use super::markdown::{
     MarkdownViewHeight, has_viewable_plan_markdown, markdown_style, prepared_markdown, render_code_preview,
     render_markdown, render_markdown_view, render_markdown_with_style, render_output_text,
+    render_selectable_output_text,
 };
 use super::strings::{app, bundle, display, i18n, key, key_context, keys};
 use super::transcript::{

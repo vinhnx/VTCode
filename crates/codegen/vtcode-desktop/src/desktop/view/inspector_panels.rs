@@ -677,7 +677,7 @@ impl DesktopView {
                 .child(note)
                 .into_any_element()
         } else {
-            render_output_text(&shown_text)
+            render_selectable_output_text("output-body-text", &shown_text)
         };
         pane.child(
             div()

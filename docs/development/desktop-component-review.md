@@ -46,6 +46,26 @@ plot, its axes/grid/tooltip/interaction are deliberately off, and the full break
 Applied the reference's datum model as a DRY fix: the four categories are one named `StorageUsageDatum` array
 feeding the chart bands, the aria breakdown and the legend rows, with colors still handed in by the styled layer.
 
+Base text selection reviewed 2026-11-24 against the
+[GPUI Kit text selection guide](https://gpui-kit.com/base/text-selection/) (site v0.11.0; the pinned
+[`v0.10.0` page](https://gpui-kit.com/versions/v0.10.0/base/text-selection) carries identical prose,
+re-verified against `gpui-base 0.10.0` `src/text_selection.rs`, `src/selectable_text.rs`, `src/root.rs` and the
+vendored `patches/gpui-component/src/root.rs`). The window layer, scopes, snapshots, multi-click boundaries,
+touch handles and advanced participant adapters are already Kit-owned: `gpui_kit::open_window` mounts `base::Root`,
+whose render installs one `TextSelectionLayer` per window (`gpui-base/root.rs:261`), `RootPlugin::prepare`
+activates the scope stack and clears selection when a Kit dialog or sheet opens (vendored `root.rs:415-417`), and
+`TextView` retains a stable handle and projects runs into UTF-8-safe byte ranges. Kept as-is: terminal drag
+selection stays rio-vt-owned (VT grid cells and semantic word/line expansion have no `TextSelectionRun`
+equivalent); app-owned scrim modals keep their own focus/copy flow because Kit scopes cover Kit dialogs/sheets
+only and an ordinary pointer press clears the window selection in `prepare_for_mouse_down` (shift-click and
+handle presses are the deliberate exceptions); `highlights`/`reveal_range`
+stay unused because the inspector filters lines and conversation search jumps messages rather than byte ranges;
+touch selection stays off because the bundle must never declare `NSIsTouchNative`. Applied the guide's plain-text
+participant pattern to the one real gap: the inspector output body now renders through `SelectableText`
+(`markdown.rs::render_selectable_output_text`), so a drag selects and copies exactly the displayed capture while
+the compact transcript excerpt stays plain (its row owns click-to-expand and a full-output copy button). Pinned
+by `markdown/tests.rs::captured_output_text_selects_and_copies_from_a_drag`.
+
 Styling reviewed 2026-11-24 against the
 [GPUI Kit style guide](https://gpui-kit.com/docs/style/) (site v0.11.0; claims re-verified against pinned
 `gpui-fast 0.1.17` `styled.rs`, vendored `gpui-component 0.10.0` `status_bar.rs`, and the desktop checkout).

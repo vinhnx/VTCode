@@ -449,3 +449,76 @@ fn code_fences_carry_copy_action_only(cx: &mut TestAppContext) {
         assert!(!view, "no view action for {source:?}");
     }
 }
+
+struct OutputSelectionFixture;
+
+impl Render for OutputSelectionFixture {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        gpui_kit::div().size_full().child(
+            gpui_kit::div()
+                .id("output-selection-probe")
+                .w(gpui_kit::px(400.))
+                .h(gpui_kit::px(40.))
+                .child(super::render_selectable_output_text(
+                    "output-selection-text",
+                    &SharedString::from("alpha beta gamma"),
+                )),
+        )
+    }
+}
+
+#[gpui_kit::test]
+fn captured_output_text_selects_and_copies_from_a_drag(cx: &mut TestAppContext) {
+    use gpui_kit::base::TextSelection;
+
+    cx.update(gpui_kit::init);
+    let (window, _) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| OutputSelectionFixture)).unwrap()
+    });
+    let _ = cx.update_window(window, |_, window, cx| {
+        use gpui_kit::{InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, point, px};
+
+        window.render_frame(cx);
+        assert!(!TextSelection::has_selection(window, cx), "no selection before the drag");
+
+        let dispatch = |event: gpui_kit::PlatformInput, window: &mut Window, cx: &mut gpui_kit::App| {
+            let _ = window.dispatch_event(event, cx);
+        };
+        dispatch(
+            MouseDownEvent {
+                position: point(px(1.), px(12.)),
+                button: MouseButton::Left,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+        dispatch(
+            MouseMoveEvent {
+                position: point(px(390.), px(12.)),
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Modifiers::default(),
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+        dispatch(
+            MouseUpEvent {
+                position: point(px(390.), px(12.)),
+                button: MouseButton::Left,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+
+        window.render_frame(cx);
+        assert_eq!(TextSelection::selected_text(window, cx), "alpha beta gamma");
+    });
+}
