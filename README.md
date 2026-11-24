@@ -4,13 +4,12 @@
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
 <p>
-  <sub>Terminal-first coding agent, desktop-ready on macOS — plan, edit, and verify with your model of choice.</sub>
+  <sub>VT Code is an open-source coding agent for everyone.</sub>
 </p>
 
 [![Rust](https://img.shields.io/badge/rust-1.100.0%2B-D99A4E?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/vtcode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-BFB38F?style=flat-square)](#license)
 [![GitHub release](https://img.shields.io/github/release/vinhnx/vtcode.svg)](https://github.com/vinhnx/vtcode/releases)
-[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/vinhnx/vtcode?utm_source=oss&utm_medium=github&utm_campaign=vinhnx%2Fvtcode&labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-007ec6?style=flat-square)](https://deepwiki.com/vinhnx/vtcode)
 [![macOS 15+](https://img.shields.io/badge/macOS-15%2B-383B73?style=flat-square&logo=apple)](#desktop-app)
 [![arm64 and x64](https://img.shields.io/badge/arch-arm64_%7C_x64-30363D?style=flat-square)](#desktop-app)
@@ -26,19 +25,19 @@
 
 ## Overview
 
-VT Code is an auditable, resumable coding agent — one shared runloop powers the terminal TUI and the
+VT Code is an open-source coding agent: one shared runloop powers the terminal TUI and the
 native macOS app. It is open source under **MIT OR Apache-2.0** (see [License](#license)).
 Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
-| At a glance | What you get |
-| ----------- | ------------ |
-| **Plan** | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md). |
-| **Safety** | Sandboxed, [auditable command policy](./docs/security/security_model.md). |
-| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md) with [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
-| **Extend** | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
-| **Models** | Per-task [hosted or local providers](./docs/providers/provider_guides.md). |
+| At a glance   | What you get                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Plan**      | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md).                                                         |
+| **Safety**    | Sandboxed, [auditable command policy](./docs/security/security_model.md).                                                                                                  |
+| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md) with [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md).                 |
+| **Extend**    | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
+| **Models**    | Per-task [hosted or local providers](./docs/providers/provider_guides.md).                                                                                                 |
 
 <!-- markdownlint-enable MD060 -->
 
