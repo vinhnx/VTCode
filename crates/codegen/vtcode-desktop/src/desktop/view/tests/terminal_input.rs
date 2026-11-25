@@ -211,7 +211,9 @@ fn terminal_ctrl_g_reaches_shell(cx: &mut TestAppContext) {
     pump_until_grid_count(window, &view, "rdy", 2, cx);
     press_keys(
         window,
-        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        &[
+            "c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter",
+        ],
         cx,
     );
     std::thread::sleep(Duration::from_millis(500));
@@ -226,7 +228,9 @@ fn terminal_ctrl_r_reaches_shell_instead_of_opening_history(cx: &mut TestAppCont
     pump_until_grid_count(window, &view, "rdy", 2, cx);
     press_keys(
         window,
-        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        &[
+            "c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter",
+        ],
         cx,
     );
     std::thread::sleep(Duration::from_millis(500));
@@ -244,7 +248,9 @@ fn terminal_alt_up_reaches_shell(cx: &mut TestAppContext) {
     pump_until_grid_count(window, &view, "rdy", 2, cx);
     press_keys(
         window,
-        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        &[
+            "c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter",
+        ],
         cx,
     );
     std::thread::sleep(Duration::from_millis(500));
