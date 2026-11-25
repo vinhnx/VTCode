@@ -67,6 +67,108 @@ fn rejects_overrides_colliding_with_fixed_chords(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn composer_context_chords_stay_with_their_commands(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        // The owner may keep its default or move away on its own.
+        assert!(bindings(&BTreeMap::from([("cancel".into(), "cmd-.".into())]), cx).is_ok());
+        assert!(bindings(&BTreeMap::from([("cancel".into(), "ctrl-alt-c".into())]), cx).is_ok());
+        // Once the owner unbinds, the chord is still owned by the fixed
+        // composer binding. Handing it to another command would shadow that
+        // command whenever the composer has focus (deeper context wins).
+        for (chord, owner) in EDITOR_CONTEXT_CHORDS {
+            let overrides = BTreeMap::from([
+                (owner.as_str().to_string(), String::new()),
+                ("commands".to_string(), chord.to_string()),
+            ]);
+            assert!(bindings(&overrides, cx).is_err(), "{chord} must stay reserved for {:?}", owner);
+        }
+        // Near-miss neighbours stay assignable.
+        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-.".into())]), cx).is_ok());
+        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-[".into())]), cx).is_ok());
+        assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-]".into())]), cx).is_ok());
+    });
+}
+
+#[gpui_kit::test]
+fn editor_context_owner_table_pins_defaults_and_fixed_bindings(cx: &mut TestAppContext) {
+    // Structural pin: if `init_keybindings` drops or changes one of its
+    // `Input && mode == editor` rows, or a command default drifts, this fails
+    // instead of leaving stale reservation rules in `bindings()`.
+    for (chord, owner) in EDITOR_CONTEXT_CHORDS {
+        let command = COMMANDS.iter().find(|command| command.id == owner).unwrap();
+        assert_eq!(command.default_binding, chord, "{:?} default drifted", owner);
+    }
+    cx.update(|cx| {
+        init_keybindings(cx, &Default::default());
+        for (chord, owner) in EDITOR_CONTEXT_CHORDS {
+            let expected = action(owner);
+            assert_chord_resolves_to(cx, chord, "Input mode=editor", expected.as_ref());
+        }
+    });
+}
+
+#[gpui_kit::test]
+fn every_modified_fixed_chord_is_reserved(cx: &mut TestAppContext) {
+    use gpui_kit::AsKeystroke;
+
+    cx.update(|cx| {
+        let defaults = bindings(&BTreeMap::new(), cx).expect("defaults build");
+        let configurable_count = defaults.len();
+        cx.bind_keys(defaults);
+        let baseline = cx.key_bindings().borrow().bindings().count();
+        init_keybindings(cx, &Default::default());
+        // `init_keybindings` rebinds the configurable table first; everything
+        // after that prefix is the fixed table. Normalize both sides so the
+        // oracle is independent of the spelling chosen in either table.
+        let os = host_operating_system();
+        let os_reserved = [
+            "cmd-q",
+            "cmd-w",
+            "cmd-m",
+            "cmd-h",
+            "alt-cmd-h",
+            "cmd-shift-n",
+            "ctrl-cmd-f",
+            "cmd-c",
+            "cmd-x",
+            "cmd-v",
+            "cmd-a",
+            "cmd-z",
+            "cmd-shift-z",
+        ];
+        let reserved: HashSet<String> = bootstrap::FIXED_RESERVED_CHORDS
+            .iter()
+            .copied()
+            .chain(EDITOR_CONTEXT_CHORDS.iter().map(|(chord, _)| *chord))
+            .chain(os_reserved)
+            .map(|chord| gpui_kit::Keystroke::parse_with_os(chord, os).unwrap().unparse(os))
+            .collect();
+        let keymap = cx.key_bindings();
+        let fixed: Vec<String> = keymap
+            .borrow()
+            .bindings()
+            .skip(baseline + configurable_count)
+            .flat_map(|binding| {
+                binding
+                    .keystrokes()
+                    .iter()
+                    .map(|stroke| stroke.as_keystroke().unparse(os))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        for chord in fixed {
+            if !chord.contains('-') {
+                continue; // bare keys are rejected by the modifier rule
+            }
+            assert!(
+                reserved.contains(&chord),
+                "fixed chord {chord} must be reserved before a configurable rebind can claim it"
+            );
+        }
+    });
+}
+
+#[gpui_kit::test]
 fn review_navigation_accepts_configurable_function_key_bindings(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let configured = BTreeMap::from([

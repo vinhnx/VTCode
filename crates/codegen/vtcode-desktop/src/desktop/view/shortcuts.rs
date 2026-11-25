@@ -210,6 +210,19 @@ pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
     }
 }
 
+/// Fixed chords from the composer's inner `Input mode=editor` scope that are
+/// also configurable defaults. GPUI ranks the deeper context first, so the
+/// fixed binding owns each chord while the composer has focus even after its
+/// owner is rebound. They cannot join [`bootstrap::FIXED_RESERVED_CHORDS`]
+/// because that list rejects the defaults themselves; validation instead pins
+/// each chord to its owner. Keep in sync with the three rows scoped to
+/// `Input && mode == editor` in [`bootstrap::init_keybindings`].
+pub(super) const EDITOR_CONTEXT_CHORDS: [(&str, CommandId); 3] = [
+    ("cmd-.", CommandId::Cancel),
+    ("cmd-[", CommandId::NavigateBack),
+    ("cmd-]", CommandId::NavigateForward),
+];
+
 pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result<Vec<KeyBinding>, String> {
     if overrides.keys().any(|key| CommandId::from_id(key).is_none()) {
         return Err(rust_i18n::t!("app.shortcuts.unknown_action").to_string());
@@ -255,6 +268,16 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result
             .contains(&normalized.as_str())
                 || bootstrap::FIXED_RESERVED_CHORDS.contains(&normalized.as_str())
             {
+                return Err(rust_i18n::t!("app.shortcuts.reserved_shortcut", label = label.as_str()).to_string());
+            }
+            // A deeper composer binding would silently consume the chord
+            // whenever the composer has focus, so these stay with the command
+            // whose default they are (see [`EDITOR_CONTEXT_CHORDS`]).
+            let editor_owner = EDITOR_CONTEXT_CHORDS
+                .iter()
+                .find(|(chord, _)| *chord == normalized.as_str())
+                .map(|(_, owner)| *owner);
+            if editor_owner.is_some_and(|owner| owner != command.id) {
                 return Err(rust_i18n::t!("app.shortcuts.reserved_shortcut", label = label.as_str()).to_string());
             }
             if !(command.id == CommandId::Dismiss && source == key::ESCAPE)
