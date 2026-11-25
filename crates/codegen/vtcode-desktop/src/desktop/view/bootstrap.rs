@@ -245,10 +245,13 @@ impl DesktopView {
         // `observe_in` fires on every `SliderState::notify` (drag ticks) and
         // applies the palette there without persisting. Persistence is handled
         // here instead: once on pointer `Release`, and on discrete `Change`s
-        // that have no drag behind them (assistive-technology Increment/
-        // Decrement call `step_thumb`, which emits `Change` but never
-        // `Release`). Arrow keys call `set_value`, which emits no event and
-        // persists at its own call site in `settings_accessibility`.
+        // with no drag behind them. Pinned Kit's `step_thumb`
+        // (assistive-technology Increment/Decrement) emits `Change` then
+        // `Release`, so one a11y adjustment saves twice; both writes are
+        // idempotent and the unconditional `Release` save stays correct if
+        // Kit ever reorders the pair. Arrow keys call `set_value`, which
+        // emits no event, and persist at their own call site in
+        // `settings_accessibility`.
         let contrast_event_subscription = cx.subscribe_in(
             &contrast_slider,
             window,
