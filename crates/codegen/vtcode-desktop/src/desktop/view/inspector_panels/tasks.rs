@@ -213,7 +213,10 @@ impl DesktopView {
             let shown = snapshot.items.len().min(TRACKER_INLINE_MAX_ROWS);
             block = block.children(snapshot.items.iter().take(shown).enumerate().map(|(index, item)| {
                 div()
-                    .id(format!("tracker-inline-{row_id}-row-{index}"))
+                    // The task's canonical path, the same identity the
+                    // virtualized `task-row-*` uses. The snapshot can change
+                    // as tasks advance, so the slot index is not an identity.
+                    .id(format!("tracker-inline-{row_id}-row-{}", item.index_path))
                     .test_support()
                     .child(render_task_line(item, Some(index) == current, colors))
             }));

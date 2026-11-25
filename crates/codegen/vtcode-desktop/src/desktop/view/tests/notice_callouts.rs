@@ -29,8 +29,8 @@ fn transcript_notices_render_severity_without_message_chrome(cx: &mut TestAppCon
         assert_eq!(stacked[1].severity, NoticeSeverity::Info);
         window.click("notice-stack-toggle-notice-error", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("notice-stack-entry-notice-warning-0").role(), Some(gpui_kit::Role::Status));
-        assert_eq!(window.find("notice-stack-entry-notice-info-1").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(window.find("notice-stack-entry-notice-warning").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(window.find("notice-stack-entry-notice-info").role(), Some(gpui_kit::Role::Status));
         // No message chrome: notices carry no copy action, even when stacked.
         for id in ["notice-error", "notice-warning", "notice-info"] {
             assert!(window.try_find(format!("copy-message-{id}")).is_none(), "{id} must not offer message copy");
@@ -213,11 +213,11 @@ fn notice_stack_cta_reveals_folded_announcements(cx: &mut TestAppContext) {
             "the CTA names how many announcements are folded: {:?}",
             toggle.label()
         );
-        assert!(window.try_find("notice-stack-entry-second-0").is_none());
+        assert!(window.try_find("notice-stack-entry-second").is_none());
 
         window.click("notice-stack-toggle-first", cx);
         window.render_frame(cx);
-        let entry = window.find("notice-stack-entry-second-0");
+        let entry = window.find("notice-stack-entry-second");
         assert!(
             entry.label().is_some_and(|label| label.contains("Run error")),
             "folded titles capitalize their first letter: {:?}",

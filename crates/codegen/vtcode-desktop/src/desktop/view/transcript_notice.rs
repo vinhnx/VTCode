@@ -238,8 +238,8 @@ impl DesktopView {
         }
 
         if has_stack && item.notice_stack_expanded {
-            for (index, entry) in item.notice_stack.iter().enumerate() {
-                card = card.child(self.render_folded_notice(entry, index, cx));
+            for entry in &item.notice_stack {
+                card = card.child(self.render_folded_notice(entry, cx));
             }
         }
 
@@ -295,13 +295,13 @@ impl DesktopView {
     /// One folded announcement revealed by the stack count CTA. It shares the
     /// head's chrome; the body is already on demand, so no second toggle is
     /// needed inside the expanded stack.
-    fn render_folded_notice(&self, entry: &NoticePayload, index: usize, cx: &mut Context<Self>) -> AnyElement {
+    fn render_folded_notice(&self, entry: &NoticePayload, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let entry_chrome = callout_chrome(entry.severity, &colors);
         let title = capitalize_first(entry.title.as_str());
         let has_body = !entry.text.trim().is_empty();
         let mut body = div()
-            .id(format!("notice-stack-entry-{}-{}", entry.id, index))
+            .id(format!("notice-stack-entry-{}", entry.id))
             .test_support()
             .role(if entry.severity == NoticeSeverity::Error {
                 gpui_kit::Role::Alert

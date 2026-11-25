@@ -314,9 +314,9 @@ fn expanded_tracker_rows_bound_the_inline_tree_with_overflow(cx: &mut TestAppCon
         });
         window.render_frame(cx);
         // Rows 0..30 render; the 31st folds into the overflow line.
-        assert!(window.try_find("tracker-inline-tool-tracker-big-row-0").is_some());
-        assert!(window.try_find("tracker-inline-tool-tracker-big-row-29").is_some());
-        assert!(window.try_find("tracker-inline-tool-tracker-big-row-30").is_none());
+        assert!(window.try_find("tracker-inline-tool-tracker-big-row-1").is_some());
+        assert!(window.try_find("tracker-inline-tool-tracker-big-row-30").is_some());
+        assert!(window.try_find("tracker-inline-tool-tracker-big-row-31").is_none());
         assert!(window.try_find("tracker-inline-tool-tracker-big-overflow").is_some());
     })
     .unwrap();
