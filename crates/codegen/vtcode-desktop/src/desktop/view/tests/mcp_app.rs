@@ -1,11 +1,17 @@
 //! Static MCP Apps preview cards: tier gating, fetch-on-expand, and body states.
 
-use super::super::mcp_app::{McpAppBodyKey, PendingMcpAppRead, head_with_truncation, valid_mcp_app_read};
+use super::super::mcp_app::{
+    McpAppBodyKey, PendingMcpAppRead, head_with_truncation, preview_element_id, valid_mcp_app_read,
+};
 use crate::desktop::transcript::TranscriptItem;
 use vtcode_desktop_protocol::{ConfigSetting, ConfigSettingsSnapshot, McpAppReadResult};
 use vtcode_exec_events::AppPreviewItem;
 
 use super::*;
+
+fn preview_id(prefix: &str, uri: &str) -> String {
+    preview_element_id(prefix, "app-1", uri)
+}
 
 fn tier_snapshot(tier: &str) -> ConfigSettingsSnapshot {
     ConfigSettingsSnapshot {
@@ -85,6 +91,45 @@ fn mcp_app_read_validation_matches_pending_identity() {
     assert!(!valid_mcp_app_read(&swapped, &pending));
 }
 
+#[test]
+fn preview_element_id_keys_the_domain_and_hides_the_uri() {
+    let id = preview_id("mcp-app-preview", "ui://demo/app.html");
+    assert!(id.starts_with("mcp-app-preview-"));
+    assert!(!id.contains("app-1"));
+    assert!(!id.contains("ui://demo/app.html"));
+    assert_ne!(id, preview_element_id("mcp-app-preview", "app-2", "ui://demo/app.html"));
+    assert_ne!(id, preview_id("mcp-app-preview", "ui://demo/second.html"));
+    assert_ne!(id, preview_id("mcp-app-body", "ui://demo/app.html"));
+}
+
+#[gpui_kit::test]
+fn preview_ids_survive_a_slot_change(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
+            let mut item = preview_item();
+            let mut sibling = item.app_previews[0].clone();
+            sibling.uri = "ui://demo/second.html".into();
+            // Reverse the previews so the original one now occupies slot 1.
+            item.app_previews.insert(0, sibling);
+            view.transcript.push(item);
+        });
+        window.render_frame(cx);
+        // Domain-derived ids follow the preview, not its position. Positional
+        // ids would have moved the app preview to `-1` and lost this lookup.
+        assert!(window.try_find(preview_id("mcp-app-preview", "ui://demo/app.html")).is_some());
+        assert!(
+            window
+                .try_find(preview_id("mcp-app-preview", "ui://demo/second.html"))
+                .is_some()
+        );
+        assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
+        assert!(window.try_find("mcp-app-preview-app-1-1").is_none());
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn mcp_app_cards_render_only_under_the_static_tier(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -94,14 +139,14 @@ fn mcp_app_cards_render_only_under_the_static_tier(cx: &mut TestAppContext) {
             assert!(!view.mcp_apps_preview_enabled(), "missing settings default to off");
         });
         window.render_frame(cx);
-        assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
+        assert!(window.try_find(preview_id("mcp-app-preview", "ui://demo/app.html")).is_none());
 
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("off")));
             assert!(!view.mcp_apps_preview_enabled());
         });
         window.render_frame(cx);
-        assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
+        assert!(window.try_find(preview_id("mcp-app-preview", "ui://demo/app.html")).is_none());
 
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("interactive")));
@@ -120,8 +165,8 @@ fn mcp_app_cards_render_only_under_the_static_tier(cx: &mut TestAppContext) {
             );
         });
         window.render_frame(cx);
-        assert!(window.try_find("mcp-app-preview-app-1-0").is_some());
-        assert!(window.try_find("mcp-app-body-app-1-0").is_some());
+        assert!(window.try_find(preview_id("mcp-app-preview", "ui://demo/app.html")).is_some());
+        assert!(window.try_find(preview_id("mcp-app-body", "ui://demo/app.html")).is_some());
     })
     .unwrap();
 }
@@ -193,8 +238,8 @@ fn multiple_failed_previews_get_distinct_alert_ids(cx: &mut TestAppContext) {
             }
         });
         window.render_frame(cx);
-        assert_eq!(window.find("mcp-app-error-app-1-0").label(), Some("Failed 0"));
-        assert_eq!(window.find("mcp-app-error-app-1-1").label(), Some("Failed 1"));
+        assert_eq!(window.find(preview_id("mcp-app-error", "ui://demo/app.html")).label(), Some("Failed 0"));
+        assert_eq!(window.find(preview_id("mcp-app-error", "ui://demo/second.html")).label(), Some("Failed 1"));
     })
     .unwrap();
 }
@@ -220,11 +265,11 @@ fn mcp_app_error_row_retries_through_the_button(cx: &mut TestAppContext) {
             );
         });
         window.render_frame(cx);
-        let error = window.find("mcp-app-error-app-1-0");
+        let error = window.find(preview_id("mcp-app-error", "ui://demo/app.html"));
         assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(error.label(), Some("Could not load the app preview. Try again."));
-        assert!(window.try_find("retry-mcp-app-app-1-0").is_some());
-        window.click("retry-mcp-app-app-1-0", cx);
+        assert!(window.try_find(preview_id("retry-mcp-app", "ui://demo/app.html")).is_some());
+        window.click(preview_id("retry-mcp-app", "ui://demo/app.html"), cx);
         window.render_frame(cx);
 
         view.update(cx, |view, _| {
@@ -256,7 +301,14 @@ fn mcp_app_loading_row_shows_while_read_pending(cx: &mut TestAppContext) {
             assert_eq!(view.mcp_app_pending.len(), 1);
         });
         window.render_frame(cx);
-        assert!(window.find("mcp-app-loading-label-app-1-0").bounds().size.height > px(0.));
+        assert!(
+            window
+                .find(preview_id("mcp-app-loading-label", "ui://demo/app.html"))
+                .bounds()
+                .size
+                .height
+                > px(0.)
+        );
 
         view.update(cx, |view, _| {
             let key = McpAppBodyKey {
@@ -267,7 +319,11 @@ fn mcp_app_loading_row_shows_while_read_pending(cx: &mut TestAppContext) {
             view.mcp_app_pending.clear();
         });
         window.render_frame(cx);
-        assert!(window.try_find("mcp-app-loading-label-app-1-0").is_none());
+        assert!(
+            window
+                .try_find(preview_id("mcp-app-loading-label", "ui://demo/app.html"))
+                .is_none()
+        );
     })
     .unwrap();
 }

@@ -6,6 +6,7 @@
 //! body has loaded.
 
 use super::super::markdown::render_html;
+use super::ids::opaque_path_element_id;
 use super::*;
 use vtcode_commons::formatting::format_size;
 
@@ -20,6 +21,19 @@ const MCP_APPS_TIER_PATH: &str = "mcp.ui.apps";
 
 /// Tier value enabling static HTML previews.
 const MCP_APPS_TIER_STATIC: &str = "static";
+
+/// Stable element id for one preview and each element in its subtree.
+///
+/// The preview list is filtered and capped before rendering, so a slot index
+/// is not an identity: inserting or removing a preview above this one would
+/// re-key the card, re-initialize the retry button's keyed focus handle, and
+/// re-run HTML preparation under another key. Derive every id from the same
+/// `(item_id, uri)` pair that identifies the fetched body instead. Hashing
+/// keeps possibly-local resource URIs out of the element tree.
+pub(super) fn preview_element_id(prefix: &str, item_id: &str, uri: &str) -> String {
+    let identity = format!("{item_id}\0{uri}");
+    opaque_path_element_id(prefix, &identity)
+}
 
 /// Identity of one in-flight app-body read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,12 +177,11 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let caption = themes::aa_muted(colors.background, colors.muted_foreground);
         let mut cards = div().flex().flex_col().gap_2().ml_4();
-        for (index, preview) in item
+        for preview in item
             .app_previews
             .iter()
             .filter(|preview| !is_computer_preview_uri(&preview.uri))
             .take(MAX_ROW_PREVIEWS)
-            .enumerate()
         {
             let key = McpAppBodyKey { item_id: item.id.clone(), uri: preview.uri.clone() };
             let mut meta = match preview.mime_type.as_deref() {
@@ -179,7 +192,7 @@ impl DesktopView {
                 meta.push_str(" · truncated");
             }
             let mut card = div()
-                .id(format!("mcp-app-preview-{}-{index}", item.id))
+                .id(preview_element_id("mcp-app-preview", &item.id, &preview.uri))
                 .test_support()
                 .flex()
                 .flex_col()
@@ -199,7 +212,7 @@ impl DesktopView {
                 )
                 .child(div().text_xs().text_color(caption).truncate().child(preview.uri.clone()));
             if let Some(body) = self.mcp_app_bodies.get(&key) {
-                card = card.child(self.render_mcp_app_body(item, index, preview, body, cx));
+                card = card.child(self.render_mcp_app_body(item, preview, body, cx));
             } else if let Some(error) = self.mcp_app_errors.get(&key) {
                 let retry_id = item.id.clone();
                 let retry_uri = preview.uri.clone();
@@ -208,9 +221,13 @@ impl DesktopView {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(accessible_error(format!("mcp-app-error-{}-{index}", item.id), error.clone(), &colors))
+                        .child(accessible_error(
+                            preview_element_id("mcp-app-error", &item.id, &preview.uri),
+                            error.clone(),
+                            &colors,
+                        ))
                         .child(
-                            desktop_ghost_button(format!("retry-mcp-app-{}-{index}", item.id))
+                            desktop_ghost_button(preview_element_id("retry-mcp-app", &item.id, &preview.uri))
                                 .label(rust_i18n::t!("app.preview.retry").to_string())
                                 .accessibility_label(
                                     rust_i18n::t!("app.preview.retry_for", uri = preview.uri.as_str()).to_string(),
@@ -227,7 +244,7 @@ impl DesktopView {
                 .any(|pending| pending.item_id == item.id && pending.uri == preview.uri)
             {
                 card = card.child(loading_marker_row_with_spinner(
-                    format!("mcp-app-loading-label-{}-{index}", item.id),
+                    preview_element_id("mcp-app-loading-label", &item.id, &preview.uri),
                     rust_i18n::t!("app.preview.loading").to_string(),
                     Spinner::new().small().color(caption),
                     themes::muted_text(&colors),
@@ -256,7 +273,6 @@ impl DesktopView {
     fn render_mcp_app_body(
         &self,
         item: &TranscriptItem,
-        index: usize,
         preview: &vtcode_exec_events::AppPreviewItem,
         body: &McpAppReadResult,
         cx: &mut Context<Self>,
@@ -270,7 +286,7 @@ impl DesktopView {
         }
         let (source, cut) = head_with_truncation(&body.body, MAX_PREVIEW_CHARS);
         let mut panel = div()
-            .id(format!("mcp-app-body-{}-{index}", item.id))
+            .id(preview_element_id("mcp-app-body", &item.id, &preview.uri))
             .role(gpui_kit::Role::Label)
             .aria_label(rust_i18n::t!("app.preview.static_aria", uri = preview.uri.as_str()).to_string())
             .test_support()
@@ -278,7 +294,11 @@ impl DesktopView {
             .py_2()
             .rounded_md()
             .bg(cx.theme().colors.secondary)
-            .child(render_html(format!("mcp-app-html-{}-{index}", item.id), source.to_string().into(), cx));
+            .child(render_html(
+                preview_element_id("mcp-app-html", &item.id, &preview.uri),
+                source.to_string().into(),
+                cx,
+            ));
         if cut || body.truncated {
             panel = panel.child(
                 div()
