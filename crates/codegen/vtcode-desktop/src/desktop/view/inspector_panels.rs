@@ -522,7 +522,7 @@ impl DesktopView {
             .when(is_selected_output, |header| {
                 header
                     .child(
-                        Tag::custom(colors.secondary, colors.muted_foreground, colors.border)
+                        Tag::custom(colors.secondary, colors.muted_foreground, themes::soft_edge_color(&colors))
                             .small()
                             .rounded_full()
                             .child(rust_i18n::t!("app.inspector.history_tag").to_string()),
@@ -541,7 +541,7 @@ impl DesktopView {
             })
             .when(output.running, |header| {
                 header.child(
-                    Tag::custom(colors.secondary, colors.foreground, colors.border)
+                    Tag::custom(colors.secondary, colors.foreground, themes::soft_edge_color(&colors))
                         .small()
                         .child(rust_i18n::t!("app.inspector.status_running").to_string()),
                 )

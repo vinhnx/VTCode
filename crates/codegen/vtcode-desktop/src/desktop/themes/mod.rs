@@ -363,6 +363,17 @@ pub(super) fn apply_selection_with_contrast(
         };
         colors.foreground = mix(colors.foreground, target, f32::from(contrast.min(100)) / 100.0);
         apply_filled_surfaces(colors);
+        // Boosting the foreground also moves every raised surface, so the
+        // semantic colors must be re-seated against the new seats (outline
+        // status tags paint `success`/`danger`/`warning` as foreground on
+        // popovers). Keeping the pre-boost tone let "adventure" at contrast 40
+        // fall to 4.49:1 against the popover. Re-deriving is idempotent when
+        // the tone already clears every seat.
+        colors.success = readable_semantic_color(colors.background, colors.foreground, colors.success);
+        colors.danger = readable_semantic_color(colors.background, colors.foreground, colors.danger);
+        colors.warning = readable_semantic_color(colors.background, colors.foreground, colors.warning);
+        colors.success_foreground = filled_button_foreground(colors.success);
+        colors.danger_foreground = filled_button_foreground(colors.danger);
         apply_surface_borders(colors);
         apply_unified_hover_surface(colors, hover_surface(colors.background, colors.foreground));
         // Focus policy: the app draws no focus-ring border highlight anywhere,
@@ -514,10 +525,20 @@ pub(super) fn soft_edge_color(colors: &ThemeColor) -> Hsla {
     colors.border.opacity(SOFT_EDGE_OPACITY)
 }
 
+/// Resolve a semantic seed to a tone that stays readable everywhere it can
+/// paint. Besides diff markers on the canvas, semantic colors are the
+/// foreground of outline `Tag`s (connection status, diff counts), which sit on
+/// raised panels and popovers. Certify all three seats in one place so a color
+/// that clears AA on the canvas cannot quietly dip below it once embedded —
+/// "adventure" at contrast 40 lost 0.01 against the popover before this.
 pub(super) fn readable_semantic_color(background: Hsla, foreground: Hsla, color: Hsla) -> Hsla {
     const AA_RATIO: f32 = 4.5;
+    let resting = filled_surface(background, foreground, RESTING_FILL_MAX_STEP, None);
+    let raised = filled_surface(background, foreground, RAISED_FILL_MAX_STEP, Some(resting));
     adjust_color_until_readable(background, foreground, color, |candidate| {
         diff_marker_is_readable(background, candidate, AA_RATIO)
+            && contrast_ratio(candidate, resting) >= AA_RATIO
+            && contrast_ratio(candidate, raised) >= AA_RATIO
     })
 }
 

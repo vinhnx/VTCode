@@ -447,3 +447,39 @@ fn recommended_pill_holds_contrast_on_washed_rows(cx: &mut gpui_kit::TestAppCont
         }
     });
 }
+
+/// An outline `Tag` paints its semantic variant color as foreground over the
+/// surface that hosts it — never over a guaranteed canvas. The seed pipeline
+/// only certifies those colors against `background`, so pin the real seats a
+/// status tag can land on (settings group box, popover, raised panel): a color
+/// that clears AA on the canvas must not quietly fall below it once embedded.
+#[gpui_kit::test]
+fn outline_tag_foregrounds_hold_contrast_on_every_tag_surface(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+            .into_iter()
+            .chain(all_themes().iter().map(|theme| theme.id))
+        {
+            for amount in [0, 40, 100] {
+                let _mode = apply_with_contrast(id, amount, None, cx);
+                let colors = cx.theme().colors;
+                for (name, foreground) in [
+                    ("success", colors.success),
+                    ("warning", colors.warning),
+                    ("danger", colors.danger),
+                ] {
+                    for (seat, surface) in [
+                        ("canvas", colors.background),
+                        ("panel", colors.secondary),
+                        ("group box", colors.group_box),
+                        ("popover", colors.popover),
+                    ] {
+                        let ratio = contrast_ratio(foreground, surface);
+                        assert!(ratio >= 4.5, "{id} at {amount}: outline {name} tag on {seat} is {ratio:.2}");
+                    }
+                }
+            }
+        }
+    });
+}

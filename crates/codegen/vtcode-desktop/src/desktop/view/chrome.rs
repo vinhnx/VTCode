@@ -693,9 +693,13 @@ impl DesktopView {
         if show_details {
             if let Some(speed) = self.session_options().and_then(|options| options.speed.as_ref()) {
                 group = group.content(
-                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                        .small()
-                        .child(speed.clone()),
+                    Tag::custom(
+                        theme.colors.secondary,
+                        theme.colors.foreground,
+                        themes::soft_edge_color(&theme.colors),
+                    )
+                    .small()
+                    .child(speed.clone()),
                 );
             }
         }
