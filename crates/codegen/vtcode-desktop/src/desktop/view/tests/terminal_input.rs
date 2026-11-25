@@ -170,3 +170,84 @@ fn terminal_escape_reaches_shell_without_selection(cx: &mut TestAppContext) {
     press_keys(window, &["escape"], cx);
     pump_until_grid_count(window, &view, "^[", 1, cx);
 }
+
+#[gpui_kit::test]
+fn terminal_focused_history_chords_yield_to_shell(cx: &mut TestAppContext) {
+    use super::super::PaletteKind;
+
+    // Workspace-backed so the terminal panel (and its focus node) is really
+    // rendered; focusing the handle of a hidden panel would not exercise the
+    // dispatch path production uses.
+    let (window, view, _dir) = open_workspace_terminal(cx);
+    cx.update_window(window, |_, window, cx| {
+        let terminal_focus = view.read(cx).terminal_focus.clone();
+        window.focus(&terminal_focus, cx);
+        assert!(terminal_focus.is_focused(window));
+        window.press("ctrl-s", cx);
+        window.press("ctrl-r", cx);
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert!(view.palette.is_none(), "ctrl-s/ctrl-r with terminal focus must not open history");
+    });
+    // Control: the same chords keep opening history from the composer, so the
+    // gate is focus-dependent rather than a blanket disable.
+    cx.update_window(window, |_, window, cx| {
+        let composer_focus = view.read(cx).composer.read(cx).focus_handle(cx);
+        window.focus(&composer_focus, cx);
+        window.press("ctrl-s", cx);
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert!(view.palette.is_some());
+        assert!(matches!(view.palette_kind, PaletteKind::PromptHistory));
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_ctrl_g_reaches_shell(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_workspace_terminal(cx);
+    press_keys(window, &["e", "c", "h", "o", "space", "r", "d", "y", "enter"], cx);
+    pump_until_grid_count(window, &view, "rdy", 2, cx);
+    press_keys(
+        window,
+        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        cx,
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    press_keys(window, &["ctrl-g"], cx);
+    pump_until_grid_count(window, &view, "^G", 1, cx);
+}
+
+#[gpui_kit::test]
+fn terminal_ctrl_r_reaches_shell_instead_of_opening_history(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_workspace_terminal(cx);
+    press_keys(window, &["e", "c", "h", "o", "space", "r", "d", "y", "enter"], cx);
+    pump_until_grid_count(window, &view, "rdy", 2, cx);
+    press_keys(
+        window,
+        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        cx,
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    press_keys(window, &["ctrl-r"], cx);
+    pump_until_grid_count(window, &view, "^R", 1, cx);
+    view.update(cx, |view, _| {
+        assert!(view.palette.is_none(), "ctrl-r with terminal focus must not open history");
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_alt_up_reaches_shell(cx: &mut TestAppContext) {
+    let (window, view, _dir) = open_workspace_terminal(cx);
+    press_keys(window, &["e", "c", "h", "o", "space", "r", "d", "y", "enter"], cx);
+    pump_until_grid_count(window, &view, "rdy", 2, cx);
+    press_keys(
+        window,
+        &["c", "o", "m", "m", "a", "n", "d", "space", "c", "a", "t", "space", "-", "v", "enter"],
+        cx,
+    );
+    std::thread::sleep(Duration::from_millis(500));
+    press_keys(window, &["alt-up"], cx);
+    pump_until_grid_count(window, &view, "^[[A", 1, cx);
+}

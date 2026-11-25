@@ -32,6 +32,10 @@ impl DesktopView {
     /// Ctrl+R while the history palette is open: open it first, otherwise
     /// cycle to the next match (CLI `KeyCode::Char('r') if CONTROL` parity).
     pub(super) fn on_prompt_history_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.terminal_owns_control_keys(window) {
+            cx.propagate();
+            return;
+        }
         if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
             if !self.move_composer_suggestion(true, window, cx) {
                 // A query matching no rows has nothing to cycle: stay open so
@@ -49,6 +53,10 @@ impl DesktopView {
     pub(super) fn cancel_prompt_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.palette.is_some() && self.palette_kind == PaletteKind::PromptHistory {
             self.close_palette(window, cx);
+        } else {
+            // Nothing to cancel: a swallowed Ctrl+G would never reach the
+            // shell bell or any other raw handler below this action.
+            cx.propagate();
         }
     }
 
@@ -173,6 +181,10 @@ impl DesktopView {
 
     /// Cycle the scope (CLI Ctrl+S parity). Opens the palette when closed.
     pub(super) fn cycle_history_scope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.terminal_owns_control_keys(window) {
+            cx.propagate();
+            return;
+        }
         if self.palette.is_none() || self.palette_kind != PaletteKind::PromptHistory {
             self.open_prompt_history(window, cx);
             return;

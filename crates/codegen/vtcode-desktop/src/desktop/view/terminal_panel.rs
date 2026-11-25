@@ -208,6 +208,16 @@ impl DesktopView {
         }
     }
 
+    /// Whether control-key chords belong to the shell rather than desktop
+    /// commands. A matched keybinding consumes the keystroke before raw
+    /// handlers run, so DESKTOP-scoped chords (reverse-i-search, XOFF, bell)
+    /// would never reach the PTY while the grid has focus. Handlers for those
+    /// chords propagate here instead of consuming them — the same idle
+    /// propagation `dismiss_overlay` uses so Escape reaches the shell.
+    pub(super) fn terminal_owns_control_keys(&self, window: &Window) -> bool {
+        self.terminal_focus.is_focused(window)
+    }
+
     fn handle_terminal_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let Some(tab) = self.terminal.as_mut() else {
             return;

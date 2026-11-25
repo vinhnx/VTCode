@@ -399,6 +399,10 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &TakeLatestQueued, window, cx| {
                 if view.composer.read(cx).focus_handle(cx).is_focused(window) {
                     view.take_latest_queued(cx);
+                } else {
+                    // Idle outside the composer: Alt-Up must keep falling
+                    // through to the terminal grid and other raw handlers.
+                    cx.propagate();
                 }
             }))
             .on_action(
