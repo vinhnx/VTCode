@@ -11,7 +11,8 @@ use super::*;
 #[cfg(test)]
 use gpui_kit::Global;
 #[cfg(not(test))]
-use objc2_service_management::{SMAppService, SMAppServiceStatus};
+use objc2_service_management::SMAppService;
+use objc2_service_management::SMAppServiceStatus;
 
 /// What the settings toggle understands. `NotRegistered` and `NotFound`
 /// both read as [`LoginItemStatus::Disabled`]: nothing launches at login.
@@ -31,6 +32,17 @@ struct LoginItemStub {
 
 #[cfg(test)]
 impl Global for LoginItemStub {}
+
+/// Map a ServiceManagement status onto the settings toggle's view. Both
+/// "not registered" and "not found" mean nothing launches at login. Pure so
+/// the OS contract is testable without calling into the framework.
+fn login_item_status(status: SMAppServiceStatus) -> LoginItemStatus {
+    match status {
+        SMAppServiceStatus::Enabled => LoginItemStatus::Enabled,
+        SMAppServiceStatus::RequiresApproval => LoginItemStatus::RequiresApproval,
+        _ => LoginItemStatus::Disabled,
+    }
+}
 
 /// Current OS status.
 pub(super) fn status(cx: &App) -> LoginItemStatus {
@@ -57,11 +69,7 @@ fn native_status() -> LoginItemStatus {
     // main-thread requirement.
     let service = unsafe { SMAppService::mainAppService() };
     // SAFETY: `status` reads registration state.
-    match unsafe { service.status() } {
-        SMAppServiceStatus::Enabled => LoginItemStatus::Enabled,
-        SMAppServiceStatus::RequiresApproval => LoginItemStatus::RequiresApproval,
-        _ => LoginItemStatus::Disabled,
-    }
+    login_item_status(unsafe { service.status() })
 }
 
 /// Register or unregister the login item, returning the resulting status.
@@ -251,5 +259,19 @@ impl DesktopView {
             ));
         }
         accessible_group_box("login-items-settings-group", title, group)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_management_status_maps_to_the_toggle_states() {
+        assert_eq!(login_item_status(SMAppServiceStatus::NotRegistered), LoginItemStatus::Disabled);
+        assert_eq!(login_item_status(SMAppServiceStatus::Enabled), LoginItemStatus::Enabled);
+        assert_eq!(login_item_status(SMAppServiceStatus::RequiresApproval), LoginItemStatus::RequiresApproval);
+        assert_eq!(login_item_status(SMAppServiceStatus::NotFound), LoginItemStatus::Disabled);
+        assert_eq!(login_item_status(SMAppServiceStatus(42)), LoginItemStatus::Disabled);
     }
 }
