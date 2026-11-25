@@ -6,23 +6,28 @@ use super::*;
 /// does not add locale keys without full native-quality translations.
 const TERMINAL_CTA_LABEL: &str = "Monitor in bottom terminal";
 
+/// Prepare the dotted rule's geometry from resolved frame bounds.
+///
+/// Called by the canvas prepaint phase; the resulting path is passed to paint
+/// unchanged. A single dashed stroke replaces the old loop of up to 1024
+/// filled quads built during paint, and does not truncate rows wider than
+/// 3072 px. The half-pixel offset keeps the 1 px stroke pixel-aligned.
+fn dotted_rule_path(bounds: gpui_kit::Bounds<Pixels>) -> Option<gpui_kit::Path<Pixels>> {
+    let mut builder = gpui_kit::PathBuilder::stroke(px(1.0)).dash_array(&[px(1.0), px(2.0)]);
+    let y = bounds.origin.y + px(0.5);
+    builder.move_to(point(bounds.origin.x, y));
+    builder.line_to(point(bounds.origin.x + bounds.size.width, y));
+    builder.build().ok()
+}
+
 impl DesktopView {
     /// A small, theme-colored dotted rule under an actionable filename.
     pub(super) fn filename_dotted_underline(color: gpui_kit::Hsla) -> impl IntoElement {
         gpui_kit::canvas(
-            |_, _, _| (),
-            move |bounds, (), window, _| {
-                let width: f32 = bounds.size.width.into();
-                for index in 0_u16..1024 {
-                    let offset = f32::from(index) * 3.0;
-                    if offset >= width {
-                        break;
-                    }
-                    let x = bounds.origin.x + px(offset);
-                    window.paint_quad(gpui_kit::fill(
-                        gpui_kit::Bounds::new(point(x, bounds.origin.y), size(px(1.0), px(1.0))),
-                        color,
-                    ));
+            |bounds, _, _| dotted_rule_path(bounds),
+            move |_, path, window, _| {
+                if let Some(path) = path {
+                    window.paint_path(path, color);
                 }
             },
         )
@@ -294,6 +299,30 @@ impl DesktopView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dotted_rule_prepaint_builds_a_full_width_half_pixel_path() {
+        let wide = gpui_kit::Bounds {
+            origin: point(px(10.), px(20.)),
+            size: size(px(4000.), px(1.)),
+        };
+        let path = dotted_rule_path(wide).expect("the dashed rule must build from resolved bounds");
+        assert!(
+            path.bounds.size.width >= px(3998.),
+            "the rule follows the full resolved width, with no 1024-dot cap: {:?}",
+            path.bounds
+        );
+        assert!(
+            (px(19.9)..=px(20.1)).contains(&path.bounds.origin.y),
+            "the 1 px stroke stays pixel-aligned on the half pixel: {:?}",
+            path.bounds
+        );
+        let short = gpui_kit::Bounds {
+            origin: point(px(0.), px(0.)),
+            size: size(px(30.), px(1.)),
+        };
+        assert!(dotted_rule_path(short).is_some());
+    }
 
     #[test]
     fn kind_icons_name_the_tool_not_the_outcome() {
