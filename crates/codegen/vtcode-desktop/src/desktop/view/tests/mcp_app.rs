@@ -105,25 +105,30 @@ fn preview_element_id_keys_the_domain_and_hides_the_uri() {
 #[gpui_kit::test]
 fn preview_ids_survive_a_slot_change(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let app_uri = "ui://demo/app.html";
+    let second_uri = "ui://demo/second.html";
+    let app_id = preview_id("mcp-app-preview", app_uri);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.cli_config_settings = Some(std::rc::Rc::new(tier_snapshot("static")));
-            let mut item = preview_item();
-            let mut sibling = item.app_previews[0].clone();
-            sibling.uri = "ui://demo/second.html".into();
-            // Reverse the previews so the original one now occupies slot 1.
-            item.app_previews.insert(0, sibling);
-            view.transcript.push(item);
+            view.transcript.push(preview_item());
         });
         window.render_frame(cx);
-        // Domain-derived ids follow the preview, not its position. Positional
-        // ids would have moved the app preview to `-1` and lost this lookup.
-        assert!(window.try_find(preview_id("mcp-app-preview", "ui://demo/app.html")).is_some());
-        assert!(
-            window
-                .try_find(preview_id("mcp-app-preview", "ui://demo/second.html"))
-                .is_some()
-        );
+        // The app preview starts in slot 0; the sibling is not present yet.
+        assert!(window.try_find(app_id.clone()).is_some());
+        assert!(window.try_find(preview_id("mcp-app-preview", second_uri)).is_none());
+
+        view.update(cx, |view, _| {
+            let original = preview_item().app_previews[0].clone();
+            let mut sibling = original.clone();
+            sibling.uri = second_uri.into();
+            view.transcript.set_app_previews("app-1", vec![sibling, original]);
+        });
+        window.render_frame(cx);
+        // The same preview now sits in slot 1 but keeps its domain-derived id.
+        // A positional id would have moved it to `-1`, losing this lookup.
+        assert!(window.try_find(app_id).is_some());
+        assert!(window.try_find(preview_id("mcp-app-preview", second_uri)).is_some());
         assert!(window.try_find("mcp-app-preview-app-1-0").is_none());
         assert!(window.try_find("mcp-app-preview-app-1-1").is_none());
     })
