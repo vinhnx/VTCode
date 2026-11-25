@@ -725,6 +725,8 @@ struct DesktopView {
     browser_list_focus: FocusHandle,
     /// Project-tag filter state owned by the sidebar popover and manager.
     tag_filter_open: bool,
+    tag_all_open: bool,
+    tag_section_expanded: bool,
     _tag_search_subscription: Subscription,
     tag_search: Entity<InputState>,
     tag_manager_open: bool,

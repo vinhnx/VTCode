@@ -24,6 +24,7 @@ icon_assets!(
         House,
         Keyboard,
         LaptopMinimal,
+        Layers2,
         Leaf,
         ListChecks,
         ListTree,

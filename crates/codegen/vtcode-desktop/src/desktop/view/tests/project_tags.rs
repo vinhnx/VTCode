@@ -5,6 +5,7 @@ fn seed_projects(view: &Entity<DesktopView>, cx: &mut gpui_kit::App, entries: &[
     view.update(cx, |view, cx| {
         view.preferences.recent_workspaces = entries.iter().map(|(path, _)| (*path).to_owned()).collect();
         view.preferences.workspace_tags.workspaces.clear();
+        view.preferences.workspace_tags.active.clear();
         for (path, tags) in entries {
             let _ = view
                 .preferences
@@ -204,6 +205,168 @@ fn tag_manager_edits_tags_and_escape_restores_focus(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.try_find("tag-manager-dialog").is_none(), "Escape dismisses the topmost layer");
         assert!(!view.read(cx).tag_manager_open);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tag_section_collapses_and_radio_rows_select_a_context(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_projects(&view, cx, &[("/work/alpha", &["dev"]), ("/work/beta", &["infra"])]);
+        window.render_frame(cx);
+        assert!(window.try_find("tag-section-toggle").is_some());
+        assert!(window.try_find("tag-section-dev").is_some());
+        assert!(window.try_find("tag-section-infra").is_some());
+
+        window.click("tag-section-toggle", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tag-section-dev").is_none(), "collapsed section hides its rows");
+
+        window.click("tag-section-toggle", cx);
+        window.render_frame(cx);
+        window.click("tag-section-dev", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.workspace_tags.active, ["dev".to_owned()]);
+        assert_eq!(view.read(cx).visible_recent_workspaces(), ["/work/alpha".to_owned()]);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn all_tags_row_opens_the_searchable_multi_select_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_projects(&view, cx, &[("/work/alpha", &["dev"]), ("/work/beta", &["infra"])]);
+        window.render_frame(cx);
+        window.click("tag-section-all", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).tag_all_open, "the section row opens its own picker");
+        assert!(!view.read(cx).tag_filter_open, "the compact picker stays closed");
+        assert!(window.try_find("tag-filter-dev").is_some());
+        assert!(window.try_find("tag-filter-infra").is_some());
+
+        window.click("tag-filter-dev", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.workspace_tags.active, ["dev".to_owned()]);
+
+        window.click_with_modifiers("tag-filter-infra", Modifiers::shift(), cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.workspace_tags.active,
+            ["dev".to_owned(), "infra".to_owned()],
+            "Shift+click from the section picker combines contexts"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn section_picker_closes_before_the_manager_or_on_collapse(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_projects(&view, cx, &[("/work/alpha", &["dev"])]);
+        window.render_frame(cx);
+        window.click("tag-section-all", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).tag_all_open);
+
+        window.click("tag-manage-open", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).tag_manager_open);
+        assert!(!view.read(cx).tag_all_open, "a popover must not paint above the modal scrim");
+        assert!(window.try_find("tag-filter-list").is_none());
+
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.click("tag-section-all", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).tag_all_open);
+        view.update(cx, |view, cx| {
+            view.tag_search
+                .update(cx, |input, cx| input.set_value("stale query", window, cx));
+        });
+        window.click("tag-section-toggle", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).tag_all_open, "folding the section retires its picker");
+        assert_eq!(view.read(cx).tag_search.read(cx).value(), "", "a prop-driven close resets the query");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn section_picker_dismisses_with_escape(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_projects(&view, cx, &[("/work/alpha", &["dev"])]);
+        window.render_frame(cx);
+        window.click("tag-section-all", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).tag_all_open);
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).tag_all_open, "Escape dismisses the picker");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tag_section_caps_quick_rows_and_keeps_the_full_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let tags = ["t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"];
+        seed_projects(&view, cx, &[("/work/alpha", &tags)]);
+        window.render_frame(cx);
+        for tag in tags.iter().take(8) {
+            assert!(window.try_find(format!("tag-section-{tag}")).is_some(), "{tag} is a quick row");
+        }
+        // An active tag outside the alphabetical window is promoted into it.
+        view.update(cx, |view, _| {
+            view.preferences.workspace_tags.active = vec!["t9".to_owned()];
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("tag-section-t9").is_some(), "the active tag stays visible");
+        assert!(window.try_find("tag-section-t7").is_none(), "the cap still applies");
+
+        view.update(cx, |view, _| {
+            view.preferences.workspace_tags.active.clear();
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("tag-section-t8").is_none(), "the section must not starve the thread list");
+        assert!(window.try_find("tag-section-all").is_some());
+
+        window.click("tag-section-all", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tag-filter-t9").is_some(), "the full picker still lists every tag");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn reselecting_a_radio_row_keeps_the_context(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        seed_projects(&view, cx, &[("/work/alpha", &["dev"]), ("/work/beta", &["infra"])]);
+        window.render_frame(cx);
+        window.click("tag-section-dev", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.workspace_tags.active, ["dev".to_owned()]);
+
+        window.click("tag-section-dev", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.workspace_tags.active,
+            ["dev".to_owned()],
+            "re-clicking the selected radio must not clear the context"
+        );
+
+        window.click("tag-section-infra", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.workspace_tags.active,
+            ["infra".to_owned()],
+            "choosing another radio replaces the single context"
+        );
     })
     .unwrap();
 }

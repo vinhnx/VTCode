@@ -657,6 +657,8 @@ impl DesktopView {
             browser_focus: cx.focus_handle().tab_stop(true),
             browser_list_focus: cx.focus_handle().tab_stop(true),
             tag_filter_open: false,
+            tag_all_open: false,
+            tag_section_expanded: true,
             _tag_search_subscription,
             tag_search,
             tag_manager_open: false,

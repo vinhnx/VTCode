@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use super::*;
 use gpui_kit::ClickEvent;
 use gpui_kit::base::InteractiveElementExt;
+use gpui_kit::component::popover::PopoverState;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::ThemeColor;
 
@@ -30,6 +31,190 @@ fn project_tag_chip(tag: &str, selected: bool, colors: &ThemeColor) -> Tag {
         .max_w(gpui_kit::rems(8.))
         .text_xs()
         .child(div().truncate().child(tag.to_owned()))
+}
+
+#[derive(Clone, Copy)]
+enum TagPickerAnchor {
+    Header,
+    AllTags,
+}
+
+/// The shared tag picker body, used by both the compact trigger and the
+/// sidebar section's "All Tags…" row.
+fn tag_picker_content(
+    view: WeakEntity<DesktopView>,
+    search: Entity<InputState>,
+) -> impl Fn(&mut PopoverState, &mut Window, &mut Context<PopoverState>) -> AnyElement {
+    move |_popover, _window, cx| {
+        let colors = cx.theme().colors;
+        let weak = view.clone();
+        let query = search.read(cx).value().to_string().to_lowercase();
+        let (tags, project_names, active_tags) = weak
+            .read_with(cx, |view, _| {
+                let state = &view.preferences.workspace_tags;
+                let all = state.all_tags();
+                let matches_query = |tag: &str| {
+                    query.is_empty()
+                        || tag.contains(&query)
+                        || state.workspaces.iter().any(|(path, tags)| {
+                            path.to_lowercase().contains(&query) && tags.iter().any(|entry| entry == tag)
+                        })
+                };
+                let tags = all.into_iter().filter(|(tag, _)| matches_query(tag)).collect::<Vec<_>>();
+                let project_names = view.preferences.recent_workspaces.len();
+                (tags, project_names, view.preferences.workspace_tags.active.clone())
+            })
+            .ok()
+            .unwrap_or((Vec::new(), 0, Vec::new()));
+
+        let mut content = div()
+            .id("tag-filter-list")
+            .w_full()
+            .max_h(px(340.))
+            .lock_scroll_axis()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(Input::new(&search).small().w_full())
+            .child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child(format!("{project_names} projects")),
+            );
+        if tags.is_empty() {
+            content = content.child(div().px_2().py_2().text_sm().text_color(colors.muted_foreground).child(
+                if query.is_empty() {
+                    "No tags yet. Manage tags to add one."
+                } else {
+                    "No tags match your search."
+                },
+            ));
+        }
+        for (tag, count) in tags {
+            let selected = active_tags.iter().any(|active| active == &tag);
+            let tag_for_click = tag.clone();
+            let click_weak = weak.clone();
+            content = content.child(
+                desktop_ghost_button(format!("tag-filter-{tag}"))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .w_full()
+                            .child(project_tag_chip(&tag, selected, &colors))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_xs()
+                                    .text_color(colors.muted_foreground)
+                                    .child(count.to_string()),
+                            ),
+                    )
+                    .accessibility_label(format!("{tag}, {count} projects"))
+                    .w_full()
+                    .justify_start()
+                    .toggled(selected)
+                    .on_click(move |event: &ClickEvent, window, cx| {
+                        let _updated = click_weak.update(cx, |view, cx| {
+                            view.toggle_tag_filter(&tag_for_click, event.modifiers().shift, window, cx);
+                        });
+                    }),
+            );
+        }
+        if !active_tags.is_empty() {
+            let clear_weak = weak.clone();
+            content = content.child(
+                desktop_ghost_button("tag-filter-clear")
+                    .icon(IconName::X)
+                    .label("Clear filter")
+                    .w_full()
+                    .justify_start()
+                    .on_click(move |_, _, cx| {
+                        let _updated = clear_weak.update(cx, |view, cx| view.clear_tag_filter(cx));
+                    }),
+            );
+        }
+        let manage_weak = weak.clone();
+        content = content.child(
+            desktop_ghost_button("tag-manage-open")
+                .icon(IconName::Settings2)
+                .label("Manage tags")
+                .w_full()
+                .justify_start()
+                .on_click(move |_, window, cx| {
+                    let _updated = manage_weak.update(cx, |view, cx| view.open_tag_manager(window, cx));
+                }),
+        );
+        content.into_any_element()
+    }
+}
+
+fn tag_filter_popover(
+    id: &'static str,
+    anchor: TagPickerAnchor,
+    trigger: Button,
+    open: bool,
+    view: WeakEntity<DesktopView>,
+    search: Entity<InputState>,
+) -> Popover {
+    let open_view = view.clone();
+    Popover::new(id)
+        .anchor(Anchor::TopLeft)
+        .offset(px(6.))
+        .w(px(300.))
+        .max_h(px(380.))
+        .open(open)
+        .on_open_change(move |is_open, window, cx| {
+            let _updated = open_view.update(cx, |view, cx| {
+                // Kit does not announce prop-driven closes, so reset on both
+                // transitions and keep only one picker open at a time.
+                view.tag_search.update(cx, |input, cx| input.set_value("", window, cx));
+                match anchor {
+                    TagPickerAnchor::Header => {
+                        view.tag_filter_open = *is_open;
+                        if *is_open {
+                            view.tag_all_open = false;
+                        }
+                    }
+                    TagPickerAnchor::AllTags => {
+                        view.tag_all_open = *is_open;
+                        if *is_open {
+                            view.tag_filter_open = false;
+                        }
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .trigger(trigger)
+        .content(tag_picker_content(view, search))
+}
+
+/// The section is a quick-access list, not the full tag registry: many tags
+/// would push the sidebar's thread list (a `flex_1` region) down to zero.
+const MAX_SECTION_TAG_ROWS: usize = 8;
+
+/// Radio marker for the section's single-select tag rows.
+fn tag_radio(selected: bool, colors: &ThemeColor) -> AnyElement {
+    div()
+        .size(gpui_kit::rems(1.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .border_1()
+        .border_color(if selected {
+            colors.primary
+        } else {
+            themes::soft_edge_color(colors)
+        })
+        .when(selected, |marker| marker.child(div().size(gpui_kit::rems(0.5)).rounded_full().bg(colors.primary)))
+        .into_any_element()
 }
 
 impl DesktopView {
@@ -85,41 +270,16 @@ impl DesktopView {
             && self.workspace_switch_idle()
     }
 
-    /// Select or combine a tag context. A plain click picks one tag (or clears
-    /// it when already selected); Shift+click toggles it in the existing set.
-    pub(super) fn toggle_tag_filter(&mut self, tag: &str, combine: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let state = &mut self.preferences.workspace_tags;
-        let active = &mut state.active;
-        let position = active.iter().position(|existing| existing == tag);
-        let changed = if combine {
-            match position {
-                Some(index) => {
-                    let _ = active.remove(index);
-                    true
-                }
-                None => {
-                    active.push(tag.to_owned());
-                    true
-                }
-            }
-        } else {
-            let next = if active.as_slice() == [tag] {
-                Vec::new()
-            } else {
-                vec![tag.to_owned()]
-            };
-            if *active != next {
-                *active = next;
-                true
-            } else {
-                false
-            }
-        };
-        let pruned = state.prune_active();
-        self.commit_tag_change(changed || pruned, cx);
+    /// Apply a new active set, prune stale entries, and move an untouched
+    /// landing page into the resulting context. Shared by every filter path
+    /// so the auto-switch rule cannot drift between pickers and radio rows.
+    fn apply_tag_filter(&mut self, next: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preferences.workspace_tags.active == next {
+            return;
+        }
+        self.preferences.workspace_tags.active = next;
+        self.commit_tag_change(true, cx);
 
-        // Move an untouched landing page into the new context; never disturb
-        // an open conversation or a draft (see `new_thread_page_untouched`).
         if !self.preferences.workspace_tags.active.is_empty()
             && self.new_thread_page_untouched(cx)
             && let Some(path) = self.visible_recent_workspaces().into_iter().next()
@@ -132,6 +292,35 @@ impl DesktopView {
         }
     }
 
+    /// Select or combine a tag context. A plain click picks one tag (or clears
+    /// it when already selected); Shift+click toggles it in the existing set.
+    pub(super) fn toggle_tag_filter(&mut self, tag: &str, combine: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let current = &self.preferences.workspace_tags.active;
+        let next = if combine {
+            let mut next = current.clone();
+            match next.iter().position(|existing| existing == tag) {
+                Some(index) => {
+                    let _ = next.remove(index);
+                }
+                None => next.push(tag.to_owned()),
+            }
+            next
+        } else if current.as_slice() == [tag] {
+            Vec::new()
+        } else {
+            vec![tag.to_owned()]
+        };
+        self.apply_tag_filter(next, window, cx);
+    }
+
+    /// Radio-row semantics: selecting the already-selected tag is a no-op.
+    pub(super) fn select_tag_context(&mut self, tag: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preferences.workspace_tags.active.as_slice() == [tag] {
+            return;
+        }
+        self.apply_tag_filter(vec![tag.to_owned()], window, cx);
+    }
+
     pub(super) fn clear_tag_filter(&mut self, cx: &mut Context<Self>) {
         self.preferences.workspace_tags.active.clear();
         self.commit_tag_change(true, cx);
@@ -139,7 +328,11 @@ impl DesktopView {
 
     pub(super) fn open_tag_manager(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.disarm_double_escape();
+        // Deferred popovers paint above modal scrims, so neither picker may
+        // survive the manager opening.
         self.tag_filter_open = false;
+        self.tag_all_open = false;
+        self.tag_search.update(cx, |input, cx| input.set_value("", window, cx));
         self.tag_manager_open = true;
         self.tag_error = None;
         self.tag_manager_focus.focus(window, cx);
@@ -238,135 +431,103 @@ impl DesktopView {
             })
             .tooltip("Filter projects by tag")
             .toggled(self.tag_filter_open || active);
+        tag_filter_popover(
+            "project-tag-filter-popover",
+            TagPickerAnchor::Header,
+            trigger,
+            self.tag_filter_open && !self.tag_all_open,
+            cx.entity().downgrade(),
+            self.tag_search.clone(),
+        )
+        .into_any_element()
+    }
 
-        let open_view = cx.entity().downgrade();
-        let content_view = cx.entity().downgrade();
-        let search = self.tag_search.clone();
-        Popover::new("project-tag-filter-popover")
-            .anchor(Anchor::TopLeft)
-            .offset(px(6.))
-            .w(px(300.))
-            .max_h(px(380.))
-            .open(self.tag_filter_open)
-            .on_open_change(move |open, window, cx| {
-                let _updated = open_view.update(cx, |view, cx| {
-                    // Kit does not announce prop-driven closes, so reset on
-                    // both transitions: a programmatic close must not leave a
-                    // stale query for the next open.
-                    view.tag_search.update(cx, |input, cx| input.set_value("", window, cx));
-                    view.tag_filter_open = *open;
-                    cx.notify();
-                });
-            })
-            .trigger(trigger)
-            .content(move |_popover, _window, cx| {
-                let colors = cx.theme().colors;
-                let weak = content_view.clone();
-                let query = search.read(cx).value().to_string().to_lowercase();
-                let (tags, project_names, active_tags) = weak
-                    .read_with(cx, |view, _| {
-                        let state = &view.preferences.workspace_tags;
-                        let all = state.all_tags();
-                        let matches_query = |tag: &str| {
-                            query.is_empty()
-                                || tag.contains(&query)
-                                || state.workspaces.iter().any(|(path, tags)| {
-                                    path.to_lowercase().contains(&query) && tags.iter().any(|entry| entry == tag)
-                                })
-                        };
-                        let tags = all.into_iter().filter(|(tag, _)| matches_query(tag)).collect::<Vec<_>>();
-                        let project_names = view.preferences.recent_workspaces.len();
-                        (tags, project_names, view.preferences.workspace_tags.active.clone())
-                    })
-                    .ok()
-                    .unwrap_or((Vec::new(), 0, Vec::new()));
-
-                let mut content = div()
-                    .id("tag-filter-list")
+    /// Collapsible Tags section in the workspace sidebar: quick single-tag
+    /// filters, plus "All Tags…" for the searchable multi-select picker.
+    pub(super) fn render_tag_section(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let expanded = self.tag_section_expanded;
+        let title = "Tags";
+        let header = desktop_ghost_button("tag-section-toggle")
+            .w_full()
+            .px_0()
+            .accessibility_label(format!("{} {title}", if expanded { "Collapse" } else { "Expand" }))
+            .toggled(expanded)
+            .child(
+                div()
                     .w_full()
-                    .max_h(px(340.))
-                    .lock_scroll_axis()
-                    .overflow_y_scroll()
                     .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(Input::new(&search).small().w_full())
-                    .child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child(format!("{project_names} projects")),
-                    );
-                if tags.is_empty() {
-                    content = content.child(div().px_2().py_2().text_sm().text_color(colors.muted_foreground).child(
-                        if query.is_empty() {
-                            "No tags yet. Manage tags to add one."
-                        } else {
-                            "No tags match your search."
-                        },
-                    ));
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(eyebrow_label(title.to_owned(), &colors))
+                    .child(transcript_chevron_lane(expanded).text_color(colors.muted_foreground)),
+            )
+            .on_click(cx.listener(|view: &mut Self, _, window, cx| {
+                view.tag_section_expanded = !view.tag_section_expanded;
+                if !view.tag_section_expanded {
+                    view.tag_all_open = false;
+                    view.tag_search.update(cx, |input, cx| input.set_value("", window, cx));
                 }
-                for (tag, count) in tags {
-                    let selected = active_tags.iter().any(|active| active == &tag);
-                    let tag_for_click = tag.clone();
-                    let click_weak = weak.clone();
-                    content = content.child(
-                        desktop_ghost_button(format!("tag-filter-{tag}"))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .w_full()
-                                    .child(project_tag_chip(&tag, selected, &colors))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .text_xs()
-                                            .text_color(colors.muted_foreground)
-                                            .child(count.to_string()),
-                                    ),
-                            )
-                            .accessibility_label(format!("{tag}, {count} projects"))
-                            .w_full()
-                            .justify_start()
-                            .toggled(selected)
-                            .on_click(move |event: &ClickEvent, window, cx| {
-                                let _updated = click_weak.update(cx, |view, cx| {
-                                    view.toggle_tag_filter(&tag_for_click, event.modifiers().shift, window, cx);
-                                });
-                            }),
-                    );
-                }
-                if !active_tags.is_empty() {
-                    let clear_weak = weak.clone();
-                    content = content.child(
-                        desktop_ghost_button("tag-filter-clear")
-                            .icon(IconName::X)
-                            .label("Clear filter")
-                            .w_full()
-                            .justify_start()
-                            .on_click(move |_, _, cx| {
-                                let _updated = clear_weak.update(cx, |view, cx| view.clear_tag_filter(cx));
-                            }),
-                    );
-                }
-                let manage_weak = weak.clone();
-                content = content.child(
-                    desktop_ghost_button("tag-manage-open")
-                        .icon(IconName::Settings2)
-                        .label("Manage tags")
+                cx.notify();
+            }));
+
+        let mut section = div().w_full().flex().flex_col().gap_1().child(header);
+        if expanded {
+            let state = &self.preferences.workspace_tags;
+            let tags = state.all_tags();
+            let total_tags = tags.len();
+            let active = state.active.clone();
+            // Keep active tags in the quick list even when it is capped, so
+            // the selected state is always visible without opening the picker.
+            let mut tags = tags.into_iter().collect::<Vec<_>>();
+            tags.sort_by(|(left, _), (right, _)| {
+                active.contains(right).cmp(&active.contains(left)).then(left.cmp(right))
+            });
+            let mut body = div().w_full().flex().flex_col().gap_1();
+            for (tag, count) in tags.into_iter().take(MAX_SECTION_TAG_ROWS) {
+                let selected = active.contains(&tag);
+                let tag_for_click = tag.clone();
+                body = body.child(
+                    desktop_ghost_button(format!("tag-section-{tag}"))
                         .w_full()
                         .justify_start()
-                        .on_click(move |_, window, cx| {
-                            let _updated = manage_weak.update(cx, |view, cx| view.open_tag_manager(window, cx));
-                        }),
+                        .accessibility_label(format!("{tag}, {count} projects"))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .w_full()
+                                .child(tag_radio(selected, &colors))
+                                .child(div().flex_1().min_w_0().truncate().text_sm().child(tag.clone()))
+                                .child(div().text_xs().text_color(colors.muted_foreground).child(count.to_string())),
+                        )
+                        .toggled(selected)
+                        .on_click(cx.listener(move |view: &mut Self, _, window, cx| {
+                            view.select_tag_context(&tag_for_click, window, cx);
+                        })),
                 );
-                content.into_any_element()
-            })
-            .into_any_element()
+            }
+            section = section.child(body);
+            let all_trigger = desktop_ghost_button("tag-section-all")
+                .icon(IconName::Layers2)
+                .label("All Tags…")
+                .accessibility_label("All Tags…")
+                .tooltip(format!("{total_tags} tags"))
+                .w_full()
+                .justify_start()
+                .toggled(self.tag_all_open);
+            section = section.child(tag_filter_popover(
+                "tag-section-all-popover",
+                TagPickerAnchor::AllTags,
+                all_trigger,
+                self.tag_all_open && !self.tag_filter_open,
+                cx.entity().downgrade(),
+                self.tag_search.clone(),
+            ));
+        }
+        section.into_any_element()
     }
 
     /// Full-screen management surface for tags and per-project tag edits.

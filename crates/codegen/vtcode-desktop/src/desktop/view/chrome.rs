@@ -7,6 +7,7 @@ use gpui_kit::component::menu::ContextMenuExt;
 impl DesktopView {
     pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let tag_filter = self.render_tag_filter(cx);
+        let tag_section = self.render_tag_section(cx);
         let theme = cx.theme();
         let workspace_section = rust_i18n::t!(i18n::WORKSPACE_SECTION).to_string();
         let projects_section = rust_i18n::t!("app.workspace.projects").to_string();
@@ -152,6 +153,8 @@ impl DesktopView {
                 )
             })));
         }
+
+        sidebar = sidebar.child(tag_section);
 
         sidebar = sidebar.child(
             div()
