@@ -8,8 +8,29 @@ use std::borrow::Cow;
 use super::*;
 use gpui_kit::ClickEvent;
 use gpui_kit::base::InteractiveElementExt;
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::theme::ThemeColor;
 
 use crate::desktop::project_tags::{MAX_TAGS_PER_WORKSPACE, normalize_tag};
+
+/// One neutral tag chip. Selected tags use the filled accent token with the
+/// design system's AA-safe label; resting tags use a recessed fill with the
+/// shared soft-edge border. No per-tag colors: tags are labels, not status.
+fn project_tag_chip(tag: &str, selected: bool, colors: &ThemeColor) -> Tag {
+    let (fill, label, border) = if selected {
+        (colors.primary, themes::filled_button_foreground(colors.primary), colors.primary)
+    } else {
+        (colors.secondary, colors.foreground, themes::soft_edge_color(colors))
+    };
+    // Kit's `small()` sets a 0.625rem label; pin our `text_xs` floor so the
+    // chip never drops below the app's smallest supported text size.
+    Tag::custom(fill, label, border)
+        .small()
+        .rounded_full()
+        .max_w(gpui_kit::rems(8.))
+        .text_xs()
+        .child(div().truncate().child(tag.to_owned()))
+}
 
 impl DesktopView {
     /// Sessions in the active context. The unfiltered case (the common one)
@@ -203,11 +224,12 @@ impl DesktopView {
 
     /// Sidebar trigger plus its searchable tag popover.
     pub(super) fn render_tag_filter(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
         let label = self.tag_active_label();
         let active = !label.is_empty();
         let trigger = desktop_ghost_button("project-tag-filter")
             .icon(IconName::Tags)
-            .when(active, |button| button.label(label.clone()))
+            .when(active, |button| button.child(project_tag_chip(&label, true, &colors)))
             .small()
             .accessibility_label(if active {
                 format!("Filter projects by tag: {label}")
@@ -292,12 +314,25 @@ impl DesktopView {
                     let click_weak = weak.clone();
                     content = content.child(
                         desktop_ghost_button(format!("tag-filter-{tag}"))
-                            .label(format!("{tag}  {count}"))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .w_full()
+                                    .child(project_tag_chip(&tag, selected, &colors))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .text_xs()
+                                            .text_color(colors.muted_foreground)
+                                            .child(count.to_string()),
+                                    ),
+                            )
                             .accessibility_label(format!("{tag}, {count} projects"))
                             .w_full()
                             .justify_start()
                             .toggled(selected)
-                            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                             .on_click(move |event: &ClickEvent, window, cx| {
                                 let _updated = click_weak.update(cx, |view, cx| {
                                     view.toggle_tag_filter(&tag_for_click, event.modifiers().shift, window, cx);
@@ -384,8 +419,8 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(Icon::new(IconName::Tags).small().text_color(colors.primary))
-                            .child(div().flex_1().min_w_0().text_sm().truncate().child(tag.clone()))
+                            .child(project_tag_chip(tag, selected, &colors))
+                            .child(div().flex_1())
                             .child(div().text_xs().text_color(colors.muted_foreground).child(format!("{count}")))
                             .when(selected, |row| row.child(div().text_xs().text_color(colors.primary).child("active")))
                             .child(
@@ -511,13 +546,31 @@ impl DesktopView {
                                     .truncate()
                                     .child(workspace_short_name(&path).to_string()),
                             )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(colors.muted_foreground)
-                                    .truncate()
-                                    .child(tags.join(" · ")),
-                            )
+                            .child({
+                                let mut chips = div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .overflow_hidden()
+                                    .max_w(gpui_kit::rems(17.5));
+                                for tag in tags.iter().take(3) {
+                                    chips = chips.child(project_tag_chip(tag, active.contains(tag), &colors));
+                                }
+                                if tags.len() > 3 {
+                                    chips = chips.child(
+                                        Tag::custom(
+                                            colors.secondary,
+                                            colors.muted_foreground,
+                                            themes::soft_edge_color(&colors),
+                                        )
+                                        .small()
+                                        .rounded_full()
+                                        .text_xs()
+                                        .child(format!("+{}", tags.len() - 3)),
+                                    );
+                                }
+                                chips
+                            })
                             .child(
                                 desktop_ghost_button(opaque_path_element_id("tag-manager-edit", &path))
                                     .icon(IconName::Pencil)
@@ -548,7 +601,8 @@ impl DesktopView {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(div().flex_1().text_sm().child(tag.clone()))
+                                    .child(project_tag_chip(tag, active.contains(tag), &colors))
+                                    .child(div().flex_1())
                                     .child(
                                         desktop_ghost_button(remove_id)
                                             .icon(IconName::X)
