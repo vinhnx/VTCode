@@ -59,6 +59,53 @@ fn images_open_in_the_viewer_while_text_routes_externally(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
+fn file_preview_image_keeps_a_stable_identity(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    std::fs::write(workspace.path().join("shot.png"), TINY_PNG).expect("fixture image");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_image_viewer("shot.png".into(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // Pinned `gpui-fast 0.1.17` `elements/img.rs` advances a multi-frame
+        // image only when the element has retained state, and retained state
+        // requires an `ElementId`. The viewer accepts gif/webp, so this
+        // identity is what makes those formats actually animate.
+        assert!(window.try_find("file-preview-image").is_some(), "the image keeps a stable id");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn undecodable_image_shows_the_preview_unavailable_fallback(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    // A supported extension with bytes the decoder rejects: `read_image`
+    // succeeds, so only `img()`'s fallback can report this to the user.
+    std::fs::write(workspace.path().join("broken.png"), b"not a png").expect("corrupt fixture");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_image_viewer("broken.png".into(), window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let expected = rust_i18n::t!("app.files.preview_unavailable", path = "broken.png").to_string();
+        assert_eq!(window.find("file-preview-unavailable").label(), Some(expected.as_str()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn image_viewer_refuses_non_images(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     std::fs::write(workspace.path().join("notes.md"), "# Notes\n").unwrap();

@@ -65,17 +65,24 @@ Tokenizing (rather than matching source text) ignores comments and string litera
 bodies in scope, and avoids false failures from fake variants mentioned in prose; the scan unit test pins all of
 those cases plus the `ALL` exclusion.
 
-Images reviewed 2026-11-24 against the
+Images reviewed 2026-11-24 and deep-passed 2026-11-25 against the
 [GPUI Kit images guide](https://gpui-kit.com/docs/image/) (site v0.11.0,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims re-verified against pinned
-`gpui-fast 0.1.17` `elements/img.rs`, `image_cache.rs` and `platform.rs::Image`). ALREADY PRESENT: both desktop image
+`gpui-fast 0.1.17` `elements/img.rs`, `image_cache.rs`, `platform.rs` and `window.rs`). ALREADY PRESENT: both desktop image
 holders (`files::Preview::image`, `computer_preview::Body::image`) are `Arc<gpui_kit::Image>` — encoded bytes already
 held — so there is no URL, asset-key, filesystem-path or custom-loader path to fix, and no native `HttpClient` is
 needed. `brand_mark` sets both `.text_color(...)` and `.size(...)` on the `svg()` element itself; full-color art uses
-`img()` with explicit bounds; no animated image or `with_loading`/`with_fallback` consumer needs `.id(...)`. SKIPPED:
-HTTP-layer caching (no remote images), scoped caches (the App cache already keys by source), and reserving a box for
-the screenshot preview (bytes are already held and the card sets width; a fixed height would letterbox varying aspect
-ratios — a design decision, not a code fix).
+`img()` with explicit bounds; no `with_loading` consumer needs `.id(...)`. SKIPPED: HTTP-layer caching (no remote
+images), scoped caches (the App cache already keys by source), and reserving a box for the screenshot preview (bytes
+are already held and the card sets width; a fixed height would letterbox varying aspect ratios — a design decision,
+not a code fix). APPLIED 2026-11-25 (reverses the earlier "no animated image" verdict): `files::is_image_path` accepts
+gif/webp, so the viewer does render animated formats, but pinned `elements/img.rs` advances frames only when the
+`Img` has retained element state, which requires an `ElementId`. The viewer's `img()` now carries
+`.id("file-preview-image")`; decode failures happen after the file read (so `open_image_viewer` cannot catch them) and
+now use `.with_fallback(...)` with an accessible `file-preview-unavailable` node reusing `app.files.preview_unavailable`.
+Pinned by `view/tests/files_preview.rs::file_preview_image_keeps_a_stable_identity` and
+`::undecodable_image_shows_the_preview_unavailable_fallback` (both fail with the old chain). `.test_support()` stays
+last: it wraps the element in `Observed<E>`, which ends image-specific builder methods.
 
 Focus reviewed 2026-11-24 against the
 [GPUI Kit focus guide](https://gpui-kit.com/docs/focus/) (site v0.11.0; claims re-verified against the pinned

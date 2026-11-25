@@ -71,6 +71,7 @@ impl ProjectTagsState {
     }
 
     /// Whether a workspace belongs to the active context.
+    #[cfg(test)]
     pub(super) fn matches(&self, workspace: &str) -> bool {
         let active = self.effective_active();
         self.matches_active(workspace, &active)
@@ -124,6 +125,7 @@ impl ProjectTagsState {
     }
 
     /// Replace all tags on a workspace. Returns whether anything changed.
+    #[cfg(test)]
     pub(super) fn set_workspace_tags(&mut self, workspace: &str, tags: Vec<String>) -> bool {
         // All-or-nothing: an invalid entry must never silently clear a
         // project's existing tags.

@@ -845,24 +845,46 @@ impl DesktopView {
                         // The viewer only ever holds images: the open path
                         // gates on the image allowlist, so the `None` arm
                         // keeps the match total without rendering.
-                        Some(image) => div()
-                            .id("file-preview-body")
-                            .test_support()
-                            .flex_1()
-                            .min_h_0()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .overflow_hidden()
-                            .p_3()
-                            .child(
-                                img(image)
-                                    .max_w_full()
-                                    .max_h_full()
-                                    .object_fit(gpui_kit::ObjectFit::Contain)
-                                    .rounded_md(),
-                            )
-                            .into_any_element(),
+                        Some(image) => {
+                            // `img()` decodes `Arc<Image>` asynchronously. An id gives
+                            // the element retained state, which animated GIF/WebP need
+                            // to advance frames; without one they show only frame 0.
+                            let unavailable =
+                                rust_i18n::t!("app.files.preview_unavailable", path = preview.rel_path.as_str())
+                                    .to_string();
+                            div()
+                                .id("file-preview-body")
+                                .test_support()
+                                .flex_1()
+                                .min_h_0()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .overflow_hidden()
+                                .p_3()
+                                .child(
+                                    img(image)
+                                        .id("file-preview-image")
+                                        .max_w_full()
+                                        .max_h_full()
+                                        .object_fit(gpui_kit::ObjectFit::Contain)
+                                        .rounded_md()
+                                        // Decode failures happen after the file read,
+                                        // so `open_image_viewer` cannot catch them.
+                                        .with_fallback(move || {
+                                            div()
+                                                .id("file-preview-unavailable")
+                                                .test_support()
+                                                .role(gpui_kit::Role::Label)
+                                                .aria_label(unavailable.clone())
+                                                .text_sm()
+                                                .child(unavailable.clone())
+                                                .into_any_element()
+                                        })
+                                        .test_support(),
+                                )
+                                .into_any_element()
+                        }
                         None => div().into_any_element(),
                     }),
             )

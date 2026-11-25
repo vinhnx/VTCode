@@ -460,7 +460,7 @@ impl DesktopView {
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .child(eyebrow_label(title.to_owned(), &colors))
+                    .child(eyebrow_label(title, &colors))
                     .child(transcript_chevron_lane(expanded).text_color(colors.muted_foreground)),
             )
             .on_click(cx.listener(|view: &mut Self, _, window, cx| {
