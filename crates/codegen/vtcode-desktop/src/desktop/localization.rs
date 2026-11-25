@@ -169,16 +169,17 @@ pub(super) type UiLanguageSelectState = SelectState<SearchableVec<UiLanguageOpti
 
 static KIT_TRANSLATIONS: Once = Once::new();
 
-/// Register app-owned overrides for GPUI Kit once, then keep both catalogs on
-/// the same locale. `rust-i18n` locale changes are global and do not notify GPUI.
+/// Register app-owned overrides for GPUI Kit once, then select the locale.
+/// `rust-i18n` locale changes are global and do not notify GPUI.
 pub(super) fn initialize(language: UiLanguage) {
     KIT_TRANSLATIONS.call_once(|| rust_i18n::extend!(gpui_component));
     set_language(language);
 }
 
 pub(super) fn set_language(language: UiLanguage) {
+    // `gpui_component::set_locale` re-exports `rust_i18n::set_locale`: both the
+    // app's `t!` and the component's extended lookups read this same global.
     rust_i18n::set_locale(language.locale());
-    gpui_component::set_locale(language.locale());
 }
 
 #[cfg(test)]

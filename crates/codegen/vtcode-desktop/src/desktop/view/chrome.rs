@@ -457,7 +457,7 @@ impl DesktopView {
                         button.bg(cue_background).text_color(cue_foreground)
                     })
                     .tooltip_with_action(
-                        format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.back")),
+                        rust_i18n::t!("app.navigation.back_swipe").to_string(),
                         &NavigateBack,
                         Some(key_context::DESKTOP),
                     )
@@ -478,7 +478,7 @@ impl DesktopView {
                         button.bg(cue_background).text_color(cue_foreground)
                     })
                     .tooltip_with_action(
-                        format!("{} (two-finger swipe)", rust_i18n::t!("app.navigation.forward")),
+                        rust_i18n::t!("app.navigation.forward_swipe").to_string(),
                         &NavigateForward,
                         Some(key_context::DESKTOP),
                     )
