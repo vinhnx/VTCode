@@ -596,18 +596,18 @@ impl DesktopView {
                 );
             }
             if output_page_loading {
+                // The Status node must carry the same name it paints: nested
+                // shimmer text alone yields no accessible label.
+                let message = rust_i18n::t!("app.inspector.reading_next_page").to_string();
                 recovery = recovery.child(
                     div()
                         .id("output-page-loading")
+                        .test_support()
                         .role(gpui_kit::Role::Status)
+                        .aria_label(message.clone())
                         .text_xs()
                         .text_color(colors.muted_foreground)
-                        .child(shimmer_label(
-                            "output-page-loading-label",
-                            rust_i18n::t!("app.inspector.reading_next_page").to_string(),
-                            colors.muted_foreground,
-                            cx,
-                        )),
+                        .child(shimmer_label("output-page-loading-label", message, colors.muted_foreground, cx)),
                 );
             }
             if let Some(error) = output_page_error {

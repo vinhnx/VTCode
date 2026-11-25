@@ -827,6 +827,7 @@ mod restored_output_pages;
 mod review_changes;
 mod review_diff_mode;
 mod review_output;
+mod review_output_a11y;
 mod running_confirm;
 mod search_config;
 mod search_config_conversation;

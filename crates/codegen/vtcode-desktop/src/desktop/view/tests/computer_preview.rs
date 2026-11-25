@@ -235,6 +235,23 @@ fn computer_preview_scaled_body_marks_the_caption(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn computer_preview_not_loaded_note_is_accessible(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(preview_item());
+        });
+        window.render_frame(cx);
+        let note = window.find("computer-preview-not-loaded-cua-1");
+        assert_eq!(note.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(note.label(), Some("Screenshot not loaded."));
+        assert!(window.try_find("computer-preview-body-cua-1").is_none());
+        assert!(window.try_find("retry-computer-preview-cua-1").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn computer_preview_expired_renders_without_retry_or_refetch(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
@@ -276,9 +293,13 @@ fn computer_preview_expired_renders_without_retry_or_refetch(cx: &mut TestAppCon
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        // The expired note renders with no retry control and no body panel.
+        // The expired note renders with no retry control and no body panel,
+        // but it is still named for assistive technology.
         assert!(window.try_find("retry-computer-preview-cua-1").is_none());
         assert!(window.try_find("computer-preview-body-cua-1").is_none());
+        let note = window.find("computer-preview-expired-cua-1");
+        assert_eq!(note.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(note.label(), Some("Screenshot expired — previews are kept in memory only while recent."));
         view.update(cx, |view, cx| {
             let key = ComputerPreviewBodyKey {
                 item_id: "cua-1".into(),

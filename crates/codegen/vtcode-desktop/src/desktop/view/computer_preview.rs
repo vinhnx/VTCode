@@ -192,11 +192,18 @@ impl DesktopView {
                     .child(img(body.image.clone()).w_full()),
             );
         } else if self.computer_preview_expired.contains(&key) {
+            // Plain text is not in the accessibility tree, so name the note on
+            // the same node that paints it (same contract as `accessible_error`).
+            let note = "Screenshot expired — previews are kept in memory only while recent.";
             card = card.child(
                 div()
+                    .id(format!("computer-preview-expired-{}", item.id))
+                    .test_support()
+                    .role(gpui_kit::Role::Label)
+                    .aria_label(note.to_string())
                     .text_sm()
                     .text_color(themes::muted_text(&colors))
-                    .child("Screenshot expired — previews are kept in memory only while recent.".to_string()),
+                    .child(note.to_string()),
             );
         } else if let Some(error) = self.computer_preview_errors.get(&key) {
             let retry_id = item.id.clone();
@@ -230,11 +237,16 @@ impl DesktopView {
                 cx,
             ));
         } else {
+            let note = "Screenshot not loaded.";
             card = card.child(
                 div()
+                    .id(format!("computer-preview-not-loaded-{}", item.id))
+                    .test_support()
+                    .role(gpui_kit::Role::Label)
+                    .aria_label(note.to_string())
                     .text_sm()
                     .text_color(themes::muted_text(&colors))
-                    .child("Screenshot not loaded.".to_string()),
+                    .child(note.to_string()),
             );
         }
         card.into_any_element()
