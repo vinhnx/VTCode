@@ -638,7 +638,8 @@ fn step_effort(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let current = slider.read(cx).value().start();
+    // One read, one owned f32: `settle_effort` updates this same entity next.
+    let current = slider.read_with(cx, |state, _| state.value().start());
     settle_effort(slider, current + direction, window, cx);
 }
 
@@ -648,8 +649,7 @@ fn jump_effort(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let limit = slider.read(cx);
-    let limit = if to_max { limit.max_value() } else { limit.min_value() };
+    let limit = slider.read_with(cx, |state, _| if to_max { state.max_value() } else { state.min_value() });
     settle_effort(slider, limit, window, cx);
 }
 
