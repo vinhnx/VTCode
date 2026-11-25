@@ -100,6 +100,39 @@ fn goal_transitions_notice_once_per_state_change(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn repeated_goal_snapshot_keeps_the_original_live_elapsed_stamp(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("session".into());
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
+        assert!(view.goal_snapshot_at.is_some(), "first update stamps arrival");
+        // Move the stamp into the past so a spurious re-stamp is unambiguous.
+        let arrived = Instant::now()
+            .checked_sub(Duration::from_secs(30))
+            .expect("30s fits in an Instant");
+        view.goal_snapshot_at = Some(arrived);
+
+        // A byte-identical snapshot at the handler boundary (the live producer
+        // normally advances `elapsed_ms` each turn) must not restart the label.
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Active))));
+        assert_eq!(view.goal_snapshot_at, Some(arrived), "an unchanged snapshot must not restart the live timer");
+
+        // A real change re-stamps, and repeating that value keeps the new stamp.
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Paused))));
+        let changed = view.goal_snapshot_at.expect("a changed snapshot stamps arrival");
+        assert!(changed > arrived);
+        view.handle_thread_event(goal_notification(Some(snapshot("Ship it", GoalState::Paused))));
+        assert_eq!(view.goal_snapshot_at, Some(changed));
+
+        // Clearing drops the stamp; repeating the clear keeps it absent.
+        view.handle_thread_event(goal_notification(None));
+        assert!(view.goal_snapshot_at.is_none());
+        view.handle_thread_event(goal_notification(None));
+        assert!(view.goal_snapshot_at.is_none());
+    });
+}
+
+#[gpui_kit::test]
 fn goal_snapshot_seeds_from_newest_restored_checkpoint(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, _| {

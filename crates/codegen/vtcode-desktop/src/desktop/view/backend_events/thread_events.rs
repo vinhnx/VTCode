@@ -14,8 +14,16 @@ impl DesktopView {
             .and_then(Value::as_str)
             .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
         {
-            self.ui_progress_active = progress.get(keys::ACTIVE).and_then(Value::as_bool).unwrap_or(false);
-            cx.notify();
+            let active = progress.get(keys::ACTIVE).and_then(Value::as_bool).unwrap_or(false);
+            // `cx.notify()` dirties the whole DesktopView, not just this flag:
+            // an unchanged value would force a full repaint for no visible
+            // change. The service pump already dedups, but guard here too so a
+            // duplicate notification cannot inflate redraw work (the FPS
+            // monitor's INV lesson — see maintainer notes on notify guards).
+            if self.ui_progress_active != active {
+                self.ui_progress_active = active;
+                cx.notify();
+            }
         }
     }
 
@@ -296,7 +304,16 @@ impl DesktopView {
                 self.tracker_snapshot = Some(snapshot.as_ref().clone());
             }
             ThreadEvent::GoalUpdated(event) => {
-                self.set_goal_snapshot(event.goal.clone());
+                // A byte-identical snapshot must not replace the stored one:
+                // re-stamping would restart the live-elapsed label for an
+                // Active goal. The per-turn producer flushes elapsed time
+                // before emitting (`GoalTracker::account_elapsed`), so live
+                // refreshes normally carry a larger `elapsed_ms`; this is a
+                // defensive boundary guard, not a routine hot path. The
+                // transition notice keeps its own state guard below.
+                if self.goal_snapshot != event.goal {
+                    self.set_goal_snapshot(event.goal.clone());
+                }
                 self.note_goal_transition(event.goal.as_ref());
             }
             _ => {}

@@ -709,8 +709,12 @@ impl DesktopView {
             }
             BackendEvent::UiProgress(progress) => self.handle_ui_progress(progress, cx),
             BackendEvent::UpdateInstallProgress(state) => {
-                self.handle_update_install_progress(state);
-                cx.notify();
+                // Download ticks are frequent and often identical; only a real
+                // phase change may dirty the whole window (FPS/INV lesson).
+                if self.update_install_state != state {
+                    self.handle_update_install_progress(state);
+                    cx.notify();
+                }
             }
             BackendEvent::TurnQueueStatus(status) => {
                 let Ok(snapshot) = serde_json::from_value::<protocol::TurnQueueStatus>(status) else {
