@@ -427,15 +427,19 @@ impl DesktopView {
                         // after TurnStarted cleared its immediate submit. A
                         // different id proves a queued draft won the idle race.
                         if self.pending_submission.is_none() {
+                            // TURN_SUBMIT invalidates WebMCP status before dispatch, and
+                            // `promote_oldest_queued_submission` mutates the queue and
+                            // transcript on the idle-race path. Either exit below can
+                            // follow a real mutation, so keep the invalidation.
                             if self.active_turn_id.as_deref() == Some(accepted.turn_id.as_str())
                                 || self.finished_turn_id.as_deref() == Some(accepted.turn_id.as_str())
                                 || !self.promote_oldest_queued_submission()
                             {
-                                return false;
+                                return true;
                             }
                             if self.active_turn_id.is_some() {
                                 // The prior turn's terminal events are still in transit.
-                                return false;
+                                return true;
                             }
                         }
                         self.pending_submission = None;

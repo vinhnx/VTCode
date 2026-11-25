@@ -125,3 +125,36 @@ fn terminal_monitor_output_still_notifies_the_drain(cx: &mut TestAppContext) {
     );
     assert!(notified.get() >= 1, "the terminal monitor grid must repaint from the drain");
 }
+
+#[gpui_kit::test]
+fn late_turn_ack_keeps_the_webmcp_invalidation_signal(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.webmcp_status = Some(connected_webmcp_status());
+        view.selected_session_id = Some("session".into());
+        view.active_turn_id = Some("turn".into());
+    });
+    cx.run_until_parked();
+    cx.update(|_| {});
+    let notified = Rc::new(Cell::new(0_usize));
+    let probe = notified.clone();
+    let _subscription = view.update(cx, |_, cx| {
+        let handle = cx.entity();
+        cx.observe(&handle, move |_, _, _| probe.set(probe.get() + 1))
+    });
+
+    // A duplicate ack for the active turn hits the early-return guard. The
+    // pre-dispatch WebMCP invalidation still dirtied the status row, so the
+    // drain must not treat this event as a no-op.
+    drain_one(
+        window,
+        &view,
+        BackendEvent::Response {
+            method: vtcode_desktop_protocol::method::TURN_SUBMIT.into(),
+            result: Some(json!({"sessionId": "session", "turnId": "turn"})),
+            error: None,
+        },
+        cx,
+    );
+    assert!(notified.get() >= 1, "a late turn ack must keep the WebMCP invalidation");
+}
