@@ -298,19 +298,20 @@ fn build_themes() -> Vec<DesktopTheme> {
 }
 
 /// Apply a theme by id: install the kit base for its mode, then override the
-/// core tokens from the palette.
+/// core tokens from the palette. No explicit `cx.refresh_windows()` here:
+/// `Theme::change` and `Theme::update` (via `normalize_system_interaction_colors`
+/// or `apply_palette`) each schedule one, and GPUI coalesces repeats into a
+/// single redraw per update cycle.
 pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
     match id {
         SYSTEM_LIGHT_ID => {
             Theme::change(ThemeMode::Light, window, cx);
             normalize_system_interaction_colors(cx);
-            cx.refresh_windows();
             ThemeMode::Light
         }
         SYSTEM_DARK_ID => {
             Theme::change(ThemeMode::Dark, window, cx);
             normalize_system_interaction_colors(cx);
-            cx.refresh_windows();
             ThemeMode::Dark
         }
         _ => {
