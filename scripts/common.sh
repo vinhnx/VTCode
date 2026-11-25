@@ -162,6 +162,10 @@ run_repo_governance_gates() {
 	run_python_gate "No new third-party MCP provider docs." \
 		"New MCP provider guide/example added (out of scope; see docs/CONTRIBUTING.md)." \
 		scripts/check_mcp_provider_docs.py || failed=1
+	print_status "Checking vendored GPUI snapshot attribution..."
+	run_python_gate "GPUI snapshot attribution matches the vendored crate." \
+		"Third-party notices name a stale GPUI snapshot." \
+		scripts/check_third_party_notices.py || failed=1
 	print_status "Checking the documented accessibility contract..."
 	run_python_gate "Accessibility contract is consistent." \
 		"Accessibility switch documentation or desktop locale parity drifted." \

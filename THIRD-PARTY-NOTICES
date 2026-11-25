@@ -32,7 +32,7 @@ Kepano (MIT-licensed network allowlist)
 
 Zed GPUI macOS backend
   Source: https://github.com/zed-industries/zed
-  Snapshot: gpui-pre-macos 0.3.11, zed@f816e1f9263e3a8ef63c4baaa02e1441ce1c6038
+  Snapshot: gpui-pre-macos 0.3.12, zed@d2a4fb6ded7c470be25d1541281da3882495b65b
   License: Apache License, Version 2.0
   Vendored path: patches/gpui-pre-macos
   VT Code modifications: immediate native cursor refresh, state-lock release
