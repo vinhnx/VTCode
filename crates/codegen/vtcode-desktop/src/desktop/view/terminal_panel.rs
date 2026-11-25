@@ -512,12 +512,16 @@ fn terminal_column_width(
         .unwrap_or(mono_size.as_f32() * 0.6)
 }
 
-/// Window position to visible grid cell. `None` before the grid or past
-/// its end (fail-closed); short lines clamp to the last column so clicks
-/// past the text still select.
+/// Window-space pointer position to visible grid cell. `None` before the
+/// grid or past its end (fail-closed); short lines clamp to the last column
+/// so clicks past the text still select.
+///
+/// Both arguments are in window coordinates: the probe records prepaint
+/// bounds and pointer events report the same space. `relative_to` converts
+/// once into grid-local coordinates — the origin must not be applied again.
 fn terminal_cell_for_point(
-    position: gpui_kit::Point<Pixels>,
-    origin: gpui_kit::Point<Pixels>,
+    pointer_in_window: gpui_kit::Point<Pixels>,
+    grid_origin_in_window: gpui_kit::Point<Pixels>,
     row_height: f32,
     char_width: f32,
     rows: usize,
@@ -526,8 +530,9 @@ fn terminal_cell_for_point(
     if rows == 0 || columns == 0 || row_height <= 0.0 || char_width <= 0.0 {
         return None;
     }
-    let dx = f32::from(position.x - origin.x);
-    let dy = f32::from(position.y - origin.y);
+    let pointer_in_grid = pointer_in_window.relative_to(&grid_origin_in_window);
+    let dx = f32::from(pointer_in_grid.x);
+    let dy = f32::from(pointer_in_grid.y);
     if dx < 0.0 || dy < 0.0 {
         return None;
     }

@@ -8,23 +8,23 @@ impl DesktopView {
         self.transcript.push(item);
     }
 
-    pub(super) fn handle_ui_progress(&mut self, progress: Value, cx: &mut Context<Self>) {
-        if progress
+    /// Returns whether the displayed flag actually changed. The event drain
+    /// uses this to avoid invalidating the window for a duplicate tick.
+    pub(super) fn handle_ui_progress(&mut self, progress: Value, cx: &mut Context<Self>) -> bool {
+        if !progress
             .get(keys::SESSION_ID)
             .and_then(Value::as_str)
             .is_some_and(|session_id| self.selected_session_id.as_deref() == Some(session_id))
         {
-            let active = progress.get(keys::ACTIVE).and_then(Value::as_bool).unwrap_or(false);
-            // `cx.notify()` dirties the whole DesktopView, not just this flag:
-            // an unchanged value would force a full repaint for no visible
-            // change. The service pump already dedups, but guard here too so a
-            // duplicate notification cannot inflate redraw work (the FPS
-            // monitor's INV lesson — see maintainer notes on notify guards).
-            if self.ui_progress_active != active {
-                self.ui_progress_active = active;
-                cx.notify();
-            }
+            return false;
         }
+        let active = progress.get(keys::ACTIVE).and_then(Value::as_bool).unwrap_or(false);
+        if self.ui_progress_active == active {
+            return false;
+        }
+        self.ui_progress_active = active;
+        cx.notify();
+        true
     }
 
     pub(super) fn handle_turn_status(&mut self, status: Value) {

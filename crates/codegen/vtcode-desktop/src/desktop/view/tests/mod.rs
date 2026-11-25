@@ -764,6 +764,7 @@ mod activity_navigation;
 mod activity_settings;
 mod activity_summary;
 mod attachment_picker;
+mod backend_drain_notify;
 mod browser_navigation;
 mod changelog_viewer;
 mod chat_width;

@@ -33,7 +33,8 @@ impl DesktopView {
             match self.event_rx.try_recv() {
                 Ok(event) => {
                     processed += 1;
-                    changed = true;
+                    // Receipt alone is not a change: the handler reports
+                    // whether it actually mutated view state.
                     if pending_item_update
                         .as_ref()
                         .is_some_and(|pending| can_coalesce_item_updates(pending, &event))
@@ -45,12 +46,12 @@ impl DesktopView {
                         continue;
                     }
                     if let Some(pending) = pending_item_update.take() {
-                        self.process_drained_event(pending, window, cx);
+                        changed |= self.process_drained_event(pending, window, cx);
                     }
                     if event_signals::is_item_update_event(&event) {
                         pending_item_update = Some(event);
                     } else {
-                        self.process_drained_event(event, window, cx);
+                        changed |= self.process_drained_event(event, window, cx);
                     }
                     if self.session_load_task.is_some() {
                         break;
@@ -59,7 +60,8 @@ impl DesktopView {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     if let Some(pending) = pending_item_update.take() {
-                        self.process_drained_event(pending, window, cx);
+                        // The disconnect path below dirties the view anyway.
+                        let _ = self.process_drained_event(pending, window, cx);
                     }
                     self.cancel_session_load_task();
                     self.interrupt_cli_config_write();
@@ -82,7 +84,7 @@ impl DesktopView {
             }
         }
         if let Some(pending) = pending_item_update {
-            self.process_drained_event(pending, window, cx);
+            changed |= self.process_drained_event(pending, window, cx);
         }
         if changed {
             cx.notify();
@@ -90,7 +92,9 @@ impl DesktopView {
         self.session_load_task.is_none() && processed == MAX_UI_EVENTS_PER_TICK
     }
 
-    fn process_drained_event(&mut self, event: BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
+    /// Returns whether processing this event changed view state, so the drain
+    /// can skip a whole-window invalidation for events that did nothing.
+    fn process_drained_event(&mut self, event: BackendEvent, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let accepted_decision = matches!(&event,
             BackendEvent::InteractionResponded { identity, error: None }
                 if self.pending_interaction_response.as_deref() == Some(identity.interaction_id.as_str()))
@@ -116,17 +120,20 @@ impl DesktopView {
             BackendEvent::Response { method, result: Some(_), error: None }
                 if method == protocol::method::CONFIG_DISCOVER
         );
-        self.handle_backend_event(event, cx);
+        let mut changed = self.handle_backend_event_tracked(event, cx);
         if update_status_refresh {
             self.maybe_autoshow_release_notes(window, cx);
+            changed = true;
         }
         if config_discover_refresh {
             self.maybe_open_skills_consent(window, cx);
+            changed = true;
         }
         if let Some(text) = self.pending_composer_restore.take() {
             self.replace_composer_text(text, window, cx);
             self.reset_history_recall();
             self.status = rust_i18n::t!("app.composer.draft_restored").to_string();
+            changed = true;
         }
         let interaction_replaced = new_interaction
             && previous_interaction_id.as_deref()
@@ -160,6 +167,7 @@ impl DesktopView {
             self.focus_composer(window, cx);
         }
         self.restore_focus_after_review_close(window, cx);
+        changed
     }
 
     fn notify_agent_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {

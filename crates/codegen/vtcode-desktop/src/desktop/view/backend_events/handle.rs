@@ -1,8 +1,16 @@
 //! Backend-event dispatch: response routing, lifecycle, and interaction intake.
 use super::*;
 impl DesktopView {
-    #[expect(clippy::cognitive_complexity, reason = "event router; split per event family")]
+    /// Test entry point: dispatches an event without needing the change signal.
+    /// Production goes through [`Self::handle_backend_event_tracked`] so the
+    /// drain can skip a window invalidation when nothing actually changed.
+    #[cfg(test)]
     pub(in super::super) fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {
+        let _ = self.handle_backend_event_tracked(event, cx);
+    }
+
+    #[expect(clippy::cognitive_complexity, reason = "event router; split per event family")]
+    pub(super) fn handle_backend_event_tracked(&mut self, event: BackendEvent, cx: &mut Context<Self>) -> bool {
         if let BackendEvent::Response { method, .. } = &event
             && matches!(
                 method.as_str(),
@@ -23,7 +31,7 @@ impl DesktopView {
             BackendEvent::TurnBlockedByStartupInteraction { session_id } => {
                 if self.selected_session_id.as_deref() != Some(session_id.as_str()) || self.pending_submission.is_none()
                 {
-                    return;
+                    return false;
                 }
                 self.invalidate_webmcp_status();
                 let retry = self.pending_first_submission && !self.cancel_requested;
@@ -52,7 +60,7 @@ impl DesktopView {
                             && interaction.turn_id == identity.turn_id
                     })
                 {
-                    return;
+                    return false;
                 }
                 if let Some(error) = error {
                     self.pending_interaction_response = None;
@@ -98,7 +106,7 @@ impl DesktopView {
                 }
                 if let Some(error) = error {
                     self.handle_response_error(&method, error, gate_freed, cx);
-                    return;
+                    return true;
                 }
                 let result = result.unwrap_or(Value::Null);
                 match method.as_str() {
@@ -393,7 +401,7 @@ impl DesktopView {
                             // unactionable, and the next queue-status snapshot
                             // reconciles them.
                             self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
-                            return;
+                            return true;
                         };
                         if accepted.queued {
                             self.queue_has_dispatch_ids |= accepted.entry_id.is_some();
@@ -413,7 +421,7 @@ impl DesktopView {
                                 }
                             }
                             self.try_send_pending_cancel(false);
-                            return;
+                            return true;
                         }
                         // A response for the already started turn can arrive
                         // after TurnStarted cleared its immediate submit. A
@@ -423,11 +431,11 @@ impl DesktopView {
                                 || self.finished_turn_id.as_deref() == Some(accepted.turn_id.as_str())
                                 || !self.promote_oldest_queued_submission()
                             {
-                                return;
+                                return false;
                             }
                             if self.active_turn_id.is_some() {
                                 // The prior turn's terminal events are still in transit.
-                                return;
+                                return false;
                             }
                         }
                         self.pending_submission = None;
@@ -445,7 +453,7 @@ impl DesktopView {
                             .filter(|taken| self.selected_session_id.as_deref() == Some(taken.session_id.as_str()));
                         let Some(taken) = taken else {
                             self.error = Some(rust_i18n::t!("app.service.invalid_ack_detail").to_string());
-                            return;
+                            return true;
                         };
                         let depth = taken.queue_depth;
                         let Some(text) = taken.text else {
@@ -453,7 +461,7 @@ impl DesktopView {
                             // empty) and no snapshot follows an empty take:
                             // converge confirmed rows to the depth now.
                             self.truncate_dispatched_to_depth(depth);
-                            return;
+                            return true;
                         };
                         let index = if let Some(entry_id) = taken.entry_id {
                             self.queued_submissions
@@ -599,7 +607,7 @@ impl DesktopView {
             }
             BackendEvent::SessionHistoryResponse { request_id, result, error } => {
                 if self.history_page_request_id.as_deref() != Some(request_id.as_str()) {
-                    return;
+                    return false;
                 }
                 if let Some(error) = error {
                     self.fail_history_page(error, cx);
@@ -613,7 +621,7 @@ impl DesktopView {
                 if self.output_page_pending.as_ref().map(|pending| pending.request_id.as_str())
                     != Some(request_id.as_str())
                 {
-                    return;
+                    return false;
                 }
                 if error.is_some() {
                     self.fail_output_page(cx);
@@ -625,7 +633,7 @@ impl DesktopView {
             }
             BackendEvent::McpAppResponse { request_id, result, error } => {
                 if !self.mcp_app_pending.contains_key(request_id.as_str()) {
-                    return;
+                    return false;
                 }
                 if error.is_some() {
                     self.fail_mcp_app_preview(request_id.as_str(), cx);
@@ -637,7 +645,7 @@ impl DesktopView {
             }
             BackendEvent::ComputerPreviewResponse { request_id, result, error } => {
                 if !self.computer_preview_pending.contains_key(request_id.as_str()) {
-                    return;
+                    return false;
                 }
                 if error.is_some() {
                     self.fail_computer_preview(request_id.as_str(), cx);
@@ -649,8 +657,11 @@ impl DesktopView {
             }
             BackendEvent::ThreadEvent(notification) => {
                 if !self.notification_matches(&notification.session_id, notification.turn_id.as_deref()) {
-                    return;
+                    return false;
                 }
+                // Deliberately falls through to the conservative `true`: a
+                // tool-output delta also feeds the read-only terminal monitor,
+                // whose grid has no shell pump and relies on this repaint.
                 let was_running = self.running;
                 self.handle_thread_event(notification);
                 if was_running != self.running {
@@ -664,7 +675,7 @@ impl DesktopView {
             }
             BackendEvent::PrimaryAgentChanged(notification) => {
                 if self.selected_session_id.as_deref() != Some(notification.session_id.as_str()) {
-                    return;
+                    return false;
                 }
                 self.active_primary_agent_display = notification
                     .display_name
@@ -683,7 +694,7 @@ impl DesktopView {
                         .as_ref()
                         .is_some_and(|current| current.interaction_id == interaction.interaction_id)
                 {
-                    return;
+                    return false;
                 }
                 self.interaction_choice_ids =
                     interaction.steps.iter().map(|step| step.selected_choice_id.clone()).collect();
@@ -707,24 +718,26 @@ impl DesktopView {
                 self.invalidate_webmcp_status();
                 self.status = rust_i18n::t!("app.service.awaiting_decision").to_string();
             }
-            BackendEvent::UiProgress(progress) => self.handle_ui_progress(progress, cx),
+            BackendEvent::UiProgress(progress) => return self.handle_ui_progress(progress, cx),
             BackendEvent::UpdateInstallProgress(state) => {
                 // Download ticks are frequent and often identical; only a real
                 // phase change may dirty the whole window (FPS/INV lesson).
-                if self.update_install_state != state {
+                let changed = self.update_install_state != state;
+                if changed {
                     self.handle_update_install_progress(state);
                     cx.notify();
                 }
+                return changed;
             }
             BackendEvent::TurnQueueStatus(status) => {
                 let Ok(snapshot) = serde_json::from_value::<protocol::TurnQueueStatus>(status) else {
-                    return;
+                    return false;
                 };
                 self.apply_queue_status(snapshot);
             }
             BackendEvent::TurnSteerResult(result) => {
                 let Ok(outcome) = serde_json::from_value::<protocol::TurnSteerResultNotification>(result) else {
-                    return;
+                    return false;
                 };
                 self.apply_queued_steer_result(outcome, cx);
             }
@@ -818,5 +831,9 @@ impl DesktopView {
                 self.clear_queue_state();
             }
         }
+        // Conservatively assume every other arm mutated view state. Unknown or
+        // newly added events must never produce a stale UI; only the proven
+        // no-op guards above report `false`.
+        true
     }
 }

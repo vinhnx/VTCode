@@ -3,6 +3,30 @@
 use super::*;
 
 impl DesktopView {
+    /// Map a window-space pointer position to a visible terminal cell. The
+    /// probe's prepaint bounds and pointer events share the window origin, so
+    /// this is the single place that converts to grid-local coordinates;
+    /// mouse handlers must not add the origin again. `None` before the grid
+    /// paints or outside its rows, matching the pure mapping helper.
+    fn terminal_cell_at(
+        &self,
+        pointer_in_window: gpui_kit::Point<Pixels>,
+        char_width: f32,
+        cx: &Context<Self>,
+    ) -> Option<(usize, usize)> {
+        let grid = self.terminal_grid_bounds.get()?;
+        let tab = self.terminal.as_ref()?;
+        let size = tab.grid_size();
+        terminal_cell_for_point(
+            pointer_in_window,
+            grid.origin,
+            terminal_row_height(cx.theme().mono_font_size),
+            char_width,
+            usize::from(size.rows),
+            usize::from(size.cols),
+        )
+    }
+
     pub(super) fn handle_terminal_mouse_down(
         &mut self,
         event: &MouseDownEvent,
@@ -10,22 +34,12 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) {
         self.terminal_focus.focus(window, cx);
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
-            return;
-        };
-        let origin = grid.origin;
         let char_width =
             terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let Some(anchor) = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        ) else {
+        let Some(anchor) = self.terminal_cell_at(event.position, char_width, cx) else {
+            return;
+        };
+        let Some(tab) = self.terminal.as_mut() else {
             return;
         };
         use rio_vt::{crosswords::pos::Side, selection::SelectionType};
@@ -70,20 +84,10 @@ impl DesktopView {
             self.terminal_select_drag = None;
             return;
         }
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
+        let Some(endpoint) = self.terminal_cell_at(event.position, drag.char_width, cx) else {
             return;
         };
-        let origin = grid.origin;
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let Some(endpoint) = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            drag.char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        ) else {
+        let Some(tab) = self.terminal.as_mut() else {
             return;
         };
         // Rebuild from scratch each move: the anchor side must flip with the
@@ -104,22 +108,11 @@ impl DesktopView {
         let Some(drag) = self.terminal_select_drag.take() else {
             return;
         };
-        let (Some(tab), Some(grid)) = (self.terminal.as_mut(), self.terminal_grid_bounds.get()) else {
-            return;
-        };
-        let origin = grid.origin;
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let size = tab.grid_size();
-        let endpoint = terminal_cell_for_point(
-            event.position,
-            origin,
-            row_height,
-            drag.char_width,
-            usize::from(size.rows),
-            usize::from(size.cols),
-        );
-        if endpoint == Some(drag.anchor) {
+        if self.terminal_cell_at(event.position, drag.char_width, cx) == Some(drag.anchor) {
             // Plain click: collapse the single-cell selection.
+            let Some(tab) = self.terminal.as_mut() else {
+                return;
+            };
             let _collapsed = tab.clear_selection();
             self.terminal_select_anchor = None;
         }

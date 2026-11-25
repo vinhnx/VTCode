@@ -16,7 +16,7 @@ fn dotted_rule_path(bounds: gpui_kit::Bounds<Pixels>) -> Option<gpui_kit::Path<P
     let mut builder = gpui_kit::PathBuilder::stroke(px(1.0)).dash_array(&[px(1.0), px(2.0)]);
     let y = bounds.origin.y + px(0.5);
     builder.move_to(point(bounds.origin.x, y));
-    builder.line_to(point(bounds.origin.x + bounds.size.width, y));
+    builder.line_to(point(bounds.right(), y));
     builder.build().ok()
 }
 
@@ -317,11 +317,31 @@ mod tests {
             "the 1 px stroke stays pixel-aligned on the half pixel: {:?}",
             path.bounds
         );
+        // A non-zero origin pins the canvas path to window coordinates: the
+        // stroke starts at the resolved left edge and ends at `right()`, with
+        // no origin applied a second time during paint.
         let short = gpui_kit::Bounds {
-            origin: point(px(0.), px(0.)),
+            origin: point(px(13.), px(7.)),
             size: size(px(30.), px(1.)),
         };
-        assert!(dotted_rule_path(short).is_some());
+        let short_path = dotted_rule_path(short).expect("short rule must build from resolved bounds");
+        assert!(
+            (px(12.4)..=px(13.6)).contains(&short_path.bounds.origin.x),
+            "the stroke starts at the resolved window-space left edge: {:?}",
+            short_path.bounds
+        );
+        // A dashed stroke ends on its last dash, which is not necessarily the
+        // resolved right edge; it must still stay inside that edge.
+        assert!(
+            short_path.bounds.right() > px(38.) && short_path.bounds.right() <= short.right() + px(1.),
+            "the stroke stays within the resolved window-space bounds: {:?}",
+            short_path.bounds
+        );
+        assert!(
+            (px(6.9)..=px(7.1)).contains(&short_path.bounds.origin.y),
+            "the half-pixel stroke stays on the resolved row: {:?}",
+            short_path.bounds
+        );
     }
 
     #[test]
