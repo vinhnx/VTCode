@@ -474,11 +474,26 @@ impl DesktopView {
         if let Some(goal_bar) = self.render_goal_bar(cx) {
             panel = panel.child(goal_bar);
         }
+        // One stable handle for the COMPOSER key-context region, retained in
+        // window keyed state across renders (Kit Button uses this pattern).
+        // Reusing the composer input's Tab-stop handle here would add a second
+        // Tab stop, so keep a dedicated non-Tab-stop anchor.
+        let context_focus = window
+            .use_keyed_state("composer-focus-region", cx, |_, cx| cx.focus_handle())
+            .read(cx)
+            .clone();
         self.conversation_content_column(
             panel.child(
                 div()
+                    .id("composer-focus-region")
+                    .test_support()
                     .w_full()
                     .key_context(key_context::COMPOSER)
+                    // Anchor the context region with a stable, non-Tab-stop
+                    // handle: a focused child that stops rendering restores
+                    // here instead of to the root DESKTOP node, so composer
+                    // bindings keep working (focus guide: lost-focus restore).
+                    .track_focus(&context_focus)
                     .on_action(
                         cx.listener(|view, action: &Enter, window, cx| view.handle_composer_enter(action, window, cx)),
                     )

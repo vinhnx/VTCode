@@ -1,3 +1,4 @@
+use super::super::PaletteKind;
 use super::super::shortcuts::{COMMANDS, CommandId};
 use super::*;
 use vtcode_desktop_protocol::SessionSummary;
@@ -77,6 +78,44 @@ fn force_cancel_hides_until_stop_is_outstanding(cx: &mut TestAppContext) {
         view.update(cx, |view, _| view.running = false);
         window.render_frame(cx);
         assert!(window.try_find("force-cancel-exec").is_none(), "idle retires the kill");
+    })
+    .unwrap();
+}
+
+/// The focus guide's "focused element stops rendering" recipe applied to a
+/// region with its own key context: when the focused stop button is replaced
+/// by Send as the turn ends, focus must restore to the COMPOSER context
+/// region (not the root DESKTOP node), so composer bindings keep working.
+#[gpui_kit::test]
+fn ending_a_focused_stop_button_restores_the_composer_context(cx: &mut TestAppContext) {
+    let (window, view, _) = open_running_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        focus_element_by_tab(window, "cancel-turn", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("cancel-turn").focused(), Some(true));
+
+        view.update(cx, |view, _| view.running = false);
+        window.render_frame(cx);
+
+        assert!(window.try_find("cancel-turn").is_none(), "the focused stop button unmounted");
+        assert_eq!(
+            window.find("composer-focus-region").focused(),
+            Some(true),
+            "focus must restore to the COMPOSER key-context region"
+        );
+        assert!(
+            !view.read(cx).focus_handle.is_focused(window),
+            "the root DESKTOP node is not a composer binding path"
+        );
+
+        // The point of the restore is that COMPOSER-scoped bindings work again.
+        window.press("ctrl-m", cx);
+        window.render_frame(cx);
+        assert!(
+            matches!(view.read(cx).palette_kind, PaletteKind::Models),
+            "a COMPOSER-scoped binding must work after lost-focus restore"
+        );
     })
     .unwrap();
 }

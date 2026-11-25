@@ -86,6 +86,17 @@ re-attached with `.track_focus(...)` each render; overlay flows save `window.foc
 `contains_focused` drives region activity. SKIPPED: no new trap or restore path — every custom surface already pairs
 `.focus_trap(...)` with entry/dismissal focus ownership.
 
+Re-verified 2026-11-25 against the supplied Focus Guide text: the root `on_focus_lost` recipe, `tab_stop(true)` on
+retained handles, saved/restore overlay focus, `contains_focused`, and paired `.focus_trap(...)` entry/dismissal all
+stand. APPLIED (real gap): the element carrying `key_context::COMPOSER` had no tracked restore handle, so a focused
+child that unmounts inside it (the stop button when a turn ends) restored to the root DESKTOP node and lost composer
+bindings. `composer_render.rs` now tracks a dedicated non-Tab-stop handle on that wrapper, retained across renders via
+`window.use_keyed_state("composer-focus-region", …)` — the guide's stateless-component pattern. Reusing the composer
+input's own Tab-stop handle instead adds a second Tab stop (the guide's explicit warning) and breaks dialog Tab traps,
+so a separate anchor is required. Pinned by
+`view/tests/exec_controls.rs::ending_a_focused_stop_button_restores_the_composer_context` (fails without the tracking
+line: focus falls back to root; also asserts a COMPOSER-scoped `ctrl-m` binding fires after restore).
+
 Base plot reviewed 2026-11-24 against the
 [GPUI Kit plot guide](https://gpui-kit.com/base/plot/) (site v0.11.0; the pinned
 [`v0.10.0` page](https://gpui-kit.com/versions/v0.10.0/base/plot) carries identical prose, re-verified against
