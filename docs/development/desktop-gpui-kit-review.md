@@ -92,7 +92,7 @@ backend was introduced.
 | [WebAssembly](https://gpui-kit.com/docs/webassembly/) | Showcase deployment is outside this native desktop increment; do not conflate it with VT Code WebMCP. |
 | [Images](https://gpui-kit.com/docs/image/) | Keep packaged brand artwork and the transcript's existing remote-image restriction. |
 | [Assets](https://gpui-kit.com/docs/assets/) | Retain selected embedded icons and asset-coverage checks; do not embed the full icon catalog. |
-| [Fonts](https://gpui-kit.com/docs/fonts/) | Keep system SF defaults, independent code fonts, and current typography invalidation. |
+| [Fonts](https://gpui-kit.com/docs/fonts/) | Re-verified 2026-11-25 against pinned 0.10.0: vendored `theme/{system,mono}_font.rs` substitute missing defaults once on `Theme::update`/`change`; desktop applies all four font fields in `view/appearance.rs::apply_typography`, validates saved families against `all_font_names()` in `view/typography.rs`, and shapes terminal cells with `TextSystem::advance`. Keep system SF defaults, no bundled fonts/CJK stack, and the recorded invalidation/rem path. |
 | [Internationalization](https://gpui-kit.com/docs/i18n/) | Retain app-owned locale resources and explicit view refresh; no new translation subsystem. |
 | [System notifications](https://gpui-kit.com/docs/system-notification/) | Keep the existing originating-window notification route and durable in-app state. |
 | [Native extensions](https://gpui-kit.com/docs/native-extension/) | Keep asynchronous native path prompts; do not introduce a synchronous native modal loop. |
