@@ -166,6 +166,10 @@ run_repo_governance_gates() {
 	run_python_gate "GPUI snapshot attribution matches the vendored crate." \
 		"Third-party notices name a stale GPUI snapshot." \
 		scripts/check_third_party_notices.py || failed=1
+	print_status "Checking dev-profile framework overrides..."
+	run_python_gate "Dev profile optimizes the pinned GPUI framework crates." \
+		"Dev-profile framework overrides drifted from the locked Kit graph." \
+		scripts/check_dev_profile.py || failed=1
 	print_status "Checking the documented accessibility contract..."
 	run_python_gate "Accessibility contract is consistent." \
 		"Accessibility switch documentation or desktop locale parity drifted." \

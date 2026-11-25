@@ -512,6 +512,28 @@ overflow-checks = true
 opt-level = 3
 codegen-units = 16
 
+# Debug builds leave GPUI's rendering, layout, and text stack largely
+# unoptimized. Optimize those framework crates for a responsive desktop
+# preview while application code stays debuggable. Every other dependency
+# keeps the wildcard level below; proc macros run only inside the compiler and
+# are handled by build-override above. Adapted from the GPUI Kit installation
+# guide (https://gpui-kit.com/docs/installation/, CC BY 4.0) for the pinned
+# 0.10.0 graph, where `gpui-base` and the macOS platform backends are still
+# separate crates. `gpui-fast` is present in the lockfile but not enabled, so
+# it needs no override.
+[profile.dev.package]
+gpui-pre = { opt-level = 3 }
+gpui-pre-platform = { opt-level = 3 }
+gpui-pre-apple = { opt-level = 3 }
+gpui-pre-macos = { opt-level = 3 }
+gpui-component = { opt-level = 3 }
+gpui-base = { opt-level = 3 }
+gpui-kit = { opt-level = 3 }
+gpui-kit-assets = { opt-level = 3 }
+rustybuzz = { opt-level = 3 }
+taffy = { opt-level = 3 }
+ttf-parser = { opt-level = 3 }
+
 # Optimize dependencies slightly (they're cached anyway)
 [profile.dev.package."*"]
 opt-level = 1

@@ -94,10 +94,12 @@ cargo build --locked -p vtcode
 cargo run --locked -p vtcode-desktop
 ```
 
-The workspace dev profile compiles dependencies (including GPUI rendering, layout,
-and text crates) with light optimization for a responsive desktop preview while
-keeping application code debuggable. The first build of those dependencies can
-take longer. Always re-run the `cargo build` line before relaunching: `cargo run`
+The workspace dev profile optimizes every dependency at `opt-level = 1` and lifts
+the GPUI rendering, layout, and text crates (`gpui-*`, `rustybuzz`, `taffy`,
+`ttf-parser`) to `opt-level = 3`, following the
+[GPUI Kit installation guide](https://gpui-kit.com/docs/installation/). Application code stays debuggable;
+the first build of those framework crates can take longer. `scripts/check_dev_profile.py` keeps the override
+list in sync with `Cargo.lock`. Always re-run the `cargo build` line before relaunching: `cargo run`
 rebuilds only the GUI, so a restarted app otherwise respawns the previous backend
 binary, and a still-running backend keeps serving old code until the app quits.
 
