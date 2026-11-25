@@ -115,7 +115,8 @@ impl DesktopView {
     pub(super) fn move_browser_session_focus(&mut self, down: bool, cx: &mut Context<Self>) {
         let next = {
             let current = self.browser_current_workspace();
-            let sessions = browser_session_order(&self.sessions, current.as_deref());
+            let filtered = self.context_sessions();
+            let sessions = browser_session_order(&filtered, current.as_deref());
             let order: Vec<&str> = sessions.iter().map(|(_, id)| *id).collect();
             step_highlight_order(&order, self.keyboard_focused_session.as_deref(), down)
                 .and_then(|position| sessions.get(position).map(|(row, id)| (*row, id.to_string())))
@@ -130,7 +131,8 @@ impl DesktopView {
     pub(super) fn move_browser_session_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
         let next = {
             let current = self.browser_current_workspace();
-            let sessions = browser_session_order(&self.sessions, current.as_deref());
+            let filtered = self.context_sessions();
+            let sessions = browser_session_order(&filtered, current.as_deref());
             (if first { sessions.first() } else { sessions.last() }).map(|(row, id)| (*row, id.to_string()))
         };
         let Some((row, session_id)) = next else {
@@ -156,14 +158,14 @@ impl DesktopView {
         let row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
         let current = self.browser_current_workspace();
         let now = now_unix_secs();
-        let rows = browser_rows(&self.sessions, current.as_deref());
+        let rows = browser_rows(&self.context_sessions(), current.as_deref());
         let sizes = self.browser_row_sizes.get(rows.len(), row_height);
         let (primary, foreground, muted, popover) =
             (colors.primary, colors.foreground, colors.muted_foreground, colors.popover);
         let row_colors = colors;
         let can_new_thread = self.new_thread_available();
         let can_close_thread = self.selected_session_id.is_some() && can_new_thread;
-        let content = if self.sessions.is_empty() {
+        let content = if self.context_sessions().is_empty() {
             empty_state(
                 rust_i18n::t!("app.browser.empty_title").to_string(),
                 rust_i18n::t!("app.browser.empty_description").to_string(),
@@ -202,7 +204,8 @@ impl DesktopView {
                             visible_range
                                 .filter_map(|row| match rows.get(row)? {
                                     BrowserRow::Group { index, count } => {
-                                        let workspace = view.sessions.get(*index)?.workspace.as_str();
+                                        let sessions = view.context_sessions();
+                                        let workspace = sessions.get(*index)?.workspace.as_str();
                                         let name = workspace_short_name(workspace).to_string();
                                         Some(
                                             div()
@@ -223,7 +226,8 @@ impl DesktopView {
                                         )
                                     }
                                     BrowserRow::Session { index, ordinal } => {
-                                        let session = view.sessions.get(*index)?;
+                                        let sessions = view.context_sessions();
+                                        let session = sessions.get(*index)?;
                                         let session_id = session.session_id.clone();
                                         let selected = view.selected_session_id.as_deref() == Some(session_id.as_str());
                                         let label = session_display_title(&session_id, session.title.as_deref());
@@ -261,7 +265,7 @@ impl DesktopView {
                                                 .when(keyboard_focused, |row| row.aria_active_descendant())
                                                 .aria_label(accessible_label.clone())
                                                 .aria_position_in_set(ordinal + 1)
-                                                .aria_size_of_set(view.sessions.len())
+                                                .aria_size_of_set(view.context_sessions().len())
                                                 .aria_selected(selected)
                                                 .h(px(row_height))
                                                 .w_full()

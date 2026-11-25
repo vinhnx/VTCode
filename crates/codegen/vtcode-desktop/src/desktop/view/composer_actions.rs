@@ -224,7 +224,7 @@ impl DesktopView {
         let current_label = self
             .workspace_file_name()
             .unwrap_or_else(|| rust_i18n::t!(i18n::COMPOSER_CONTEXT_WORKSPACE).to_string());
-        let recent = self.recent_workspaces();
+        let recent = self.visible_recent_workspaces();
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
         let view = cx.entity().downgrade();

@@ -32,7 +32,8 @@ impl DesktopView {
     /// list focused). Clamps at both ends and scrolls the row into view.
     pub(super) fn move_session_focus(&mut self, down: bool, cx: &mut Context<Self>) {
         let next = {
-            let order: Vec<&str> = self.sessions.iter().map(|session| session.session_id.as_str()).collect();
+            let sessions = self.context_sessions();
+            let order: Vec<&str> = sessions.iter().map(|session| session.session_id.as_str()).collect();
             step_highlight_order(&order, self.keyboard_focused_session.as_deref(), down)
         };
         let Some(next) = next else {
@@ -43,10 +44,10 @@ impl DesktopView {
 
     /// Jump the highlight to the first/last thread (Home/End, vim `g`/`G`).
     pub(super) fn move_session_focus_edge(&mut self, first: bool, cx: &mut Context<Self>) {
-        if self.sessions.is_empty() {
+        if self.context_sessions().is_empty() {
             return;
         }
-        let index = if first { 0 } else { self.sessions.len() - 1 };
+        let index = if first { 0 } else { self.context_sessions().len() - 1 };
         self.focus_session_at(index, cx);
     }
 
@@ -62,7 +63,7 @@ impl DesktopView {
     }
 
     fn focus_session_at(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(session_id) = self.sessions.get(index).map(|session| session.session_id.clone()) else {
+        let Some(session_id) = self.context_sessions().get(index).map(|session| session.session_id.clone()) else {
             return;
         };
         self.keyboard_focused_session = Some(session_id);

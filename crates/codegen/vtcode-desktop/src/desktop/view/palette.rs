@@ -258,7 +258,7 @@ impl DesktopView {
             groups.push((rust_i18n::t!(i18n::PALETTE_SECTIONS_VTCODE_COMMANDS).to_string(), slash_commands));
         }
         let sessions: Vec<PaletteCommand> = self
-            .sessions
+            .context_sessions()
             .iter()
             .map(|session| {
                 let label = session_display_title(&session.session_id, session.title.as_deref());

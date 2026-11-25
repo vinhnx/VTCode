@@ -12,14 +12,21 @@ enum WorkspaceSelection {
 impl DesktopView {
     /// Remember a workspace as recently used.
     fn remember_workspace(&mut self, workspace: &Path) {
-        if self.preferences.touch_workspace(&workspace.to_string_lossy()) {
-            self.preferences.save();
+        let path = workspace.to_string_lossy();
+        let is_new = !self
+            .preferences
+            .recent_workspaces
+            .iter()
+            .any(|existing| existing == path.as_ref());
+        // A newly added project inherits the single active tag; revisiting an
+        // existing one never silently re-tags it.
+        let mut changed = is_new && self.preferences.workspace_tags.tag_new_workspace(&path);
+        changed |= self.preferences.touch_workspace(&path);
+        let preferences = &mut self.preferences;
+        changed |= preferences.workspace_tags.retain_recent(&preferences.recent_workspaces);
+        if changed {
+            preferences.save();
         }
-    }
-
-    /// The saved recent workspaces for the sidebar.
-    pub(super) fn recent_workspaces(&self) -> Vec<String> {
-        self.preferences.recent_workspaces.clone()
     }
 
     /// Short display name for the active workspace: the final path component

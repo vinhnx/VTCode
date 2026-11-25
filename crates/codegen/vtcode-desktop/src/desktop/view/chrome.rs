@@ -6,6 +6,7 @@ use gpui_kit::component::menu::ContextMenuExt;
 
 impl DesktopView {
     pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let tag_filter = self.render_tag_filter(cx);
         let theme = cx.theme();
         let workspace_section = rust_i18n::t!(i18n::WORKSPACE_SECTION).to_string();
         let projects_section = rust_i18n::t!("app.workspace.projects").to_string();
@@ -115,8 +116,16 @@ impl DesktopView {
                 ),
         );
 
-        sidebar = sidebar.child(eyebrow_label(projects_section, &theme.colors));
-        let recent = self.recent_workspaces();
+        sidebar = sidebar.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(eyebrow_label(projects_section, &theme.colors))
+                .child(tag_filter),
+        );
+        let recent = self.visible_recent_workspaces();
         if !recent.is_empty() {
             sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().map(|path| {
                 let workspace_path = path.clone();
@@ -154,11 +163,11 @@ impl DesktopView {
                     div()
                         .text_xs()
                         .text_color(theme.colors.muted_foreground)
-                        .child(self.sessions.len().to_string()),
+                        .child(self.context_sessions().len().to_string()),
                 ),
         );
         let session_row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
-        let session_sizes = self.session_row_sizes.get(self.sessions.len(), session_row_height);
+        let session_sizes = self.session_row_sizes.get(self.context_sessions().len(), session_row_height);
         let session_primary = theme.colors.primary;
         sidebar = sidebar
             .child(
@@ -166,7 +175,7 @@ impl DesktopView {
                     .id("session-list")
                     .test_support()
                     .track_focus(&self.session_focus)
-                    .when(self.sessions.is_empty(), |el| el.tab_stop(false))
+                    .when(self.context_sessions().is_empty(), |el| el.tab_stop(false))
                     .key_context(key_context::SESSIONS)
                     .on_action(cx.listener(|view, _: &SessionPrevious, _, cx| view.move_session_focus(false, cx)))
                     .on_action(cx.listener(|view, _: &SessionNext, _, cx| view.move_session_focus(true, cx)))
@@ -193,7 +202,8 @@ impl DesktopView {
                             move |view, visible_range, _, cx| {
                                 visible_range
                                     .filter_map(|index| {
-                                        let session = view.sessions.get(index)?;
+                                        let sessions = view.context_sessions();
+                                        let session = sessions.get(index)?;
                                         let session_id = session.session_id.clone();
                                         let menu_id = session_id.clone();
                                         let tabbed = view.open_tabs.iter().any(|tab| tab == &session_id);
@@ -211,7 +221,7 @@ impl DesktopView {
                                                 .when(keyboard_focused, |row| row.aria_active_descendant())
                                                 .aria_label(label.clone())
                                                 .aria_position_in_set(index + 1)
-                                                .aria_size_of_set(view.sessions.len())
+                                                .aria_size_of_set(view.context_sessions().len())
                                                 .aria_selected(selected)
                                                 .h(px(session_row_height))
                                                 .w_full()

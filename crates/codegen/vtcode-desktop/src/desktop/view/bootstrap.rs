@@ -186,7 +186,7 @@ impl DesktopView {
         cx: &mut Context<Self>,
         theme_mode: ThemeMode,
         start_theme: String,
-        preferences: preferences::Preferences,
+        mut preferences: preferences::Preferences,
     ) -> Self {
         let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
@@ -269,6 +269,24 @@ impl DesktopView {
         let shortcut_search_input = cx
             .new(|cx| InputState::new(window, cx).placeholder(rust_i18n::t!(i18n::SHORTCUTS_SEARCH_ARIA).to_string()));
         let shortcut_search_subscription = cx.subscribe_in(&shortcut_search_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        let tag_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search tags or projects"));
+        let _tag_search_subscription = cx.subscribe_in(&tag_search, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        let tag_project_input = cx.new(|cx| InputState::new(window, cx).placeholder("Add a tag"));
+        let _tag_project_subscription = cx.subscribe_in(&tag_project_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        let tag_rename_input = cx.new(|cx| InputState::new(window, cx).placeholder("New tag name"));
+        let _tag_rename_subscription = cx.subscribe_in(&tag_rename_input, window, |_, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.notify();
             }
@@ -428,6 +446,11 @@ impl DesktopView {
                 cx.notify();
             }
         });
+        // The tag map is derived from the recent-workspace list: drop tags
+        // for evicted projects, then drop active tags that no longer exist.
+        // Do this before `preferences` moves below.
+        let _ = preferences.workspace_tags.retain_recent(&preferences.recent_workspaces);
+        let _ = preferences.workspace_tags.prune_active();
         // Read before `preferences` moves into the struct below.
         let zen_mode = preferences.zen_mode();
         Self {
@@ -633,6 +656,19 @@ impl DesktopView {
             review_focus: cx.focus_handle().tab_stop(true),
             browser_focus: cx.focus_handle().tab_stop(true),
             browser_list_focus: cx.focus_handle().tab_stop(true),
+            tag_filter_open: false,
+            _tag_search_subscription,
+            tag_search,
+            tag_manager_open: false,
+            tag_manager_focus: cx.focus_handle().tab_stop(true),
+            tag_project_editor: None,
+            _tag_project_subscription,
+            tag_project_input,
+            tag_rename_target: None,
+            _tag_rename_subscription,
+            tag_rename_input,
+            tag_delete_target: None,
+            tag_error: None,
             git_branch: None,
             palette: None,
             palette_kind: PaletteKind::Commands,

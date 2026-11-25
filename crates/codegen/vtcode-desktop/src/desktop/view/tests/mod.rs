@@ -818,6 +818,7 @@ mod overlay_toggles;
 mod palette_icons;
 mod panel_dismiss;
 mod plan_proposal;
+mod project_tags;
 mod prompt_history;
 mod queue_reconcile;
 mod restored_output_pages;

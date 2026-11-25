@@ -10,6 +10,7 @@ mod notifications;
 mod output_sections;
 mod output_tail;
 mod preferences;
+mod project_tags;
 mod startup;
 mod strings;
 mod terminal_process;

@@ -158,6 +158,7 @@ use motion::{NavigationFadeExt as _, NavigationMotion};
 mod overlays;
 mod palette;
 mod palette_render;
+mod project_tags;
 mod prompt_confirm;
 mod queue;
 mod resize;
@@ -722,6 +723,23 @@ struct DesktopView {
     /// shared [`Self::keyboard_focused_session`] highlight in browser-row
     /// order while this handle is focused; `browser_focus` keeps the panel.
     browser_list_focus: FocusHandle,
+    /// Project-tag filter state owned by the sidebar popover and manager.
+    tag_filter_open: bool,
+    _tag_search_subscription: Subscription,
+    tag_search: Entity<InputState>,
+    tag_manager_open: bool,
+    tag_manager_focus: FocusHandle,
+    /// Workspace whose inline tag editor is expanded in the manager.
+    tag_project_editor: Option<String>,
+    _tag_project_subscription: Subscription,
+    tag_project_input: Entity<InputState>,
+    /// Tag being renamed; its old name is replaced everywhere on save.
+    tag_rename_target: Option<String>,
+    _tag_rename_subscription: Subscription,
+    tag_rename_input: Entity<InputState>,
+    /// Tag awaiting a destructive delete confirmation.
+    tag_delete_target: Option<String>,
+    tag_error: Option<String>,
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,

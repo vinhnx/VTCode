@@ -578,6 +578,9 @@ impl DesktopView {
         if self.about_open {
             self.disarm_double_escape();
             self.close_about(window, cx);
+        } else if self.tag_manager_open {
+            self.disarm_double_escape();
+            self.close_tag_manager(window, cx);
         } else if self.running_confirm.is_some() {
             self.disarm_double_escape();
             self.cancel_running_confirm(window, cx);

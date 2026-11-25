@@ -634,6 +634,9 @@ pub(super) struct Preferences {
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
     pub recent_workspaces: Vec<String>,
+    /// Workspace labels and the client-local active tag filter.
+    #[serde(default)]
+    pub workspace_tags: super::project_tags::ProjectTagsState,
     /// Explicit confirmation choices, retained alongside recent workspace paths.
     pub workspace_permissions: std::collections::BTreeMap<String, vtcode_desktop_protocol::PermissionMode>,
     /// Reasoning effort levels shown in model controls. Missing means every
