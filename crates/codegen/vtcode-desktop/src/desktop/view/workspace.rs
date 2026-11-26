@@ -348,6 +348,7 @@ impl DesktopView {
         let weak = cx.entity().downgrade();
         super::super::notifications::handoff_received(
             window,
+            session_id,
             system,
             deeplinks::click_handler(deeplinks::NotificationTarget::Thread { session_id: session_id.to_owned() }, weak),
             cx,

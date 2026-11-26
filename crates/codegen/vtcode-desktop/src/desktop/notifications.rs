@@ -147,14 +147,18 @@ pub(super) fn background_agent_activity(
 /// either missing or an opaque id. The click target carries the identity.
 pub(super) fn handoff_received(
     window: &mut Window,
+    session_id: &str,
     system: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &mut App,
 ) {
     let message = rust_i18n::t!("app.notifications.handoff_received").to_string();
+    // Kit replaces a system notification by tag. Keying by the handed-off
+    // thread keeps two background handoffs from collapsing into one banner
+    // whose click can only reach the thread that arrived last.
     let notification = Notification::info(message)
         .title(app::NAME)
-        .id::<HandoffNotification>()
+        .id1::<HandoffNotification>(session_id.to_owned())
         .on_click(on_click);
     if system {
         window.push_notification(notification.system(), cx);

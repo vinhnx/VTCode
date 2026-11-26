@@ -157,6 +157,77 @@ fn handoff_link_toasts_in_app_when_the_window_is_focused(cx: &mut TestAppContext
     );
 }
 
+/// Two threads handed off while the window is in the background need two OS
+/// banners. Kit replaces a system notification by tag, so a single handoff id
+/// would drop the first thread's notice and leave it reachable only by
+/// hunting the sidebar.
+#[gpui_kit::test]
+fn concurrent_handoffs_keep_a_banner_and_click_target_per_thread(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let workspace = tempfile::TempDir::new().unwrap();
+    let canonical = vtcode_commons::paths::canonicalize(workspace.path()).expect("canonicalize");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active(), "background handoffs post to the OS center");
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(canonical.clone());
+            for id in ["thread-a", "thread-b"] {
+                view.handle_handoff_link(
+                    HandoffLink {
+                        session_id: id.into(),
+                        workspace: canonical.clone(),
+                    },
+                    window,
+                    cx,
+                );
+            }
+        });
+    })
+    .unwrap();
+
+    let delivered = cx.delivered_system_notifications();
+    assert_eq!(delivered.len(), 2, "each handed-off thread needs its own OS banner");
+    assert_ne!(delivered[0].tag, delivered[1].tag, "distinct threads need distinct OS tags");
+    while requests.try_recv().is_ok() {}
+
+    // Settle the in-flight loads so the session-change funnel accepts the
+    // click, and leave the later thread selected.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                    result: Some(json!({
+                        "session": handoff_thread_fixture("thread-b"),
+                        "messages": [],
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    // Clicking the first banner must still target the first thread, not the
+    // one that happened to arrive last.
+    cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {
+        tag: delivered[0].tag.clone(),
+        action_id: None,
+    });
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("the first banner reloads its thread")
+    else {
+        panic!("the click must send session/load, not stop");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "thread-a" }));
+}
+
 /// The handoff notice follows the master notification toggle: a user who
 /// turned notifications off must not be interrupted by a CLI handoff.
 #[gpui_kit::test]
