@@ -562,6 +562,85 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContext) {
+    use gpui_kit::NavigationDirection;
+    use gpui_kit::test::ClickOptions;
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    let workspace = std::env::temp_dir();
+    let previous = vtcode_desktop_protocol::SessionSummary {
+        session_id: "mouse-previous".into(),
+        title: Some("Previous".into()),
+        workspace: workspace.display().to_string(),
+        completed: true,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    let current = vtcode_desktop_protocol::SessionSummary {
+        session_id: "mouse-current".into(),
+        title: Some("Current".into()),
+        workspace: workspace.display().to_string(),
+        completed: false,
+        resumable: true,
+        size_bytes: 0,
+        updated_at: None,
+    };
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.workspace = Some(workspace.clone());
+        view.sessions = vec![current.clone(), previous.clone()];
+        view.selected_session_id = Some(current.session_id.clone());
+        for session in [&previous, &current] {
+            view.navigation_history.record(NavigationLocation {
+                workspace: workspace.clone(),
+                session_id: Some(session.session_id.clone()),
+            });
+        }
+    });
+
+    let press = |direction, cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click_with_options(
+                "pane-root",
+                ClickOptions::new().with_button(MouseButton::Navigate(direction)),
+                cx,
+            );
+        })
+        .unwrap();
+    };
+    press(NavigationDirection::Back, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("mouse back button should load the previous thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "mouse-previous" }));
+
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: Some(json!({
+                    "session": previous,
+                    "messages": [{ "role": "assistant", "text": "Previous" }],
+                })),
+                error: None,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    press(NavigationDirection::Forward, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("mouse forward button should load the next thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "mouse-current" }));
+}
+
+#[gpui_kit::test]
 fn navigating_back_to_a_blank_thread_closes_the_service_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
