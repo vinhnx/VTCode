@@ -728,3 +728,40 @@ fn running_command_row_shows_live_tail_and_terminal_cta(cx: &mut TestAppContext)
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn tool_output_tail_can_expand_into_a_scrollable_code_view(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let long = format!("Verification is still pending: {}", "x".repeat(400));
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "long-tail".into(),
+                "tool".into(),
+                "Harness".into(),
+                long.clone(),
+            ));
+        });
+        window.render_frame(cx);
+        window.click("tool-long-tail", cx);
+        window.render_frame(cx);
+
+        let cta = window.find("tool-output-expand-long-tail");
+        assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(cta.label(), Some("Show details"));
+        assert!(window.try_find("tool-output-expanded-long-tail").is_none());
+
+        window.click("tool-output-expand-long-tail", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tool-output-expanded-long-tail").is_some(), "expanded code view renders");
+        assert_eq!(window.find("tool-output-expand-long-tail").label(), Some("Hide details"));
+        let tail = window.find("tool-output-long-tail");
+        let body = tail.label().unwrap();
+        assert!(body.contains(&long), "full detail is readable when expanded");
+
+        window.click("tool-output-expand-long-tail", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tool-output-expanded-long-tail").is_none(), "collapses back to the inline tail");
+    })
+    .unwrap();
+}

@@ -64,6 +64,9 @@ pub(crate) struct TranscriptItem {
     /// render projections so every prepare/clone path carries it together.
     pub has_list: bool,
     pub expanded: bool,
+    /// Whether the inline tool output tail is shown as a wrapped, scrollable
+    /// code view instead of a single horizontally clipped line.
+    pub output_expanded: bool,
     /// Whether this notice row carries collapsible operational details behind
     /// a Show/Hide toggle. Every notice with a body now offers this CTA; the
     /// collapsed state shows only a short lead line.
@@ -259,6 +262,7 @@ impl TranscriptItem {
             turn_files_offset: 0,
             has_list: false,
             expanded: false,
+            output_expanded: false,
             collapsible_details: false,
             notice_is_diagnostic: false,
             notice_stack: Vec::new(),

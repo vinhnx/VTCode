@@ -96,6 +96,20 @@ impl Transcript {
         }
     }
 
+    /// Expand one tool row's inline output tail into a wrapped, vertically
+    /// scrollable code view so long single-line output can be read in place.
+    pub fn toggle_tool_output(&mut self, id: &str) {
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id && item.is_tool()) {
+            if let Some(item) = self.items.get_mut(index) {
+                item.output_expanded.toggle();
+            }
+            self.bump_revision();
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+        }
+    }
+
     pub fn toggle_diff(&mut self, id: &str) {
         let last_index = self.items.len().checked_sub(1);
         let index = last_index

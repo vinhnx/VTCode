@@ -11,6 +11,7 @@ impl DesktopView {
     ) -> AnyElement {
         let colors = cx.theme().colors;
         let id = item.id.clone();
+        let tail_id = item.id.clone();
         let status = if item.has_activity_status {
             item.text.lines().next().unwrap_or_default().to_string()
         } else {
@@ -222,6 +223,26 @@ impl DesktopView {
                             .flex()
                             .justify_end()
                             .gap(themes::layout::gap::COMPACT)
+                            .when(item.shows_inline_tail(), |row| {
+                                let label = rust_i18n::t!(if item.output_expanded {
+                                    "app.transcript.hide_details"
+                                } else {
+                                    "app.transcript.show_details"
+                                })
+                                .to_string();
+                                row.child(
+                                    desktop_ghost_button(format!("tool-output-expand-{}", item.id))
+                                        .accessibility_label(label.clone())
+                                        .tooltip(label.clone())
+                                        .xsmall()
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.transcript.toggle_tool_output(&tail_id);
+                                            cx.notify();
+                                        }))
+                                        .child(label)
+                                        .child(transcript_chevron_lane(item.output_expanded)),
+                                )
+                            })
                             .child(
                                 desktop_ghost_button(format!("copy-tool-output-{}", item.id))
                                     .icon(IconName::Copy)
@@ -266,13 +287,29 @@ impl DesktopView {
                                 .py_2()
                                 .rounded_md()
                                 .bg(colors.secondary)
-                                .overflow_hidden()
-                                .overflow_x_scroll()
-                                .whitespace_nowrap()
-                                .text_color(colors.muted_foreground)
-                                .font_family(cx.theme().mono_font_family.clone())
-                                .text_size(cx.theme().mono_font_size)
-                                .child(render_output_text(&output_excerpt)),
+                                .when(item.output_expanded, |tail| {
+                                    // Wrapped code view with the shared height cap
+                                    // and vertical scrollbar for long output.
+                                    tail.child(
+                                        div().id(format!("tool-output-expanded-{}", item.id)).test_support().child(
+                                            render_code_preview(
+                                                format!("tool-output-expanded-view-{}", item.id),
+                                                "output.txt",
+                                                output_excerpt.clone(),
+                                                cx,
+                                            ),
+                                        ),
+                                    )
+                                })
+                                .when(!item.output_expanded, |tail| {
+                                    tail.overflow_hidden()
+                                        .overflow_x_scroll()
+                                        .whitespace_nowrap()
+                                        .text_color(colors.muted_foreground)
+                                        .font_family(cx.theme().mono_font_family.clone())
+                                        .text_size(cx.theme().mono_font_size)
+                                        .child(render_output_text(&output_excerpt))
+                                }),
                         )
                     })
                     .child(self.render_mcp_app_previews(item, cx))
