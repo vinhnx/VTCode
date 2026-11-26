@@ -134,12 +134,14 @@ impl DesktopView {
             }
             None => rust_i18n::t!("app.composer.goal_cleared").to_string(),
         };
-        self.transcript.push(TranscriptItem::notice(
+        let mut notice = TranscriptItem::notice(
             format!("goal-{}", uuid_like_id()),
             rust_i18n::t!("app.composer.goal_notice_title").to_string().into(),
             body,
             NoticeSeverity::Info,
-        ));
+        );
+        notice.notice_markdown = goal.is_some();
+        self.transcript.push(notice);
     }
 
     /// Execute a `/goal` command quietly against the selected session.
@@ -213,6 +215,8 @@ impl DesktopView {
         } else {
             snapshot.short_objective(GOAL_OBJECTIVE_PREVIEW_CHARS)
         };
+        let markdown_source: gpui_kit::SharedString = objective.clone().into();
+        let prepared = prepared_markdown(&markdown_source);
         let elapsed = goal_live_elapsed_label(snapshot, self.goal_snapshot_at);
         // The accessible summary stays on the snapshot cadence: a ticking
         // live region would announce every second while Active.
@@ -236,11 +240,24 @@ impl DesktopView {
             .child(div().text_sm().text_color(colors.foreground).child(label))
             .child(
                 div()
+                    .id("goal-bar-objective")
+                    .test_support()
+                    .aria_label(prepared.accessible_text.clone())
                     .min_w_0()
                     .flex_1()
                     .text_sm()
                     .text_color(colors.muted_foreground)
-                    .child(objective),
+                    .max_h(px(240.))
+                    .overflow_y_scroll()
+                    .when(self.goal_expanded, |body| {
+                        body.child(render_markdown_with_style(
+                            "goal-bar-objective-view".to_string(),
+                            prepared.markdown.clone(),
+                            false,
+                            markdown_style(cx),
+                        ))
+                    })
+                    .when(!self.goal_expanded, |body| body.child(objective)),
             )
             .child(div().text_sm().text_color(colors.muted_foreground).child(elapsed));
         row = row.child(

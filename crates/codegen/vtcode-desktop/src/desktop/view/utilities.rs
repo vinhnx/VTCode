@@ -98,12 +98,22 @@ impl DesktopView {
                                             .child(goal_state_label(snapshot.state)),
                                     ),
                             )
-                            .child(
+                            .child({
+                                let source: gpui_kit::SharedString = snapshot.objective.clone().into();
+                                let prepared = prepared_markdown(&source);
                                 div()
+                                    .id("utilities-goal-markdown")
+                                    .test_support()
+                                    .aria_label(prepared.accessible_text.clone())
                                     .text_sm()
                                     .text_color(colors.muted_foreground)
-                                    .child(snapshot.objective.clone()),
-                            )
+                                    .child(render_markdown_with_style(
+                                        "utilities-goal-objective-view".to_string(),
+                                        prepared.markdown,
+                                        false,
+                                        markdown_style(cx),
+                                    ))
+                            })
                             .child(div().text_xs().text_color(colors.muted_foreground).child(format!(
                                 "{} · {}",
                                 goal_live_elapsed_label(snapshot, self.goal_snapshot_at),

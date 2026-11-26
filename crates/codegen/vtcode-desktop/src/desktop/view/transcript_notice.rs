@@ -227,11 +227,24 @@ impl DesktopView {
             .child(header);
 
         if has_body {
+            let markdown = item.notice_is_diagnostic || item.notice_markdown;
+            let body_text = if item.notice_markdown {
+                item.markdown.as_str()
+            } else {
+                item.text.as_str()
+            };
+            let lead_text = if item.notice_markdown {
+                item.accessibility_text.as_str()
+            } else {
+                item.text.as_str()
+            };
             card = card.child(self.render_notice_body(
                 item.id.as_str(),
-                item.text.as_str(),
-                item.expanded || (item.notice_is_diagnostic && !has_details),
-                item.notice_is_diagnostic,
+                body_text,
+                lead_text,
+                item.accessibility_text.as_str(),
+                item.expanded || ((item.notice_is_diagnostic || item.notice_markdown) && !has_details),
+                markdown,
                 &chrome,
                 cx,
             ));
@@ -255,6 +268,8 @@ impl DesktopView {
         &self,
         id: &str,
         text: &str,
+        lead_text: &str,
+        aria_text: &str,
         show_full_body: bool,
         markdown: bool,
         chrome: &CalloutChrome,
@@ -267,7 +282,8 @@ impl DesktopView {
             .test_support()
             .pl(themes::layout::padding::BODY_INSET)
             .text_size(themes::layout::typography::ROW)
-            .text_color(chrome.body_color);
+            .text_color(chrome.body_color)
+            .when(markdown, |body| body.aria_label(aria_text.to_string()));
         if markdown && show_full_body {
             body = body.child(render_markdown_with_style(
                 format!("notice-details-markdown-{id}"),
@@ -277,9 +293,9 @@ impl DesktopView {
             ));
         } else {
             let content = if show_full_body {
-                capitalize_first(text)
+                capitalize_first(lead_text)
             } else {
-                notice_lead(text)
+                notice_lead(lead_text)
             };
             body = body.child(
                 div()

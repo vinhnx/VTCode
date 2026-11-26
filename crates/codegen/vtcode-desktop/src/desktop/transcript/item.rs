@@ -71,6 +71,9 @@ pub(crate) struct TranscriptItem {
     /// a Show/Hide toggle. Every notice with a body now offers this CTA; the
     /// collapsed state shows only a short lead line.
     pub collapsible_details: bool,
+    /// Goal notices carry markdown objectives; their expanded body is rendered
+    /// through the hardened markdown pipeline like diagnostic evidence.
+    pub notice_markdown: bool,
     /// Diagnostic notices carry Markdown evidence and may be upserted by id,
     /// so they never fold into a consecutive notice stack.
     pub notice_is_diagnostic: bool,
@@ -264,6 +267,7 @@ impl TranscriptItem {
             expanded: false,
             output_expanded: false,
             collapsible_details: false,
+            notice_markdown: false,
             notice_is_diagnostic: false,
             notice_stack: Vec::new(),
             notice_stack_expanded: false,
@@ -296,9 +300,16 @@ impl TranscriptItem {
         // Notices render as plain severity text: error bodies must not
         // reinterpret backticks or brackets as Markdown.
         if self.is_notice() {
-            self.markdown = SharedString::default();
-            self.accessibility_text.clone_from(&self.text);
-            self.has_list = false;
+            if self.notice_markdown {
+                let prepared = prepare_markdown(&self.text);
+                self.markdown = prepared.markdown;
+                self.accessibility_text = prepared.accessible_text;
+                self.has_list = prepared.has_list;
+            } else {
+                self.markdown = SharedString::default();
+                self.accessibility_text.clone_from(&self.text);
+                self.has_list = false;
+            }
             return;
         }
 

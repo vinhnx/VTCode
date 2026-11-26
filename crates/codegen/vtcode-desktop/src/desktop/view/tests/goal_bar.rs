@@ -1,4 +1,5 @@
 use super::*;
+use crate::desktop::view::InspectorTab;
 use crate::desktop::view::goal::goal_live_elapsed_label;
 use std::time::{Duration, Instant};
 use vtcode_desktop_protocol::ThreadEventNotification;
@@ -518,4 +519,51 @@ fn goal_live_label_ticks_while_active_and_freezes_otherwise() {
             "{state:?} must freeze even an hour after arrival"
         );
     }
+}
+
+#[gpui_kit::test]
+fn goal_objective_renders_as_markdown_in_expanded_surfaces(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let objective = "**Review:** the code\n\n1. **Analyze:** options\n2. Implement";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            view.goal_snapshot = Some(snapshot(objective, GoalState::Active));
+        });
+        window.render_frame(cx);
+        assert!(
+            !window.find("goal-bar-objective").label().unwrap().contains("**"),
+            "compact bar keeps plain preview"
+        );
+
+        window.click("goal-expand", cx);
+        window.render_frame(cx);
+        let bar = window.find("goal-bar-objective");
+        let label = bar.label().unwrap();
+        assert!(!label.contains("**"), "expanded bar strips markdown markers: {label:?}");
+        assert!(label.contains("Review"), "expanded bar keeps objective text: {label:?}");
+
+        view.update(cx, |view, cx| view.open_inspector_tab(InspectorTab::Utilities, cx));
+        window.render_frame(cx);
+        let panel = window.find("utilities-goal-markdown");
+        let label = panel.label().unwrap();
+        assert!(!label.contains("**"), "utilities panel strips markdown markers: {label:?}");
+        assert!(label.contains("Analyze"), "utilities panel keeps list text: {label:?}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn goal_notice_renders_the_objective_as_markdown(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.note_goal_transition(Some(&snapshot("**Bold** objective", GoalState::Active))));
+        window.render_frame(cx);
+        let id = view.read(cx).transcript.items().last().expect("goal notice").id.clone();
+        let body = window.find(format!("notice-details-body-{id}"));
+        let label = body.label().unwrap();
+        assert!(!label.contains("**"), "expanded goal notice strips markdown markers: {label:?}");
+        assert!(label.contains("Bold"), "expanded goal notice keeps objective text: {label:?}");
+    })
+    .unwrap();
 }
