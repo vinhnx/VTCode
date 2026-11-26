@@ -6,7 +6,7 @@ pub(super) use std::time::Duration;
 
 pub(super) use gpui_kit::component::WindowExt as _;
 pub(super) use gpui_kit::component::select::SelectEvent;
-pub(super) use gpui_kit::test::{ClickOptions, TestWindowExt};
+pub(super) use gpui_kit::test::{ClickOptions, TestEventExt as _, TestWindowExt};
 pub(super) use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, InputEvent, MouseButton, NavigationDirection,
     ScrollEvent, TestAppContext, TouchPhase, WindowBounds, WindowOptions, point, px, size,
@@ -702,12 +702,6 @@ fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
             {"name":"custom-reviewer", "displayName":"Custom reviewer", "description":"Workspace primary agent"}
         ], "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast", "fastModeSupported": true, "fastModeEnabled": true, "fastModeLabel": "Ultrafast"}
     })).unwrap()
-}
-
-enum MousePhase {
-    Down,
-    Move,
-    Up,
 }
 
 /// Mirror of `submit()`: user echo present, turn running, no content yet.

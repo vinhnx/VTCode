@@ -156,7 +156,7 @@ fn reasoning_effort_option_does_not_submit_at_its_boundary(cx: &mut TestAppConte
 #[gpui_kit::test]
 fn compact_model_panel_disables_effort_rows_with_the_effort_button(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
     settle_fade_animations(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -191,6 +191,53 @@ fn compact_model_panel_disables_effort_rows_with_the_effort_button(cx: &mut Test
                 "effort row {index} must darken with the model button"
             );
         }
+
+        // A native disabled flag is not proof that activation is dropped.
+        // Exercise the row: the effort stays put and the panel stays open.
+        window.click(("effort-label", 2usize), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("effort-options").label(), Some("Reasoning effort: medium"));
+        assert!(window.try_find(("effort-label", 2usize)).is_some(), "a rejected click keeps the panel open");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "a disabled effort row must not commit");
+}
+
+#[gpui_kit::test]
+fn composer_clicks_stay_at_logical_coordinates_after_display_scale_change(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    settle_fade_animations(cx);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.configuration = Some(runtime_options_config());
+    });
+    let at_1x = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("composer-effort").bounds()
+        })
+        .unwrap();
+
+    cx.simulate_window_scale_factor_change(window, 2.0);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-effort").bounds(), at_1x, "scale changes device pixels, not logical layout");
+        window.click("composer-effort", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "logical hit testing opens the panel at 2x");
+        assert!(window.try_find(("effort-label", 2usize)).is_some());
+    })
+    .unwrap();
+
+    cx.simulate_window_scale_factor_change(window, 1.0);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-effort").bounds(), at_1x, "1x restores the same logical frame");
+        window.click("composer-effort", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "the same logical click closes the panel at 1x");
     })
     .unwrap();
 }

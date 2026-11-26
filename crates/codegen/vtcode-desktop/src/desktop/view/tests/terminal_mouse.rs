@@ -83,19 +83,10 @@ fn terminal_move_without_button_heals_stuck_drag(cx: &mut TestAppContext) {
         let (origin, row_height, char_width) = grid_geometry(&view, cx);
         cell_center(origin, row_height, char_width, 0, 2)
     });
-    // Raw dispatch: no headless helper presses without releasing, so the
-    // down travels the real hit-test path to the panel handler.
+    // Press without releasing: pointer_down travels the real hit-test path
+    // and, like the other TestEventExt steps, completes a frame afterward.
     cx.update_window(window, |_, window, cx| {
-        let _dispatched = window.dispatch_event(
-            gpui_kit::PlatformInput::MouseDown(gpui_kit::MouseDownEvent {
-                button: MouseButton::Left,
-                position: at,
-                modifiers: window.modifiers(),
-                click_count: 1,
-                first_mouse: false,
-            }),
-            cx,
-        );
+        window.pointer_down(at, MouseButton::Left, cx);
     })
     .unwrap();
     cx.update(|cx| {
@@ -107,27 +98,13 @@ fn terminal_move_without_button_heals_stuck_drag(cx: &mut TestAppContext) {
         cell_center(origin, row_height, char_width, 0, 4)
     });
     cx.update_window(window, |_, window, cx| {
-        let _dispatched = window.dispatch_event(
-            gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
-                position: stretched,
-                pressed_button: Some(MouseButton::Left),
-                modifiers: window.modifiers(),
-            }),
-            cx,
-        );
+        window.pointer_move(stretched, Some(MouseButton::Left), cx);
     })
     .unwrap();
     // Release happened outside the panel, so no up event arrives; the next
     // buttonless move must end the drag while keeping the selection.
     cx.update_window(window, |_, window, cx| {
-        let _dispatched = window.dispatch_event(
-            gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
-                position: stretched,
-                pressed_button: None,
-                modifiers: window.modifiers(),
-            }),
-            cx,
-        );
+        window.pointer_move(stretched, None, cx);
     })
     .unwrap();
     cx.update(|cx| {

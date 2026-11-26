@@ -166,50 +166,6 @@ fn saved_preferences_restore_theme_widths_and_inspector_state(cx: &mut TestAppCo
 
 #[gpui_kit::test]
 fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext) {
-    use gpui_kit::{InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent};
-
-    let dispatch_mouse = |window: &mut gpui_kit::Window, position, event: MousePhase, cx: &mut gpui_kit::App| {
-        match event {
-            MousePhase::Down => {
-                let _ = window.dispatch_event(
-                    MouseDownEvent {
-                        position,
-                        button: MouseButton::Left,
-                        modifiers: Modifiers::default(),
-                        click_count: 1,
-                        first_mouse: false,
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-            }
-            MousePhase::Move => {
-                let _ = window.dispatch_event(
-                    MouseMoveEvent {
-                        position,
-                        pressed_button: Some(MouseButton::Left),
-                        modifiers: Modifiers::default(),
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-            }
-            MousePhase::Up => {
-                let _ = window.dispatch_event(
-                    MouseUpEvent {
-                        position,
-                        button: MouseButton::Left,
-                        modifiers: Modifiers::default(),
-                        click_count: 1,
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-            }
-        }
-        window.render_frame(cx);
-    };
-
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| view.preferences.navigation_on_right = Some(false));
@@ -219,15 +175,15 @@ fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext)
         let initial_sidebar_width = view.read(cx).sidebar_width;
 
         // Press on the divider, drag right by 60px, release.
-        dispatch_mouse(window, start, MousePhase::Down, cx);
+        window.pointer_down(start, MouseButton::Left, cx);
         let resize = view.read(cx).resizing.expect("splitter press begins a resize");
         assert_eq!(resize.start_pointer, start.x, "drag start uses window-space pointer coordinates");
         assert_eq!(resize.start_size, px(initial_sidebar_width), "drag start retains pixel units for pane width");
-        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
+        window.pointer_move(point(start.x + px(6.), start.y), Some(MouseButton::Left), cx);
         assert!(cx.has_active_drag(), "GPUI starts a typed resize drag");
-        dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);
+        window.pointer_move(point(start.x + px(60.), start.y), Some(MouseButton::Left), cx);
         assert!(view.read(cx).resizing.is_some(), "splitter drag remains active");
-        dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Up, cx);
+        window.pointer_up(point(start.x + px(60.), start.y), MouseButton::Left, cx);
         let width = view.read(cx).sidebar_width;
         assert!(width > 300.0 && width < 340.0, "sidebar grew by the drag delta: {width}");
 
@@ -235,20 +191,20 @@ fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext)
         // drag moved it.
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
-        dispatch_mouse(window, start, MousePhase::Down, cx);
-        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Up, cx);
+        window.pointer_down(start, MouseButton::Left, cx);
+        window.pointer_move(point(start.x + px(6.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_move(point(start.x + px(600.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_up(point(start.x + px(600.), start.y), MouseButton::Left, cx);
         let width = view.read(cx).sidebar_width;
         assert!((width - crate::desktop::preferences::MAX_PANE_WIDTH).abs() < f32::EPSILON, "clamped width: {width}");
 
         let inspector_start_width = view.read(cx).inspector_width;
         let handle = window.find("resize-inspector").bounds();
         let start = point(handle.center().x, handle.center().y);
-        dispatch_mouse(window, start, MousePhase::Down, cx);
-        dispatch_mouse(window, point(start.x - px(6.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Up, cx);
+        window.pointer_down(start, MouseButton::Left, cx);
+        window.pointer_move(point(start.x - px(6.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_move(point(start.x - px(40.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_up(point(start.x - px(40.), start.y), MouseButton::Left, cx);
         let view_state = view.read(cx);
         assert!(view_state.resizing.is_none(), "splitter release ends the resize");
         assert!(
@@ -265,10 +221,10 @@ fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext)
         // test viewport from the inspector edge.
         let handle = window.find("resize-inspector").bounds();
         let start = point(handle.center().x, handle.center().y);
-        dispatch_mouse(window, start, MousePhase::Down, cx);
-        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x + px(400.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x + px(400.), start.y), MousePhase::Up, cx);
+        window.pointer_down(start, MouseButton::Left, cx);
+        window.pointer_move(point(start.x + px(6.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_move(point(start.x + px(400.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_up(point(start.x + px(400.), start.y), MouseButton::Left, cx);
         let view_state = view.read(cx);
         assert!(
             (view_state.inspector_width - crate::desktop::preferences::MIN_PANE_WIDTH).abs() < f32::EPSILON,
@@ -286,10 +242,10 @@ fn dragging_pane_dividers_resizes_and_clamps_both_panes(cx: &mut TestAppContext)
         let initial_right_sidebar_width = view.read(cx).sidebar_width;
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
-        dispatch_mouse(window, start, MousePhase::Down, cx);
-        dispatch_mouse(window, point(start.x - px(6.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Move, cx);
-        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Up, cx);
+        window.pointer_down(start, MouseButton::Left, cx);
+        window.pointer_move(point(start.x - px(6.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_move(point(start.x - px(40.), start.y), Some(MouseButton::Left), cx);
+        window.pointer_up(point(start.x - px(40.), start.y), MouseButton::Left, cx);
         assert!(
             view.read(cx).sidebar_width > initial_right_sidebar_width + 30.
                 && view.read(cx).sidebar_width < initial_right_sidebar_width + 50.,
@@ -360,18 +316,8 @@ fn held_splitter_arrow_defers_the_preferences_write_until_release(cx: &mut TestA
         }
         assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "Tab reaches the sidebar splitter");
 
-        let keystroke = gpui_kit::Keystroke::parse("right").unwrap();
         for _ in 0..5 {
-            let _ = window.dispatch_event(
-                gpui_kit::KeyDownEvent {
-                    keystroke: keystroke.clone(),
-                    is_held: true,
-                    prefer_character_input: false,
-                }
-                .to_platform_input(),
-                cx,
-            );
-            window.render_frame(cx);
+            window.key_down("right", true, cx);
         }
         assert_eq!(view.read(cx).sidebar_width, 320., "key repeat keeps resizing the pane");
         assert_eq!(
@@ -380,7 +326,7 @@ fn held_splitter_arrow_defers_the_preferences_write_until_release(cx: &mut TestA
             "five key-downs must not cause five fsync-backed preference writes"
         );
 
-        let _ = window.dispatch_event(gpui_kit::KeyUpEvent { keystroke }.to_platform_input(), cx);
+        window.key_up("right", cx);
         assert_eq!(view.read(cx).preferences.sidebar_width, Some(320.));
         assert!(!view.read(cx).layout_save_pending, "release retires the deferred write");
     })
