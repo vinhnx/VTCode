@@ -442,8 +442,8 @@ impl DesktopView {
             .when(item.is_user() || item.is_assistant(), |row| row.pb_6())
             .when(!item.is_tool() && !item.is_user() && !item.is_assistant(), |row| row.pb_3())
             // Hover tracking covers every row with revealable actions:
-            // assistant copy plus the group, diff, and tool-row jumps.
-            .when(item.is_assistant() || item.is_tool() || item.is_diff(), |row| {
+            // user/assistant copy plus the group, diff, and tool-row jumps.
+            .when(item.is_user() || item.is_assistant() || item.is_tool() || item.is_diff(), |row| {
                 row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                     let next = hovered.then(|| message_id.clone());
                     if view.hovered_message != next {
@@ -581,53 +581,56 @@ impl DesktopView {
                         ),
                 ),
             )
-            .when(!user, |message| {
+            .footer({
                 // Message actions reveal on hover or keyboard highlight; the
                 // slot keeps the xsmall button height so rows never reflow.
-                // Only the final turn response offers inline copy; intermediate
-                // commentary stays copyable through the palette command.
+                // Assistants offer inline copy only on the final turn response;
+                // intermediate commentary stays copyable through the palette
+                // command. Every user message offers inline copy.
                 // The copy action docks at the trailing edge so timestamps
                 // keep the leading spine.
                 let revealed = self.transcript_row_revealed(item.id.as_str());
-                let copyable = revealed && self.transcript.is_final_turn_response(item.id.as_str());
-                message.footer(
-                    MessageFooter::new().child(
-                        div()
-                            .id(format!("message-actions-{}", item.id))
-                            .test_support()
-                            .min_h_5()
-                            .flex()
-                            .items_center()
-                            .children(item.completed_at.as_ref().map(|time| {
-                                div()
-                                    .text_xs()
-                                    .text_color(themes::muted_text(&colors))
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(time.clone())
-                                    .when_some(item.completed_elapsed.as_ref(), |slot, elapsed| {
-                                        slot.child(format!("{} {elapsed}", display::MIDDOT))
-                                    })
-                            }))
-                            .when(copyable, |slot| {
-                                slot.child(
-                                    desktop_ghost_button(format!("copy-message-{}", item.id))
-                                        .ml_auto()
-                                        .icon(IconName::Copy)
-                                        .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
-                                        .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())
-                                        .xsmall()
-                                        .tab_stop(false)
-                                        .on_click(move |_, window, app| {
-                                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                                copy_text.to_string(),
-                                            ));
-                                            super::super::notifications::copied_to_clipboard(window, app);
-                                        }),
-                                )
-                            }),
-                    ),
+                let copyable = if user {
+                    revealed && !item.text.trim().is_empty()
+                } else {
+                    revealed && self.transcript.is_final_turn_response(item.id.as_str())
+                };
+                MessageFooter::new().child(
+                    div()
+                        .id(format!("message-actions-{}", item.id))
+                        .test_support()
+                        .min_h_5()
+                        .flex()
+                        .items_center()
+                        .children(item.completed_at.as_ref().map(|time| {
+                            div()
+                                .text_xs()
+                                .text_color(themes::muted_text(&colors))
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(time.clone())
+                                .when_some(item.completed_elapsed.as_ref(), |slot, elapsed| {
+                                    slot.child(format!("{} {elapsed}", display::MIDDOT))
+                                })
+                        }))
+                        .when(copyable, |slot| {
+                            slot.child(
+                                desktop_ghost_button(format!("copy-message-{}", item.id))
+                                    .ml_auto()
+                                    .icon(IconName::Copy)
+                                    .accessibility_label(rust_i18n::t!("app.transcript.copy_message").to_string())
+                                    .tooltip(rust_i18n::t!("app.transcript.copy_message").to_string())
+                                    .xsmall()
+                                    .tab_stop(false)
+                                    .on_click(move |_, window, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                            copy_text.to_string(),
+                                        ));
+                                        super::super::notifications::copied_to_clipboard(window, app);
+                                    }),
+                            )
+                        }),
                 )
             })
             .into_any_element()

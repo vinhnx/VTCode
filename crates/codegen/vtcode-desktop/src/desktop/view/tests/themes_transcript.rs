@@ -658,6 +658,31 @@ fn transcript_eviction_preserves_reader_anchor(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn user_message_copy_action_copies_raw_prompt_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let source = "Summarize **these** changes";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "user-copy".to_string(),
+                "user".to_string(),
+                "You".into(),
+                source.to_string(),
+            ));
+        });
+        window.render_frame(cx);
+        // Hidden until the row reveals on hover, matching assistant rows.
+        assert!(window.try_find("copy-message-user-copy").is_none());
+        window.hover("transcript-row-user-copy", cx);
+        window.render_frame(cx);
+        window.click("copy-message-user-copy", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
+        assert_eq!(window.notifications(cx).len(), 1);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let source = "# Review\n\n**Bold** and <b>inline HTML</b>\n\n```rust\nfn sample() -> u8 { 7 }\n```";

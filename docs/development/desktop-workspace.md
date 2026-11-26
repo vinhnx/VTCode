@@ -543,8 +543,8 @@ Search jumps also seed a match-cycling pill that steps through every hit in tran
 Transcript Markdown remains a document renderer: images are blocked, and only valid HTTP(S) links without embedded
 credentials open in the system browser. WebMCP remains a separately paired browser app rather than an embedded WebView.
 Runtime errors, compaction/reset notices, and run status render as compact severity rows (danger/warning/subdued,
-alert or status roles) with plain-text bodies and no message actions. Assistant message actions reveal on hover
-inside a fixed-height slot so rows never reflow; keyboard users copy the newest message through the command
+alert or status roles) with plain-text bodies and no message actions. User and assistant message actions reveal on
+hover inside a fixed-height slot so rows never reflow; keyboard users copy the newest message through the command
 palette instead. Expanded group rows nest under their header, and captured tool output opens in the Output tab.
 Commands wrap in a separate code surface with a copy action. Later user turns open with a hairline divider, and
 tool rows always reserve their status slot so state changes hold layout.
