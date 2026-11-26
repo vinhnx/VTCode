@@ -101,20 +101,20 @@ impl DesktopView {
                 &cx.theme().mono_font_family,
             ),
         };
-        let display = if family.as_str() == ".SystemUIFont" {
+        let display: gpui_kit::SharedString = if family.as_str() == ".SystemUIFont" {
             if cfg!(target_os = "macos") {
-                rust_i18n::t!("app.appearance.system_pro").to_string()
+                rust_i18n::t!("app.appearance.system_pro").to_string().into()
             } else {
-                rust_i18n::t!("app.appearance.system_short").to_string()
+                rust_i18n::t!("app.appearance.system_short").to_string().into()
             }
         } else {
-            family.to_string()
+            family.clone()
         };
         settings_row(
             label.clone(),
             "",
             desktop_ghost_button(id)
-                .label(display.to_string())
+                .label(display.clone())
                 .accessibility_label(
                     rust_i18n::t!("app.appearance.choose_current", label = label.as_str(), value = display.as_str())
                         .to_string(),

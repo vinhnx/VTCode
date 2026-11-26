@@ -396,7 +396,7 @@ pub(super) fn render_markdown_view(
         .id(id.clone())
         .test_support()
         .role(gpui_kit::Role::Label)
-        .aria_label(prepared.accessible_text.to_string())
+        .aria_label(prepared.accessible_text.clone())
         .w_full()
         .min_w_0();
     let frame = match height {

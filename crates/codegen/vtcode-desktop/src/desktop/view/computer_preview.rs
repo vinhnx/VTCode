@@ -15,6 +15,12 @@
 use super::*;
 use vtcode_commons::formatting::format_size;
 
+// Both notes are static and paint on every card frame; keep one shared value
+// per note instead of allocating the text twice per frame.
+const EXPIRED_PREVIEW_NOTE: gpui_kit::SharedString =
+    gpui_kit::SharedString::new_static("Screenshot expired — previews are kept in memory only while recent.");
+const NOT_LOADED_PREVIEW_NOTE: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Screenshot not loaded.");
+
 /// Identity of one in-flight screenshot read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct PendingComputerPreviewRead {
@@ -194,16 +200,15 @@ impl DesktopView {
         } else if self.computer_preview_expired.contains(&key) {
             // Plain text is not in the accessibility tree, so name the note on
             // the same node that paints it (same contract as `accessible_error`).
-            let note = "Screenshot expired — previews are kept in memory only while recent.";
             card = card.child(
                 div()
                     .id(format!("computer-preview-expired-{}", item.id))
                     .test_support()
                     .role(gpui_kit::Role::Label)
-                    .aria_label(note.to_string())
+                    .aria_label(EXPIRED_PREVIEW_NOTE.clone())
                     .text_sm()
                     .text_color(themes::muted_text(&colors))
-                    .child(note.to_string()),
+                    .child(EXPIRED_PREVIEW_NOTE.clone()),
             );
         } else if let Some(error) = self.computer_preview_errors.get(&key) {
             let retry_id = item.id.clone();
@@ -237,16 +242,15 @@ impl DesktopView {
                 cx,
             ));
         } else {
-            let note = "Screenshot not loaded.";
             card = card.child(
                 div()
                     .id(format!("computer-preview-not-loaded-{}", item.id))
                     .test_support()
                     .role(gpui_kit::Role::Label)
-                    .aria_label(note.to_string())
+                    .aria_label(NOT_LOADED_PREVIEW_NOTE.clone())
                     .text_sm()
                     .text_color(themes::muted_text(&colors))
-                    .child(note.to_string()),
+                    .child(NOT_LOADED_PREVIEW_NOTE.clone()),
             );
         }
         card.into_any_element()

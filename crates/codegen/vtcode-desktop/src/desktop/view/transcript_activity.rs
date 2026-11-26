@@ -4,7 +4,7 @@ use super::*;
 
 /// Label for the running-command terminal CTA. English literal: the repo
 /// does not add locale keys without full native-quality translations.
-const TERMINAL_CTA_LABEL: &str = "Monitor in bottom terminal";
+const TERMINAL_CTA_LABEL: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Monitor in bottom terminal");
 
 /// Prepare the dotted rule's geometry from resolved frame bounds.
 ///
@@ -185,8 +185,8 @@ impl DesktopView {
         desktop_ghost_button(format!("tool-open-terminal-{}", item.id))
             .icon(IconName::SquareTerminal)
             .xsmall()
-            .accessibility_label(TERMINAL_CTA_LABEL.to_string())
-            .tooltip(TERMINAL_CTA_LABEL.to_string())
+            .accessibility_label(TERMINAL_CTA_LABEL.clone())
+            .tooltip(TERMINAL_CTA_LABEL.clone())
             .on_click(cx.listener(move |view, _, window, cx| {
                 view.open_terminal_monitor(row_id.clone(), window, cx);
             }))

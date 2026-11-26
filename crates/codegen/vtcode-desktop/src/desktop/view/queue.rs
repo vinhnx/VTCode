@@ -10,6 +10,11 @@
 
 use super::*;
 
+// Static steer labels are reused across queue renders.
+const STEERING_QUEUED_LABEL: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Steering queued prompt");
+const STEER_INTO_RUNNING_TURN_LABEL: gpui_kit::SharedString =
+    gpui_kit::SharedString::new_static("Steer into the running turn");
+
 /// One prompt waiting behind the running turn.
 pub(super) struct QueuedSubmission {
     /// Stable client identity, reused when the message reaches the transcript.
@@ -642,15 +647,12 @@ impl DesktopView {
                                         .desktop_disabled(
                                             !steer_available || !self.running || !self.steer_pending.is_empty(),
                                         )
-                                        .accessibility_label(
-                                            if steer_pending {
-                                                "Steering queued prompt"
-                                            } else {
-                                                "Steer into the running turn"
-                                            }
-                                            .to_string(),
-                                        )
-                                        .tooltip("Steer into the running turn".to_string())
+                                        .accessibility_label(if steer_pending {
+                                            STEERING_QUEUED_LABEL.clone()
+                                        } else {
+                                            STEER_INTO_RUNNING_TURN_LABEL.clone()
+                                        })
+                                        .tooltip(STEER_INTO_RUNNING_TURN_LABEL.clone())
                                         .xsmall()
                                         .on_click({
                                             let echo_id = echo_id.clone();

@@ -98,7 +98,7 @@ fn render_interaction_detail(detail: &str, detail_index: usize, first: bool, cx:
         let prepared = prepared_markdown(&gpui_kit::SharedString::from(detail));
         return wrapper
             .role(gpui_kit::Role::Label)
-            .aria_label(prepared.accessible_text.to_string())
+            .aria_label(prepared.accessible_text.clone())
             .child(render_markdown_with_style(
                 format!("interaction-detail-md-{detail_index}"),
                 prepared.markdown,

@@ -4,6 +4,19 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::{App, Entity};
 
+// Static guidance copied once into shared storage instead of reallocated on
+// every settings render frame.
+const VIM_EXPERIMENTAL_TITLE: gpui_kit::SharedString =
+    gpui_kit::SharedString::new_static("Vim navigation (experimental)");
+const VIM_NAVIGATION_TITLE: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Vim navigation");
+const VIM_NAVIGATION_HINT: gpui_kit::SharedString = gpui_kit::SharedString::new_static(
+    "Move with j/k, jump with g/G, switch tabs with h/l, focus the composer with i, search with /.",
+);
+const SWIPE_NAVIGATION_TITLE: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Swipe navigation");
+const SWIPE_NAVIGATION_HINT: gpui_kit::SharedString = gpui_kit::SharedString::new_static(
+    "Navigate thread history with a two-finger swipe, horizontal scroll, or mouse back/forward buttons. Toolbar buttons and shortcuts always work.",
+);
+
 /// Cloned render inputs for the shortcuts editor (see
 /// `NotificationSettingsProps` for the Kit-hosting rationale).
 #[derive(Clone)]
@@ -189,11 +202,11 @@ impl DesktopView {
             );
         // English literals: new user-visible strings stay untranslated until
         // full native-quality translations ship for every locale.
-        let vim_group = settings_group_box("Vim navigation (experimental)".to_string(), colors).child(settings_row(
-            "Vim navigation".to_string(),
-            "Move with j/k, jump with g/G, switch tabs with h/l, focus the composer with i, search with /.".to_string(),
+        let vim_group = settings_group_box(VIM_EXPERIMENTAL_TITLE.clone(), colors).child(settings_row(
+            VIM_NAVIGATION_TITLE.clone(),
+            VIM_NAVIGATION_HINT,
             gpui_kit::component::switch::Switch::new("vim-navigation")
-                .accessibility_label("Vim navigation".to_string())
+                .accessibility_label(VIM_NAVIGATION_TITLE.clone())
                 .checked(props.vim_navigation)
                 .on_click({
                     let view = view.clone();
@@ -205,11 +218,11 @@ impl DesktopView {
         ));
         // Same English-literal rule as the vim toggle above: settings rows
         // stay untranslated until full native-quality translations ship.
-        let swipe_group = settings_group_box("Swipe navigation".to_string(), colors).child(settings_row(
-            "Swipe navigation".to_string(),
-            "Navigate thread history with a two-finger swipe, horizontal scroll, or mouse back/forward buttons. Toolbar buttons and shortcuts always work.".to_string(),
+        let swipe_group = settings_group_box(SWIPE_NAVIGATION_TITLE.clone(), colors).child(settings_row(
+            SWIPE_NAVIGATION_TITLE.clone(),
+            SWIPE_NAVIGATION_HINT,
             gpui_kit::component::switch::Switch::new("swipe-navigation")
-                .accessibility_label("Swipe navigation".to_string())
+                .accessibility_label(SWIPE_NAVIGATION_TITLE.clone())
                 .checked(props.swipe_navigation)
                 .on_click({
                     let view = view.clone();
@@ -230,8 +243,8 @@ impl DesktopView {
                 rust_i18n::t!("app.shortcuts.group_label").to_string(),
                 group,
             ))
-            .child(accessible_group_box("vim-navigation-group", "Vim navigation (experimental)".to_string(), vim_group))
-            .child(accessible_group_box("swipe-navigation-group", "Swipe navigation".to_string(), swipe_group))
+            .child(accessible_group_box("vim-navigation-group", VIM_EXPERIMENTAL_TITLE, vim_group))
+            .child(accessible_group_box("swipe-navigation-group", SWIPE_NAVIGATION_TITLE, swipe_group))
             .into_any_element()
     }
 

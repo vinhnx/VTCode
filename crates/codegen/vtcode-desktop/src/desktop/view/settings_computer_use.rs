@@ -4,6 +4,10 @@ const COMPUTER_USE_SETTINGS_GROUP_ID: &str = "computer-use-settings-group";
 const COMPUTER_USE_ENABLED_PATH: &str = "computer_use.enabled";
 const COMPUTER_USE_DECISIONS_PATH: &str = "computer_use.decisions_review";
 const COMPUTER_USE_BROWSER_BUILD_PATH: &str = "computer_use.browser_build";
+// Static CTA text is shared, not rebuilt: both badges render on every frame.
+const OPEN_COMPUTER_SETTINGS: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Open Computer Use settings");
+const DECISIONS_REVIEW_SETTINGS: gpui_kit::SharedString =
+    gpui_kit::SharedString::new_static("Decisions review is on. Open Computer Use settings.");
 
 /// Cloned render inputs for the Computer Use tab. Values come from the
 /// shared CLI config snapshot; writes go through `save_cli_config_value`.
@@ -178,8 +182,8 @@ impl DesktopView {
             .cursor_pointer()
             .icon(IconName::Computer)
             .label(rust_i18n::t!("app.settings.computer_use.group").to_string())
-            .tooltip("Open Computer Use settings".to_string())
-            .accessibility_label("Open Computer Use settings".to_string())
+            .tooltip(OPEN_COMPUTER_SETTINGS.clone())
+            .accessibility_label(OPEN_COMPUTER_SETTINGS.clone())
             .on_click(cx.listener(|view, _, window, cx| {
                 view.run_palette_action(
                     PaletteAction::SelectSettingsTab(settings::SettingsTab::ComputerUse),
@@ -197,8 +201,8 @@ impl DesktopView {
                     .cursor_pointer()
                     .icon(IconName::ShieldCheck)
                     .label(rust_i18n::t!("app.settings.computer_use.decisions").to_string())
-                    .tooltip("Decisions review is on. Open Computer Use settings.".to_string())
-                    .accessibility_label("Decisions review is on. Open Computer Use settings.".to_string())
+                    .tooltip(DECISIONS_REVIEW_SETTINGS.clone())
+                    .accessibility_label(DECISIONS_REVIEW_SETTINGS.clone())
                     .on_click(cx.listener(|view, _, window, cx| {
                         view.run_palette_action(
                             PaletteAction::SelectSettingsTab(settings::SettingsTab::ComputerUse),

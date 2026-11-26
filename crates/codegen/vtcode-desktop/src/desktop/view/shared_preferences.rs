@@ -140,9 +140,14 @@ impl DesktopView {
     ) -> AnyElement {
         let theme = props.shared_theme.clone();
         let follows = props.follow_cli_theme.unwrap_or(props.desktop_theme.is_none());
-        let sync_label = rust_i18n::t!("app.settings.cli_sync.sync_theme").to_string();
-        let reload_label = rust_i18n::t!("app.settings.cli_sync.reload_settings").to_string();
-        let use_theme_label = rust_i18n::t!("app.settings.cli_sync.use_theme").to_string();
+        // Both the button label and its tooltip retain the same text. Convert
+        // once and clone the shared handle instead of building a second value
+        // from `&str` for each Kit builder.
+        let sync_label: gpui_kit::SharedString = rust_i18n::t!("app.settings.cli_sync.sync_theme").to_string().into();
+        let reload_label: gpui_kit::SharedString =
+            rust_i18n::t!("app.settings.cli_sync.reload_settings").to_string().into();
+        let use_theme_label: gpui_kit::SharedString =
+            rust_i18n::t!("app.settings.cli_sync.use_theme").to_string().into();
         let group = settings_group_box(rust_i18n::t!("app.settings.cli_sync.group").to_string(), &cx.theme().colors)
             .child(div().text_sm().child(match theme.as_ref() {
                 Some(theme) => {
@@ -162,21 +167,21 @@ impl DesktopView {
                     .gap_2()
                     .child(
                         desktop_secondary_button("sync-cli-theme")
-                            .label(sync_label.as_str())
-                            .tooltip_with_action(sync_label.as_str(), &SyncCliTheme, Some(key_context::DESKTOP))
+                            .label(sync_label.clone())
+                            .tooltip_with_action(sync_label, &SyncCliTheme, Some(key_context::DESKTOP))
                             .desktop_disabled(!props.can_sync)
                             .dispatches_desktop_action(SyncCliTheme, props.focus_handle.clone()),
                     )
                     .child(
                         desktop_secondary_button("reload-cli-settings")
-                            .label(reload_label.as_str())
-                            .tooltip_with_action(reload_label.as_str(), &ReloadCliSettings, Some(key_context::DESKTOP))
+                            .label(reload_label.clone())
+                            .tooltip_with_action(reload_label, &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!props.can_reload)
                             .dispatches_desktop_action(ReloadCliSettings, props.focus_handle.clone()),
                     )
                     .child(
                         desktop_secondary_button("use-cli-theme")
-                            .label(use_theme_label.as_str())
+                            .label(use_theme_label)
                             .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
                             .on_click({
                                 let view = view.clone();

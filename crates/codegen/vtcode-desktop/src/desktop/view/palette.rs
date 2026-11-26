@@ -20,6 +20,9 @@ pub(super) use model_helpers::*;
 pub(super) struct PaletteCommand {
     pub(super) label: gpui_kit::SharedString,
     pub(super) description: Option<gpui_kit::SharedString>,
+    /// `label · description`, materialized once at ingestion so a render frame
+    /// clones a shared handle instead of formatting every visible row again.
+    pub(super) accessible_label: gpui_kit::SharedString,
     pub(super) keywords: Vec<String>,
     pub(super) shared_keywords: Vec<gpui_kit::SharedString>,
     pub(super) action: PaletteAction,
@@ -47,7 +50,25 @@ pub(super) const MAX_FILE_ROWS: usize = 200;
 pub(super) fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> PaletteGroups {
     groups
         .into_iter()
-        .map(|(label, entries)| (label.into(), entries.into_iter().map(Rc::new).collect()))
+        .map(|(label, entries)| {
+            let entries = entries
+                .into_iter()
+                .map(|mut entry| {
+                    // The palette rebuilds its row closures on every query
+                    // keystroke. Derive the combined a11y label here, where the
+                    // description is final, rather than formatting it per row
+                    // per frame.
+                    let accessible_label = entry
+                        .description
+                        .as_ref()
+                        .map(|details| format!("{} · {}", entry.label, details).into())
+                        .unwrap_or_else(|| entry.label.clone());
+                    entry.accessible_label = accessible_label;
+                    Rc::new(entry)
+                })
+                .collect();
+            (label.into(), entries)
+        })
         .collect()
 }
 
@@ -882,8 +903,10 @@ impl DesktopView {
 }
 
 pub(super) fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
+    let label: gpui_kit::SharedString = label.into().into();
     PaletteCommand {
-        label: label.into().into(),
+        accessible_label: label.clone(),
+        label,
         description: None,
         keywords: Vec::new(),
         shared_keywords: Vec::new(),
@@ -903,49 +926,4 @@ pub(super) fn permission_palette_mode(kind: PaletteKind, action: &PaletteAction)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The render path clones the whole group table on every frame to hand it
-    /// to `'static` row closures. A `String` field would copy these bytes each
-    /// time; `SharedString` must keep one backing allocation across clones.
-    #[test]
-    fn palette_group_clone_shares_display_text_without_copying_bytes() {
-        let mut entry = command(
-            "A retained palette label that is long enough to live on the heap".to_string(),
-            PaletteAction::ChooseWorkspace,
-        );
-        entry.description = Some(
-            "A retained palette description that is long enough to live on the heap"
-                .to_string()
-                .into(),
-        );
-        let groups = share_palette_commands(vec![(
-            "A retained group label that is long enough to live on the heap".to_string(),
-            vec![entry],
-        )]);
-        let cloned = groups.clone();
-
-        let (label, entries) = &groups[0];
-        let (cloned_label, cloned_entries) = &cloned[0];
-        assert_eq!(label.as_str(), cloned_label.as_str());
-        assert_eq!(
-            label.as_str().as_ptr(),
-            cloned_label.as_str().as_ptr(),
-            "group labels must share their backing text when the table is cloned"
-        );
-        assert_eq!(entries[0].label.as_str(), cloned_entries[0].label.as_str());
-        assert_eq!(
-            entries[0].label.as_str().as_ptr(),
-            cloned_entries[0].label.as_str().as_ptr(),
-            "entry labels must share their backing text when the table is cloned"
-        );
-        let description = entries[0].description.as_ref().expect("description retained");
-        let cloned_description = cloned_entries[0].description.as_ref().expect("description retained");
-        assert_eq!(
-            description.as_str().as_ptr(),
-            cloned_description.as_str().as_ptr(),
-            "entry descriptions must share their backing text when the table is cloned"
-        );
-    }
-}
+mod tests;

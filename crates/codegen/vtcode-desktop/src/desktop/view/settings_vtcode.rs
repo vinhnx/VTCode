@@ -3,6 +3,11 @@ use super::*;
 /// Provider group id shared by the empty and loaded states so the group
 /// keeps stable identity across configuration changes.
 const PROVIDER_SETTINGS_GROUP_ID: &str = "provider-settings-group";
+// English literal retained across frames; share it rather than reallocating on
+// every settings render.
+const CREDENTIAL_SETUP_STEPS_HINT: gpui_kit::SharedString = gpui_kit::SharedString::new_static(
+    "Choose Run to complete setup in the built-in terminal, or copy the command for your own terminal — then choose Reload CLI settings to reconnect.",
+);
 
 /// Cloned render inputs for the VtCode tab (see `NotificationSettingsProps`
 /// for the Kit-hosting rationale). Subsystem groups nest their own props;
@@ -133,7 +138,7 @@ impl DesktopView {
             let run_command = props.credential_setup_command.clone();
             // English literal: the repo does not add locale keys without
             // full native-quality translations for every locale.
-            let steps_hint = "Choose Run to complete setup in the built-in terminal, or copy the command for your own terminal — then choose Reload CLI settings to reconnect.".to_string();
+            let steps_hint = CREDENTIAL_SETUP_STEPS_HINT.clone();
             group = group.child(
                 div()
                     .flex()

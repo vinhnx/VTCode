@@ -28,6 +28,10 @@ pub(super) struct WorkspaceReviewState {
     pub(super) workspace: String,
     pub(super) pending: bool,
     pub(super) snapshot: Option<WorkspaceReviewResult>,
+    /// `snapshot.patch` converted once when the response lands. The fallback
+    /// render clones this shared handle instead of copying a possibly large
+    /// patch twice on every frame.
+    patch_text: Option<gpui_kit::SharedString>,
     pub(super) viewer: Option<Entity<DiffState>>,
     pub(super) selected_file: Option<String>,
     include_untracked: bool,
@@ -70,6 +74,7 @@ impl DesktopView {
             workspace: info.workspace.clone(),
             pending: false,
             snapshot: None,
+            patch_text: None,
             viewer: None,
             selected_file: None,
             include_untracked: false,
@@ -145,6 +150,7 @@ impl DesktopView {
         } else {
             review.selected_file = None;
         }
+        review.patch_text = result.patch.as_ref().map(|patch| gpui_kit::SharedString::from(patch.as_str()));
         review.snapshot = Some(result);
         review.error = None;
     }
@@ -571,7 +577,7 @@ impl DesktopView {
                 .text_color(colors.muted_foreground)
                 .child(snapshot.note.clone()),
         );
-        match snapshot.patch.as_deref() {
+        match review.patch_text.as_ref() {
             None => body
                 .child(review_message(
                     "workspace-review-unavailable",
@@ -580,7 +586,7 @@ impl DesktopView {
                     IconName::GitCompare,
                 ))
                 .into_any_element(),
-            Some("") => body
+            Some(patch) if patch.is_empty() => body
                 .child(review_message(
                     "workspace-review-clean",
                     if snapshot.truncated {
@@ -631,7 +637,7 @@ impl DesktopView {
                             .lock_scroll_axis()
                             .test_support()
                             .role(gpui_kit::Role::Label)
-                            .aria_label(patch.to_string())
+                            .aria_label(patch.clone())
                             .flex_1()
                             .min_h_0()
                             .track_scroll(&self.review_scroll)
@@ -640,7 +646,7 @@ impl DesktopView {
                             .p_4()
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
-                            .child(patch.to_string()),
+                            .child(patch.clone()),
                     )
                     .into_any_element()
                 }
