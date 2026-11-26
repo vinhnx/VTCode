@@ -7,6 +7,9 @@
 //! is re-exported from the parent.
 
 use super::SessionStats;
+use vtcode_commons::verification_signal::{
+    VerificationFailureShape, extract_verification_failure_shape, repeated_shape_note,
+};
 
 /// A verifier failure caused by a missing executable rather than a failing
 /// assertion.
@@ -146,6 +149,24 @@ pub(crate) struct VerificationFailureSummary {
     pub excerpt_tail: String,
     /// Consecutive failure count including this failure.
     pub consecutive_failures: u8,
+    /// Content-free localization of the failure; the default (unrecognized)
+    /// shape when no allowlisted marker matched.
+    pub shape: VerificationFailureShape,
+    /// Consecutive failures sharing a recognized `shape.fingerprint`; 1 for a
+    /// new shape or any unrecognized failure.
+    pub fingerprint_streak: u8,
+}
+
+impl VerificationFailureSummary {
+    /// Localized-failure note appended to handoffs and in-turn coaching.
+    pub(crate) fn shape_note(&self) -> String {
+        format!(" Failure shape: {}.", self.shape.describe())
+    }
+
+    /// Anti-thrash note once the same failure shape has recurred.
+    pub(crate) fn repeated_shape_note(&self) -> String {
+        repeated_shape_note(self.fingerprint_streak)
+    }
 }
 
 impl SessionStats {
@@ -258,6 +279,25 @@ impl SessionStats {
         let tail = excerpt[start..].to_string();
         self.verification_consecutive_failures = self.verification_consecutive_failures.saturating_add(1);
         let consecutive_failures = self.verification_consecutive_failures;
+        // Derive the shape from the same bounded excerpt that is retained for
+        // display, so a fingerprint never refers to a marker the reader cannot
+        // see in the handoff tail.
+        let shape = extract_verification_failure_shape(&tail);
+        // Unrecognized failures carry no fingerprint, so they never masquerade
+        // as a repeated instance of the same bug.
+        let same_identity = self
+            .last_verification_failure
+            .as_ref()
+            .and_then(|previous| previous.shape.fingerprint.as_deref())
+            .zip(shape.fingerprint.as_deref())
+            .is_some_and(|(previous, current)| previous == current);
+        let fingerprint_streak = if same_identity {
+            self.last_verification_failure
+                .as_ref()
+                .map_or(1, |previous| previous.fingerprint_streak.saturating_add(1))
+        } else {
+            1
+        };
         self.last_verification_failure = Some(VerificationFailureSummary {
             command,
             exit_code: serde_json::from_str::<serde_json::Value>(excerpt)
@@ -265,6 +305,8 @@ impl SessionStats {
                 .and_then(|value| value.get("exit_code").and_then(serde_json::Value::as_i64)),
             excerpt_tail: tail,
             consecutive_failures,
+            shape,
+            fingerprint_streak,
         });
         consecutive_failures
     }

@@ -345,10 +345,19 @@ pub(crate) async fn execute_harness_auto_verification(
                     .ctx
                     .session_stats
                     .record_verification_auto_failure(command.clone(), &response_text);
+                let (shape_note, repeat_note) = t_ctx_inner
+                    .ctx
+                    .session_stats
+                    .last_verification_failure()
+                    .map_or((String::new(), String::new()), |failure| {
+                        (failure.shape_note(), failure.repeated_shape_note())
+                    });
                 let mut coaching = format!(
                     "Harness auto-verification `{command}` did not clear the gate (consecutive failure {failures} this episode). \
                     Repair the reported failure before attempting completion again."
                 );
+                coaching.push_str(&shape_note);
+                coaching.push_str(&repeat_note);
                 if let Some(hint) = missing_executable_hint(&response_text) {
                     coaching.push(' ');
                     coaching.push_str(&hint);

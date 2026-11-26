@@ -115,14 +115,19 @@ pub(super) fn verification_exhausted_handoff_reason(
 ) -> String {
     if budget_exhaustion_cause(base).is_some() {
         return match last_failure {
-            Some(failure) => format!(
-                "{base} Previous check `{}`: terminal exit {}. Last output tail:\n{}",
-                failure.command,
-                failure
-                    .exit_code
-                    .map_or_else(|| "unobserved".to_string(), |code| code.to_string()),
-                failure.excerpt_tail,
-            ),
+            Some(failure) => {
+                let mut reason = format!(
+                    "{base} Previous check `{}`: terminal exit {}. Last output tail:\n{}",
+                    failure.command,
+                    failure
+                        .exit_code
+                        .map_or_else(|| "unobserved".to_string(), |code| code.to_string()),
+                    failure.excerpt_tail,
+                );
+                reason.push_str(&failure.shape_note());
+                reason.push_str(&failure.repeated_shape_note());
+                reason
+            }
             None => base.to_string(),
         };
     }
@@ -136,6 +141,8 @@ pub(super) fn verification_exhausted_handoff_reason(
             before typing `continue` to resume with the gate preserved.",
             failure.command, failure.consecutive_failures, failure.excerpt_tail, failure.command,
         );
+        reason.push_str(&failure.shape_note());
+        reason.push_str(&failure.repeated_shape_note());
         if let Some(hint) = missing_executable_hint(&failure.excerpt_tail) {
             reason.push(' ');
             reason.push_str(&hint);
@@ -641,6 +648,8 @@ mod tests {
             exit_code: Some(1),
             consecutive_failures: 1,
             excerpt_tail: "no match".into(),
+            shape: vtcode_commons::verification_signal::extract_verification_failure_shape("no match"),
+            fingerprint_streak: 1,
         };
         let reason = verification_exhausted_handoff_reason(base, Some("unused"), 1, 1, Some(&failure));
         assert!(reason.starts_with(base));
@@ -665,22 +674,35 @@ mod tests {
             command: "cargo nextest run".to_string(),
             excerpt_tail: "error[E0308]: mismatched types".to_string(),
             consecutive_failures: 3,
+            shape: vtcode_commons::verification_signal::extract_verification_failure_shape(
+                "error[E0308]: mismatched types\n  --> src/lib.rs:12:5",
+            ),
+            fingerprint_streak: 3,
         };
         let reason = verification_exhausted_handoff_reason(BASE, Some("cargo nextest run"), 1, 2, Some(&failure));
 
         assert!(reason.contains("`cargo nextest run` failed 3 time(s) consecutively"));
         assert!(reason.contains("Last output tail:\nerror[E0308]: mismatched types\n"));
+        assert!(reason.contains("Failure shape: compile at lib.rs:12 (fingerprint "), "{reason}");
+        assert!(reason.contains("has repeated 3 times consecutively"), "{reason}");
+        assert!(reason.contains("change your approach"), "{reason}");
         assert!(reason.contains("then run `cargo nextest run` standalone or as a pure `&&` chain"));
         assert!(!reason.contains("environment problem"), "genuine failures keep the repair recipe: {reason}");
     }
 
     #[test]
     fn exhausted_handoff_names_missing_executable_as_environmental() {
+        // A missing executable leaves no allowlisted marker: the realistic
+        // production state is the unrecognized shape with a streak of 1.
         let failure = VerificationFailureSummary {
             exit_code: Some(1),
             command: "python3 scripts/check_markdown.py".to_string(),
             excerpt_tail: "FileNotFoundError: [Errno 2] No such file or directory: 'bunx'".to_string(),
             consecutive_failures: 2,
+            shape: vtcode_commons::verification_signal::extract_verification_failure_shape(
+                "FileNotFoundError: [Errno 2] No such file or directory: 'bunx'",
+            ),
+            fingerprint_streak: 1,
         };
         let reason = verification_exhausted_handoff_reason(
             BASE,
@@ -693,6 +715,8 @@ mod tests {
         assert!(reason.contains("failed 2 time(s) consecutively"));
         assert!(reason.contains("`bunx` was not found on PATH"), "handoff names the binary: {reason}");
         assert!(reason.contains("environment problem"), "handoff reframes as environmental: {reason}");
+        assert!(reason.contains("Failure shape: other."), "unrecognized failures are labeled, not silent: {reason}");
+        assert!(!reason.contains("change your approach"), "no fingerprint means no anti-thrash: {reason}");
     }
 
     #[test]

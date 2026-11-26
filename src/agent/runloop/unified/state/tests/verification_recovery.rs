@@ -68,20 +68,39 @@ fn verification_auto_failure_escalation_counts_and_resets_as_episode() {
 
     let first = stats.record_verification_auto_failure("cargo check --locked".to_string(), "error[A]: boom");
     assert_eq!(first, 1);
+    let unknown = stats.last_verification_failure().expect("failure shape must be kept");
+    assert_eq!(unknown.shape.fingerprint, None);
+    assert_eq!(unknown.fingerprint_streak, 1);
     let second = stats.record_verification_auto_failure("cargo check --locked".to_string(), "error[A]: boom again");
     assert_eq!(second, 2);
     let summary = stats.last_verification_failure().expect("failure tail must be kept");
     assert_eq!(summary.command, "cargo check --locked");
     assert_eq!(summary.consecutive_failures, 2);
     assert!(summary.excerpt_tail.contains("boom again"));
+    assert_eq!(summary.fingerprint_streak, 1, "unrecognized failures must not dedupe");
+    assert!(summary.repeated_shape_note().is_empty(), "unknown failures must not trigger anti-thrash");
+    assert!(!summary.shape_note().contains("boom"), "shape note must not carry output text");
 
-    // Long output is bounded to the tail at record time.
-    let long = format!("x{} tail-marker", "y".repeat(5000));
+    // A recognizable failure gets an identity; repeating that same shape
+    // increments the streak and emits the anti-thrash note.
+    stats.record_verification_auto_failure("pytest -q".to_string(), "test auth::expired ... FAILED\nfirst assertion");
+    assert_eq!(stats.last_verification_failure().expect("shape").fingerprint_streak, 1);
+    stats.record_verification_auto_failure("pytest -q".to_string(), "test auth::expired ... FAILED\nsecond assertion");
+    let repeated = stats.last_verification_failure().expect("repeated shape");
+    assert_eq!(repeated.fingerprint_streak, 2, "equivalent known shapes must dedupe");
+    assert!(repeated.repeated_shape_note().contains("change your approach"));
+
+    // Long output is bounded to the tail at record time, and the site is
+    // localized from that same tail. A distinct site starts a fresh streak.
+    let long = format!("x{} test distinct::case ... FAILED tail-marker", "y".repeat(5000));
     stats.record_verification_auto_failure("pytest -q".to_string(), &long);
     let bounded = stats.last_verification_failure().expect("bounded tail must be kept");
     assert!(bounded.excerpt_tail.chars().count() <= 2000);
     assert!(bounded.excerpt_tail.contains("tail-marker"));
     assert!(!bounded.excerpt_tail.starts_with('x'), "head must be elided, not kept");
+    assert_eq!(bounded.fingerprint_streak, 1, "different sites must break the streak");
+    assert_eq!(bounded.shape.site.as_deref(), Some("distinct::case"));
+    assert!(!bounded.repeated_shape_note().contains("change your approach"));
 
     stats.record_verification_auto_success();
     assert_eq!(stats.verification_consecutive_failures(), 0);

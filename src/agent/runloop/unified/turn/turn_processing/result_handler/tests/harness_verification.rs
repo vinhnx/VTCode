@@ -461,10 +461,15 @@ async fn harness_auto_verification_failure_blocks_attempt_and_records_episode() 
         repeated_tool_attempts.auto_verification_executed,
         "the one-shot flag must stick while the gate stays pending"
     );
+    let history = backing.last_history_message_contains("did not clear the gate");
+    assert!(history, "failure must leave an explicit fix-window note");
     assert!(
-        backing.last_history_message_contains("did not clear the gate"),
-        "failure must leave an explicit fix-window note"
+        backing.last_history_message_contains("Failure shape:"),
+        "failure must localize the shape for the next corrective pass"
     );
     let ctx = backing.turn_processing_context();
     assert_eq!(ctx.session_stats.verification_consecutive_failures(), 1);
+    let summary = ctx.session_stats.last_verification_failure().expect("failure summary");
+    assert_eq!(summary.fingerprint_streak, 1);
+    assert!(!summary.shape_note().is_empty(), "shape note must be available for handoff");
 }
