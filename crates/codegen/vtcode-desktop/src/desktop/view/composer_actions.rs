@@ -19,6 +19,13 @@ fn effort_slider_value_changed(
 }
 
 impl DesktopView {
+    /// Toggle the tall composer surface used to edit long prompts. The same
+    /// `EditorState` backs both sizes, so drafts and undo history survive.
+    pub(super) fn toggle_composer_expanded(&mut self, cx: &mut Context<Self>) {
+        self.composer_expanded = !self.composer_expanded;
+        cx.notify();
+    }
+
     /// Release the model-options slider and its subscriptions as one unit, so a
     /// stale observed value cannot suppress the first repaint after reopening.
     pub(super) fn release_effort_slider(&mut self) {

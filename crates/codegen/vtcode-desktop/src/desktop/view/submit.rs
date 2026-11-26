@@ -116,6 +116,7 @@ impl DesktopView {
         };
         if sent {
             self.composer.update(cx, |state, cx| state.set_value("", window, cx));
+            self.composer_expanded = false;
         }
         cx.notify();
     }

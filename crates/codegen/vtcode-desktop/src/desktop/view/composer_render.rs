@@ -172,7 +172,8 @@ impl DesktopView {
         // but has no `auto_grow`. Use the display map's wrapped row count — the
         // same source the old textarea used — so soft-wrapped drafts grow too.
         // The count is 0 before first layout; clamp keeps the one-row minimum.
-        let lines = self.composer.read(cx).display_map().wrap_row_count().clamp(1, 6);
+        let max_lines = if self.composer_expanded { 16 } else { 6 };
+        let lines = self.composer.read(cx).display_map().wrap_row_count().clamp(1, max_lines);
         let line_height = self
             .composer
             .read(cx)
@@ -327,7 +328,33 @@ impl DesktopView {
                     .fade_in("composer-secondary-fade", cx.theme())
                     .child(self.composer_trigger_pill(ComposerPill::Attach, self.render_attach_button(cx), cx))
                     .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
-                    .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx)),
+                    .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx))
+                    .child(
+                        desktop_ghost_button("composer-expand")
+                            .icon(if self.composer_expanded {
+                                IconName::Minimize2
+                            } else {
+                                IconName::Maximize2
+                            })
+                            .accessibility_label(
+                                rust_i18n::t!(if self.composer_expanded {
+                                    "app.composer.composer_collapse"
+                                } else {
+                                    "app.composer.composer_expand"
+                                })
+                                .to_string(),
+                            )
+                            .tooltip(
+                                rust_i18n::t!(if self.composer_expanded {
+                                    "app.composer.composer_collapse"
+                                } else {
+                                    "app.composer.composer_expand"
+                                })
+                                .to_string(),
+                            )
+                            .xsmall()
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_composer_expanded(cx))),
+                    ),
             );
         let mut model_actions = div()
             .min_w_0()

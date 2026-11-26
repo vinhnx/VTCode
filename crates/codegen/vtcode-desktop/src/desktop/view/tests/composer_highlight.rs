@@ -73,3 +73,33 @@ fn composer_grows_for_soft_wrapped_single_line_drafts(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn composer_expand_toggles_a_tall_edit_surface_without_losing_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let long = "longword ".repeat(200);
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |input, cx| input.set_value(long.clone(), window, cx));
+        });
+        window.render_frame(cx);
+        let compact = window.find("message-composer-frame").bounds().size.height;
+        let cta = window.find("composer-expand");
+        assert_eq!(cta.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(cta.label(), Some("Expand composer"));
+
+        window.click("composer-expand", cx);
+        window.render_frame(cx);
+        let expanded = window.find("message-composer-frame").bounds().size.height;
+        assert!(expanded > compact, "expanded composer must be taller: {compact:?} -> {expanded:?}");
+        assert!(view.read(cx).composer_expanded);
+        assert_eq!(window.find("composer-expand").label(), Some("Collapse composer"));
+        assert_eq!(view.read(cx).composer.read(cx).value(), long);
+
+        window.click("composer-expand", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("message-composer-frame").bounds().size.height, compact);
+        assert!(!view.read(cx).composer_expanded);
+    })
+    .unwrap();
+}

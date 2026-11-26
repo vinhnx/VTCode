@@ -635,6 +635,8 @@ struct DesktopView {
     /// The composer is an `EditorState` (not a `TextareaState`) so it can host
     /// the token highlighter; it is styled to match the surrounding input.
     composer: Entity<EditorState>,
+    /// Whether the composer uses the tall edit surface for long prompts.
+    composer_expanded: bool,
     /// Theme-derived colors shared with the composer highlighter, refreshed on
     /// theme change without rebuilding the editor state.
     composer_highlight_styles: composer_highlight::SharedComposerHighlightStyles,

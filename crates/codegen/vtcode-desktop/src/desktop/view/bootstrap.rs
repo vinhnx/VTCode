@@ -578,6 +578,7 @@ impl DesktopView {
             interaction_immediate_choice_id: None,
             interaction_plan_expanded: false,
             composer,
+            composer_expanded: false,
             composer_highlight_styles,
             _composer_subscription: composer_subscription,
             ui_language_select,
