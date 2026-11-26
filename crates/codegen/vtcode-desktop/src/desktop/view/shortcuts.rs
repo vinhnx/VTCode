@@ -256,16 +256,20 @@ fn normalized_chord(source: &str) -> Option<String> {
 /// user already assigned to another command. Their override wins: leave the
 /// new command unbound instead of rejecting the whole table and silently
 /// reverting every customization on launch.
-fn suppressed_default(overrides: &BTreeMap<String, String>, command: &ShortcutCommand) -> bool {
-    if overrides.contains_key(command.id.as_str()) {
-        return false;
-    }
-    let Some(default) = normalized_chord(command.default_binding) else {
-        return false;
-    };
-    overrides
-        .iter()
-        .any(|(id, source)| id != command.id.as_str() && normalized_chord(source).is_some_and(|chord| chord == default))
+fn normalized_override_chords(overrides: &BTreeMap<String, String>) -> HashSet<String> {
+    overrides.values().filter_map(|source| normalized_chord(source)).collect()
+}
+
+/// Hoisted so keymap validation, preference drafting and palette badge
+/// rendering share one parse pass instead of reparsing every saved chord per
+/// command/row.
+fn suppressed_default(
+    overrides: &BTreeMap<String, String>,
+    command: &ShortcutCommand,
+    claimed: &HashSet<String>,
+) -> bool {
+    !overrides.contains_key(command.id.as_str())
+        && normalized_chord(command.default_binding).is_some_and(|chord| claimed.contains(&chord))
 }
 
 pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result<Vec<KeyBinding>, String> {
@@ -275,11 +279,12 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result
     // Validation normalizes against the host OS so headed and headless runs
     // agree; loading resolves through the live keyboard mapper below.
     let os = host_operating_system();
+    let claimed = normalized_override_chords(overrides);
     let mut seen = HashSet::new();
     COMMANDS
         .iter()
         .map(|command| {
-            let source = staged_value(overrides, command);
+            let source = staged_value_with(overrides, command, &claimed);
             let label = command.label();
             if source.is_empty() {
                 return Ok(Vec::new());
@@ -389,10 +394,12 @@ pub(super) fn stale_shadows(
     } else {
         &defaults
     };
+    let claimed_old = normalized_override_chords(old);
+    let claimed_new = normalized_override_chords(new_overrides);
     let mut shadows = Vec::new();
     for command in COMMANDS.iter() {
-        let retired = staged_value(old, command);
-        if retired.is_empty() || retired == staged_value(new_overrides, command) {
+        let retired = staged_value_with(old, command, &claimed_old);
+        if retired.is_empty() || retired == staged_value_with(new_overrides, command, &claimed_new) {
             continue;
         }
         // Mirrors `bindings()`: Settings and SettingsSearch bind twice, once
@@ -436,9 +443,10 @@ fn context_for(id: CommandId) -> &'static str {
 /// Empty values unbind the command. The draft always carries all ids so
 /// staged edits validate and persist without re-merging defaults.
 pub(super) fn draft_from(overrides: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    let claimed = normalized_override_chords(overrides);
     COMMANDS
         .iter()
-        .map(|command| (command.id.as_str().to_string(), staged_value(overrides, command).to_string()))
+        .map(|command| (command.id.as_str().to_string(), staged_value_with(overrides, command, &claimed).to_string()))
         .collect()
 }
 
@@ -446,7 +454,16 @@ pub(super) fn draft_from(overrides: &BTreeMap<String, String>) -> BTreeMap<Strin
 /// default, unless that default collides with a user override (see
 /// [`suppressed_default`]).
 pub(super) fn staged_value<'a>(overrides: &'a BTreeMap<String, String>, command: &ShortcutCommand) -> &'a str {
-    if suppressed_default(overrides, command) {
+    let claimed = normalized_override_chords(overrides);
+    staged_value_with(overrides, command, &claimed)
+}
+
+fn staged_value_with<'a>(
+    overrides: &'a BTreeMap<String, String>,
+    command: &ShortcutCommand,
+    claimed: &HashSet<String>,
+) -> &'a str {
+    if suppressed_default(overrides, command, claimed) {
         return "";
     }
     overrides
