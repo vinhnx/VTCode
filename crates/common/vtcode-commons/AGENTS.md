@@ -6,7 +6,7 @@
 ## Modules
 
 - Paths/fs: `paths/`, `fs/`, `vtcode_paths/`, `vtcode_paths_migration.rs`, `vtcodegitignore.rs`, `walk.rs` | errors: `errors.rs`, `error_category/`, `misconfiguration.rs`, `retry.rs` | keys: `config_keys.rs`, `provider.rs`, `tool_types.rs`.
-- Text: `formatting/`, `sanitizer.rs`, `validation.rs`, `search.rs`, `tokens.rs`, `unicode.rs`, `utf8_stream.rs`, `tracker_title.rs`, `mcp_tool_names.rs`, `line_blocks.rs` | display: `ansi.rs`, `colors.rs`, `styling.rs`, `diff_theme.rs`, `tool_headlines/`, `tool_intent.rs` | search: `content_search.rs`, `lexical.rs`.
+- Text: `formatting/`, `sanitizer.rs`, `validation.rs`, `verification_signal.rs`, `search.rs`, `tokens.rs`, `unicode.rs`, `utf8_stream.rs`, `tracker_title.rs`, `mcp_tool_names.rs`, `line_blocks.rs` | display: `ansi.rs`, `colors.rs`, `styling.rs`, `diff_theme.rs`, `tool_headlines/`, `tool_intent.rs` | search: `content_search.rs`, `lexical.rs`.
 - Runtime: `http.rs`, `task_guard.rs`, `async_utils.rs`, `runtime_diagnostics.rs`, `line_framing.rs` | UI/LLM: `ui_protocol/`, `program_status/`, `llm/`, `history_scope.rs` | test adapters: `reference.rs`.
 
 ## Rules

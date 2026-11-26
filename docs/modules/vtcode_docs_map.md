@@ -1478,7 +1478,7 @@ below based on the topic area.
 
 - **File**: `docs/development/maintainer-notes/vtcode-commons.md`
   - **Content**: vtcode-commons maintainer notes
-  - **Topics**: Module Groups, Rules, Gotchas
+  - **Topics**: Module Groups, Rules, Gotchas, Shape-only verification diagnostics
   - **User Questions**: "What can you tell me about vtcode-commons maintainer notes?", "How does Module Groups work?",
     "How does Rules work?"
 
@@ -1494,7 +1494,7 @@ below based on the topic area.
 
 - **File**: `docs/development/maintainer-notes/vtcode-core.md`
   - **Content**: vtcode-core maintainer notes
-  - **Topics**: Module map, Rules, Workflows, Gotchas
+  - **Topics**: Module map, Rules, Workflows, Gotchas, Verification failure signal
   - **User Questions**: "What can you tell me about vtcode-core maintainer notes?", "How does Module map work?", "How
     does Rules work?"
 

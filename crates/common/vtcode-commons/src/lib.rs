@@ -98,6 +98,7 @@ pub mod unicode;
 pub mod utf8_stream;
 pub mod utils;
 pub mod validation;
+pub mod verification_signal;
 pub mod vtcode_paths;
 pub mod vtcodegitignore;
 pub mod walk;
