@@ -75,9 +75,13 @@ impl<V> CacheEntry<V> {
     /// Record an access using an instant the caller already observed.
     ///
     /// A lookup needs the time both to check expiry and to stamp LRU metadata;
-    /// taking it once avoids a second clock syscall on every cache hit.
+    /// taking it once avoids a second clock read on every cache hit.
+    ///
+    /// Recency is monotonic: a timestamp observed earlier in a concurrent lookup
+    /// must not move an entry backwards in the LRU order when that lookup finally
+    /// acquires the write lock (possibly after a newer access or a replacement).
     pub fn mark_accessed_at(&mut self, now: SystemTime) {
-        self.last_accessed = now;
+        self.last_accessed = self.last_accessed.max(now);
         self.access_count += 1;
     }
 
@@ -89,7 +93,7 @@ impl<V> CacheEntry<V> {
     ///
     /// Bulk operations (eviction, pressure cleanup) evaluate many entries in
     /// one pass; reading the clock per entry would turn one O(n) walk into n
-    /// clock syscalls. Callers take a single `SystemTime::now()` and thread it
+    /// clock reads. Callers take a single `SystemTime::now()` and thread it
     /// through instead.
     pub fn is_expired_at(&self, ttl: Duration, now: SystemTime) -> bool {
         now.duration_since(self.created_at).map(|age| age > ttl).unwrap_or(true)
@@ -160,11 +164,18 @@ where
         let state = {
             let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
             let ttl = inner.ttl;
-            let now = SystemTime::now();
 
             match inner.entries.get(key) {
-                Some(entry) if !entry.is_expired_at(ttl, now) => LookupState::Hit(Arc::clone(&entry.value), now),
-                Some(_) => LookupState::Expired,
+                Some(entry) => {
+                    // Only hits need the clock; a miss used to avoid the read
+                    // entirely and should keep doing so.
+                    let now = SystemTime::now();
+                    if entry.is_expired_at(ttl, now) {
+                        LookupState::Expired
+                    } else {
+                        LookupState::Hit(Arc::clone(&entry.value), now)
+                    }
+                }
                 None => LookupState::Miss,
             }
         };
@@ -174,9 +185,10 @@ where
                 if let Ok(mut inner) = self.inner.try_write() {
                     if let Some(entry) = inner.entries.get_mut(key) {
                         // Re-stamping with the same observed instant keeps this
-                        // hit to one clock read. The entry may have been
-                        // replaced between the two locks; that is fine because
-                        // only recency metadata is updated here.
+                        // hit to one clock read. `mark_accessed_at` keeps
+                        // recency monotonic, so a stale observation from this
+                        // read phase cannot demote an entry that was accessed
+                        // or replaced between the two locks.
                         entry.mark_accessed_at(now);
                     }
                     inner.stats.hits += 1;
@@ -724,6 +736,21 @@ mod tests {
 
         entry.mark_accessed_at(observed + Duration::from_secs(1));
         assert_eq!(entry.last_accessed, observed + Duration::from_secs(1));
+        assert_eq!(entry.access_count, 3);
+    }
+
+    #[test]
+    fn mark_accessed_at_never_moves_recency_backwards() {
+        let mut entry = CacheEntry::new("value".to_string(), 5);
+        let newer = entry.created_at + Duration::from_secs(9);
+        entry.mark_accessed_at(newer);
+        let stale = entry.created_at + Duration::from_secs(3);
+
+        // A hit that observed the clock earlier but reached the write lock
+        // later (racing with a newer hit or a replacement) must not demote it.
+        entry.mark_accessed_at(stale);
+
+        assert_eq!(entry.last_accessed, newer);
         assert_eq!(entry.access_count, 3);
     }
 
