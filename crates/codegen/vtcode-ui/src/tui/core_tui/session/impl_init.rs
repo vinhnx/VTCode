@@ -109,6 +109,7 @@ impl Session {
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
             program_status: super::super::program_status::ProgramStatus::default(),
+            program_resume: super::super::program_resume::ProgramResume::default(),
             activity_state: ActivityState::Idle,
             image_input_enabled: false,
             cursor_visible: true,

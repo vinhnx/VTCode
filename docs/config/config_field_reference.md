@@ -899,6 +899,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.suppress_when_focused` | `boolean` | no | `true` | Suppress notifications while terminal focus is active. |
 | `ui.notifications.tool_failure` | `boolean` | no | `false` | Notify when a tool call fails. |
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
+| `ui.program_resume.enabled` | `boolean` | no | `true` | Advertise the session resume command (OSC 7577) on the interactive TUI terminal stream so supporting terminals can restart it. Only emits when the terminal exports `OSC7577_TOKEN`. |
 | `ui.program_status.enabled` | `boolean` | no | `true` | Emit terminal status reports (OSC 7501 plus ConEmu OSC 9;4 tab progress on allowlisted terminals) on the interactive TUI terminal stream, plus single-shot exec reports on stderr when it is a terminal. |
 | `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden"). Options: "always", "toggle", "hidden". |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |

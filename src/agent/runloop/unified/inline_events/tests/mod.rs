@@ -139,6 +139,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetInputStatus { .. } => "SetInputStatus",
         InlineCommand::SetConfiguredInputStatus { .. } => "SetConfiguredInputStatus",
         InlineCommand::ProgramStatus(_) => "ProgramStatus",
+        InlineCommand::ProgramResume(_) => "ProgramResume",
         InlineCommand::SetActivityState(_) => "SetActivityState",
         InlineCommand::UpdateProgress(_) => "UpdateProgress",
         InlineCommand::SetTerminalTitleItems { .. } => "SetTerminalTitleItems",

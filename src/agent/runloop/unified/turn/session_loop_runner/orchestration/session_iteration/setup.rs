@@ -335,6 +335,13 @@ pub(super) async fn run_session_setup<'a>(state: SessionLoopState<'a>) -> Result
     let input_activity_counter = ui_setup.input_activity_counter;
     let checkpoint_manager = ui_setup.checkpoint_manager;
     let mut session_archive = ui_setup.session_archive;
+    // OSC 7577: advertise this session's resume command (re-sent on every
+    // /new, fork, or resume switch since each iteration owns a new archive).
+    crate::agent::runloop::unified::program_resume::advertise_program_resume(
+        &handle,
+        session_archive.as_ref(),
+        &config.workspace,
+    );
     let lifecycle_hooks = ui_setup.lifecycle_hooks;
     let context_manager = ui_setup.context_manager;
     let default_placeholder = ui_setup.default_placeholder;

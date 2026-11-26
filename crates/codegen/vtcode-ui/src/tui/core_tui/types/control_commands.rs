@@ -54,6 +54,10 @@ macro_rules! impl_inline_control_methods {
             self.send_command($command::ProgramStatus(update));
         }
 
+        pub fn program_resume(&self, update: vtcode_commons::program_resume::ProgramResumeUpdate) {
+            self.send_command($command::ProgramResume(update));
+        }
+
         pub fn program_status_wait(
             &self,
             kind: vtcode_commons::program_status::InteractionKind,

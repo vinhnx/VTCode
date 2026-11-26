@@ -62,6 +62,34 @@ macro_rules! protocol_control_tests {
             }
 
             #[test]
+            fn program_resume_updates_preserve_type_and_payload() {
+                let (sender, mut receiver) = mpsc::unbounded_channel();
+                let handle = protocol::InlineHandle::new_for_tests(sender);
+                handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure { enabled: true });
+                handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::SetTarget {
+                    argv: vec!["vtcode".to_string(), "--resume".to_string(), "session-1".to_string()],
+                    cwd: Some("/tmp/ws".to_string()),
+                });
+                handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Clear);
+                assert!(
+                    matches!(receiver.try_recv().unwrap(), protocol::InlineCommand::ProgramResume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure { enabled: true }))
+                );
+                match receiver.try_recv().unwrap() {
+                    protocol::InlineCommand::ProgramResume(
+                        vtcode_commons::program_resume::ProgramResumeUpdate::SetTarget { argv, cwd },
+                    ) => {
+                        assert_eq!(argv, ["vtcode", "--resume", "session-1"].map(str::to_string));
+                        assert_eq!(cwd.as_deref(), Some("/tmp/ws"));
+                    }
+                    _ => panic!("expected resume target"),
+                }
+                assert!(
+                    matches!(receiver.try_recv().unwrap(), protocol::InlineCommand::ProgramResume(vtcode_commons::program_resume::ProgramResumeUpdate::Clear))
+                );
+                assert!(receiver.try_recv().is_err());
+            }
+
+            #[test]
             fn configured_status_preserves_custom_text_and_explicit_clear() {
                 let (sender, mut receiver) = mpsc::unbounded_channel();
                 let handle = protocol::InlineHandle::new_for_tests(sender);

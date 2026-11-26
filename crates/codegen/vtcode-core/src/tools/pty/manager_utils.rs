@@ -112,6 +112,10 @@ pub(super) fn set_command_environment_with_sandbox(
     builder.env_remove("MallocDoNotProtectSentinel");
     builder.env_remove("MallocQuiet");
 
+    // OSC 7577: a reporting program removes the resume token from every child
+    // it starts, sandboxed or not, so children cannot register resume commands.
+    builder.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
+
     if is_shell_program(program) {
         builder.env("SHELL", program);
     }
@@ -176,6 +180,9 @@ fn set_command_environment_from_snapshot(
     builder.env_remove("MallocScribble");
     builder.env_remove("MallocDoNotProtectSentinel");
     builder.env_remove("MallocQuiet");
+
+    // OSC 7577: never forward the resume token into snapshot-based children.
+    builder.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
 
     if is_shell_program(program) {
         builder.env("SHELL", program);

@@ -98,6 +98,8 @@ fn build_ssh_command(ssh_target: &str, remote_command: &str) -> Result<Command> 
     let mut command = Command::new(program);
     // Keep inherited agent sockets out of the pod transport process.
     command.env_remove("SSH_AUTH_SOCK").env_remove("GPG_AGENT_INFO");
+    // OSC 7577: the resume token must never be forwarded off the machine.
+    command.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
     command.args(args);
     command.arg(remote_command);
     Ok(command)
@@ -114,7 +116,11 @@ mod tests {
         let command = build_ssh_command("ssh -p 2222 -i 'pod key' runner@pod.example", remote_command).unwrap();
         let command = command.as_std();
 
-        for name in ["SSH_AUTH_SOCK", "GPG_AGENT_INFO"] {
+        for name in [
+            "SSH_AUTH_SOCK",
+            "GPG_AGENT_INFO",
+            vtcode_commons::program_resume::RESUME_TOKEN_ENV,
+        ] {
             assert!(
                 command
                     .get_envs()

@@ -84,6 +84,18 @@ impl TuiSessionDriver for Session {
         self.program_status.shutdown();
     }
 
+    fn attach_program_resume_terminal(&mut self) {
+        self.program_resume.attach_terminal();
+    }
+
+    fn flush_program_resume(&mut self) {
+        self.program_resume.flush();
+    }
+
+    fn reannounce_program_resume(&mut self) {
+        self.program_resume.reannounce();
+    }
+
     fn clear_terminal_title(&mut self) {
         self.clear_terminal_title();
     }

@@ -58,6 +58,7 @@ workspace = true
 
 [dev-dependencies]
 assert_fs = { workspace = true }
+serial_test = { workspace = true }
 
 [[example]]
 name = "dry_run"

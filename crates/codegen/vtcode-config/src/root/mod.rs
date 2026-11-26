@@ -273,6 +273,10 @@ pub struct UiConfig {
     #[serde(default)]
     pub program_status: UiProgramStatusConfig,
 
+    /// Terminal program resume reports for the interactive TUI (on by default).
+    #[serde(default)]
+    pub program_resume: UiProgramResumeConfig,
+
     /// Notification preferences for attention events.
     #[serde(default)]
     pub notifications: UiNotificationsConfig,
@@ -367,6 +371,10 @@ fn default_message_block_spacing() -> bool {
 }
 
 fn default_program_status_enabled() -> bool {
+    true
+}
+
+fn default_program_resume_enabled() -> bool {
     true
 }
 
@@ -500,6 +508,7 @@ impl Default for UiConfig {
             color_scheme_mode: default_color_scheme_mode(),
             app_icon: default_app_icon(),
             program_status: UiProgramStatusConfig::default(),
+            program_resume: UiProgramResumeConfig::default(),
             notifications: UiNotificationsConfig::default(),
             fullscreen: UiFullscreenConfig::default(),
             screen_reader_mode: default_screen_reader_mode(),
@@ -540,6 +549,22 @@ pub struct UiProgramStatusConfig {
 impl Default for UiProgramStatusConfig {
     fn default() -> Self {
         Self { enabled: default_program_status_enabled() }
+    }
+}
+
+/// Terminal Program Resume Protocol preferences.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct UiProgramResumeConfig {
+    /// Advertise the session resume command (OSC 7577) on the interactive TUI terminal stream so supporting terminals can restart it. Only emits when the terminal exports `OSC7577_TOKEN`.
+    #[serde(default = "default_program_resume_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for UiProgramResumeConfig {
+    fn default() -> Self {
+        Self { enabled: default_program_resume_enabled() }
     }
 }
 

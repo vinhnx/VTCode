@@ -482,6 +482,9 @@ pub(super) fn apply_live_theme_and_appearance(
     handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
         enabled: cfg.ui.program_status.enabled,
     });
+    handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure {
+        enabled: cfg.ui.program_resume.enabled,
+    });
     handle.set_fullscreen_interaction(to_tui_fullscreen(cfg));
     handle.set_key_bindings(session_bootstrap.effective_key_bindings(cfg));
     crate::agent::runloop::unified::palettes::apply_prompt_style(handle);

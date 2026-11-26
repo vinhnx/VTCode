@@ -245,6 +245,9 @@ pub(crate) async fn initialize_session_shell(
     handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
         enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_status.enabled),
     });
+    handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure {
+        enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_resume.enabled),
+    });
 
     vtcode_commons::startup_trace::record_phase("session_setup_shell", shell_phase);
 

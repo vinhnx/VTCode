@@ -344,6 +344,9 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
         enabled: runtime_config.ui.program_status.enabled,
     });
+    handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure {
+        enabled: runtime_config.ui.program_resume.enabled,
+    });
     handle.set_fullscreen_interaction(to_tui_fullscreen(&runtime_config));
     handle.set_key_bindings(session_bootstrap.effective_key_bindings(&runtime_config));
 

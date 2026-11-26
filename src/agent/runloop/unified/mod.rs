@@ -28,6 +28,7 @@ pub(crate) mod plan_blocks;
 pub(crate) mod planning_workflow;
 mod planning_workflow_state;
 mod postamble;
+pub(crate) mod program_resume;
 mod progress;
 mod prompts;
 mod request_user_input;

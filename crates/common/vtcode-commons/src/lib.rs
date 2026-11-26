@@ -63,6 +63,7 @@ pub mod model_family;
 pub mod paths;
 pub mod preview;
 pub mod process_exit;
+pub mod program_resume;
 pub mod program_status;
 pub mod project;
 pub mod prompt_history;

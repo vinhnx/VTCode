@@ -131,6 +131,9 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
 
     if suspend_result.is_ok() {
         session.mark_dirty();
+        // SIGCONT: the terminal is back. Another program may have overwritten
+        // the resume record while suspended, so report again (OSC 7577).
+        session.reannounce_program_resume();
     }
 
     suspend_result
@@ -175,6 +178,7 @@ fn handle_inline_command<S: TuiSessionDriver>(
 
     session.handle_command(command);
     session.flush_program_status();
+    session.flush_program_resume();
 
     Ok(EventStreamAction::None)
 }

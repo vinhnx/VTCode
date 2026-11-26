@@ -287,6 +287,9 @@ pub(crate) async fn initialize_session_ui(
     handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
         enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_status.enabled),
     });
+    handle.program_resume(vtcode_commons::program_resume::ProgramResumeUpdate::Configure {
+        enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_resume.enabled),
+    });
     let (editor_open_sender, editor_open_coordinator_task_guard) =
         spawn_editor_open_coordinator(config.workspace.clone(), &handle);
     editor_open_dispatcher.set_sender(editor_open_sender.clone());

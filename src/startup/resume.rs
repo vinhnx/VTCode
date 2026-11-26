@@ -67,3 +67,32 @@ pub(super) fn validate_resume_all_usage(args: &Cli, session_resume: Option<&Sess
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    /// The OSC 7577 resume advertisement must round-trip through the real CLI:
+    /// parse the exact argv we report, resolve it, and confirm it selects the
+    /// same archived session. Catches flag renames, new conflicts, or resolver
+    /// drift that would otherwise break terminal restores silently.
+    #[test]
+    fn advertised_resume_argv_parses_and_selects_the_session() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let identifier = "session-ws1-20260101T000000Z_000001-12345";
+        let update =
+            crate::agent::runloop::unified::program_resume::resume_update_for_identifier(identifier, workspace.path())
+                .expect("fixture must be reportable");
+        let vtcode_commons::program_resume::ProgramResumeUpdate::SetTarget { argv, .. } = update else {
+            panic!("expected a resume target");
+        };
+
+        let args = Cli::try_parse_from(argv).expect("advertised argv must parse");
+        assert_eq!(args.workspace.as_deref(), Some(workspace.path()));
+        let (custom_session_id, session_resume) = resolve_session_resume(&args).expect("must resolve");
+        assert_eq!(custom_session_id, None);
+        assert!(matches!(&session_resume, Some(SessionResumeMode::Specific(id)) if id == identifier));
+        validate_resume_all_usage(&args, session_resume.as_ref()).expect("must validate");
+    }
+}

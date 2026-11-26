@@ -189,6 +189,9 @@ impl CommandExecutor for SnapshotExecutor {
         for (key, value) in &snapshot.env {
             cmd.env(key, value);
         }
+        // OSC 7577: a reporting program removes the resume token from every
+        // child it starts.
+        cmd.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
 
         debug!(
             shell = %self.shell,

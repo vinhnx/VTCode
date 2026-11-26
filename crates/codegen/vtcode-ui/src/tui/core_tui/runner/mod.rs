@@ -75,6 +75,9 @@ pub trait TuiSessionDriver {
     fn attach_program_status_terminal(&mut self);
     fn flush_program_status(&mut self);
     fn shutdown_program_status(&mut self);
+    fn attach_program_resume_terminal(&mut self);
+    fn flush_program_resume(&mut self);
+    fn reannounce_program_resume(&mut self);
     fn clear_terminal_title(&mut self);
     fn is_running_activity(&self) -> bool;
     fn has_status_spinner(&self) -> bool;
@@ -288,6 +291,7 @@ where
     set_log_theme_name(options.log_theme.clone());
     let mut session = make_session(surface.rows());
     session.attach_program_status_terminal();
+    session.attach_program_resume_terminal();
     session.set_preview_callback(options.preview_callback.clone());
     session.set_show_logs(options.show_logs);
     session.set_active_pty_sessions(options.active_pty_sessions);

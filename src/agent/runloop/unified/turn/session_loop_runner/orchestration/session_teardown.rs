@@ -370,6 +370,15 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
         terminal_enabled,
     } = context;
 
+    // OSC 7577: the user deliberately ended the session, so withdraw the
+    // resume record before teardown. Queued ahead of shutdown on the same
+    // FIFO channel, the worker applies and flushes it first. NewSession keeps
+    // its record (the next iteration re-reports the new archive), and every
+    // other reason — errors, signals, crashes — keeps it so the session stays
+    // resumable.
+    if matches!(session_end_reason, SessionEndReason::Exit | SessionEndReason::Cancelled) {
+        crate::agent::runloop::unified::program_resume::clear_program_resume(handle);
+    }
     // Tell the TUI to tear down at the START of the session tail, not at
     // the end. The worker leaves the alternate screen, drains, and restores
     // escape modes concurrently with the persistence work below (harness

@@ -16,6 +16,18 @@ fn program_status_defaults_on_and_round_trip() {
 }
 
 #[test]
+fn program_resume_defaults_on_and_round_trip() {
+    assert!(UiConfig::default().program_resume.enabled);
+    assert!(toml::from_str::<UiConfig>("").unwrap().program_resume.enabled);
+    assert!(toml::from_str::<UiConfig>("[program_resume]").unwrap().program_resume.enabled);
+    let disabled: UiConfig = toml::from_str("[program_resume]\nenabled = false").unwrap();
+    assert!(!disabled.program_resume.enabled);
+    let serialized = toml::to_string(&disabled).unwrap();
+    assert!(!toml::from_str::<UiConfig>(&serialized).unwrap().program_resume.enabled);
+    assert!(toml::from_str::<UiConfig>("[program_resume]\nenabled = 'true'").is_err());
+}
+
+#[test]
 fn ui_ambiguous_width_defaults_narrow_and_round_trips() {
     assert_eq!(UiConfig::default().ambiguous_width, AmbiguousWidthMode::Narrow);
     assert_eq!(toml::from_str::<UiConfig>("").unwrap().ambiguous_width, AmbiguousWidthMode::Narrow);

@@ -139,6 +139,10 @@ impl Session {
                 }
                 command_needs_redraw = false;
             }
+            InlineCommand::ProgramResume(update) => {
+                self.program_resume.apply(update);
+                command_needs_redraw = false;
+            }
             InlineCommand::UpdateProgress(update) => {
                 self.program_status.progress(update);
                 if self.progress.apply(update) {

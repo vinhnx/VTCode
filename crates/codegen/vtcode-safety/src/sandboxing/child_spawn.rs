@@ -67,6 +67,9 @@ pub const FILTERED_ENV_VARS: &[&str] = &[
     "DYLD_LIBRARY_PATH",
     "DYLD_FRAMEWORK_PATH",
     "DYLD_FALLBACK_LIBRARY_PATH",
+    // Terminal resume token (OSC 7577): children must never inherit the
+    // ability to register resume commands for this terminal.
+    vtcode_commons::program_resume::RESUME_TOKEN_ENV,
     // Other sensitive vars
     "VAULT_TOKEN",
     "CONSUL_HTTP_TOKEN",
@@ -289,6 +292,8 @@ mod tests {
     #[test]
     fn test_should_filter_sensitive_vars() {
         assert!(should_filter_env_var("OPENAI_API_KEY"));
+        assert!(should_filter_env_var(vtcode_commons::program_resume::RESUME_TOKEN_ENV));
+        assert!(FILTERED_ENV_VARS.contains(&vtcode_commons::program_resume::RESUME_TOKEN_ENV));
         assert!(should_filter_env_var("META_API_KEY"));
         assert!(should_filter_env_var("AWS_SECRET_ACCESS_KEY"));
         assert!(should_filter_env_var("GITHUB_TOKEN"));

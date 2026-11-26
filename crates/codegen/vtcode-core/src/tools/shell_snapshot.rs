@@ -47,6 +47,9 @@ const EXCLUDED_ENV_VARS: &[&str] = &[
     "GNOME_TERMINAL_SCREEN",
     "GNOME_TERMINAL_SERVICE",
     "VTE_VERSION",
+    // OSC 7577 resume token: terminal-scoped capability, never snapshot it
+    // into child environments.
+    vtcode_commons::program_resume::RESUME_TOKEN_ENV,
     "COLORTERM",
     "WT_SESSION",
     "WT_PROFILE_ID",
@@ -357,6 +360,7 @@ async fn capture_shell_snapshot(shell_path: &str) -> Result<ShellSnapshot> {
 
     let output = Command::new(shell_path)
         .args(["-lc", &capture_script])
+        .env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV)
         .output()
         .await
         .with_context(|| format!("Failed to run login shell: {shell_path}"))?;
@@ -463,6 +467,9 @@ pub fn apply_snapshot_env(command: &mut Command, snapshot: &ShellSnapshot, clear
     for (key, value) in &snapshot.env {
         command.env(key, value);
     }
+    // OSC 7577: snapshots captured before the token exclusion must not leak
+    // it into children either.
+    command.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
 }
 
 #[cfg(test)]
@@ -492,10 +499,57 @@ mod tests {
     fn test_excluded_env_vars() {
         assert!(should_exclude_env_var("PWD"));
         assert!(should_exclude_env_var("SHLVL"));
+        assert!(should_exclude_env_var(vtcode_commons::program_resume::RESUME_TOKEN_ENV));
         assert!(should_exclude_env_var("BASH_COMMAND"));
         assert!(!should_exclude_env_var("BASH_VERSION"));
         assert!(!should_exclude_env_var("HOME"));
         assert!(!should_exclude_env_var("PATH"));
+    }
+
+    #[test]
+    fn test_apply_snapshot_env_strips_resume_token_but_keeps_the_rest() {
+        let token = vtcode_commons::program_resume::RESUME_TOKEN_ENV;
+        let mut env = HashMap::new();
+        drop(env.insert(token.to_string(), "stale-token".to_string()));
+        drop(env.insert("PATH".to_string(), "/usr/bin".to_string()));
+        let snapshot = ShellSnapshot {
+            shell_path: "/bin/sh".to_string(),
+            shell_kind: ShellKind::Sh,
+            env,
+            captured_at: Instant::now(),
+            config_fingerprints: Vec::new(),
+        };
+
+        for clear_env in [false, true] {
+            let mut command = Command::new("/bin/sh");
+            apply_snapshot_env(&mut command, &snapshot, clear_env);
+            let applied: Vec<(String, Option<String>)> = command
+                .as_std()
+                .get_envs()
+                .map(|(key, value)| {
+                    (key.to_string_lossy().into_owned(), value.map(|v| v.to_string_lossy().into_owned()))
+                })
+                .collect();
+            // The token must never be passed a value. With inheritance it
+            // additionally needs an explicit removal tombstone; after
+            // `env_clear` its absence from the explicit map suffices.
+            assert!(
+                !applied.iter().any(|(key, value)| key == token && value.is_some()),
+                "token must not be passed (clear_env={clear_env}): {applied:?}"
+            );
+            if !clear_env {
+                assert!(
+                    applied.iter().any(|(key, value)| key == token && value.is_none()),
+                    "token must suppress inheritance (clear_env={clear_env}): {applied:?}"
+                );
+            }
+            assert!(
+                applied
+                    .iter()
+                    .any(|(key, value)| key == "PATH" && value.as_deref() == Some("/usr/bin")),
+                "snapshot env must still apply (clear_env={clear_env}): {applied:?}"
+            );
+        }
     }
 
     #[test]

@@ -319,6 +319,11 @@ show_diagnostics_in_transcript = false
 # [ui.program_status]
 # enabled = false
 
+# Terminal resume reporting (OSC 7577) is on by default; uncomment to opt out.
+# Only emits when the terminal exports OSC7577_TOKEN.
+# [ui.program_resume]
+# enabled = false
+
 # Runtime notification preferences
 [ui.notifications]
 # Master toggle for terminal/desktop notifications

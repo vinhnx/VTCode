@@ -183,6 +183,16 @@ and its descendants; VT Code never clears the terminal root. Direct iTerm2 sessi
 session-status pill (`status=Idle|Working|Waiting` + indicator color + generic detail). See the
 [lifecycle and privacy guide](../development/terminal-program-status.md).
 
+## Program Resume Protocol
+
+VT Code advertises its session resume command with bounded OSC 7577 reports on the interactive TUI
+terminal by default (`[ui.program_resume] enabled = true`), only when the terminal exports
+`OSC7577_TOKEN`.
+The sequence is `ESC ] 7577 ; pid=<pid>:time=<unix>:argv=<base64,...>:cwd=<base64>:mac=<hex> ESC \`,
+with `vtcode --workspace <abs> --resume <archive-id>` as the resume command. User exits send
+`clear`; errors, signals, and crashes keep the record. Headless exec runs never report. See the
+[lifecycle and privacy guide](../development/terminal-program-resume.md).
+
 ## Testing Helpers
 
 ### Generate Test Strings

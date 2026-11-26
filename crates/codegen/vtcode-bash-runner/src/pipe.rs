@@ -222,6 +222,9 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
             command.env(key, value);
         }
     }
+    // OSC 7577: pipe children (inherited or explicit env) never receive the
+    // resume token, so they cannot register resume commands for this terminal.
+    command.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
 
     #[cfg(unix)]
     if let Some(owned) = &owned {

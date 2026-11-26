@@ -258,6 +258,8 @@ mod unix_impl {
         command.env_remove(ZSH_EXEC_WRAPPER_MODE_ENV_VAR);
         command.env_remove(ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR);
         command.env_remove(EXEC_WRAPPER_ENV_VAR);
+        // OSC 7577: wrapped executables must not inherit the resume token.
+        command.env_remove(vtcode_commons::program_resume::RESUME_TOKEN_ENV);
         let status = command.status().context("spawn wrapped executable")?;
         std::process::exit(status.code().unwrap_or(1));
     }

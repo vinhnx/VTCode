@@ -12,14 +12,22 @@ fn program_status_live_reload_projects_opt_in_and_disable() {
     let bootstrap = SessionBootstrap::default();
     for enabled in [true, false] {
         cfg.ui.program_status.enabled = enabled;
+        cfg.ui.program_resume.enabled = enabled;
         apply_live_theme_and_appearance(&handle, &cfg, &bootstrap);
         let mut projections = Vec::new();
+        let mut resume_projections = Vec::new();
         while let Ok(command) = receiver.try_recv() {
-            if let vtcode_ui::tui::app::InlineCommand::ProgramStatus(update) = command {
-                projections.push(update);
+            match command {
+                vtcode_ui::tui::app::InlineCommand::ProgramStatus(update) => projections.push(update),
+                vtcode_ui::tui::app::InlineCommand::ProgramResume(update) => resume_projections.push(update),
+                _ => {}
             }
         }
         assert_eq!(projections, vec![vtcode_commons::program_status::ProgramStatusUpdate::Configure { enabled }]);
+        assert_eq!(
+            resume_projections,
+            vec![vtcode_commons::program_resume::ProgramResumeUpdate::Configure { enabled }]
+        );
     }
 }
 

@@ -529,6 +529,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about TUI-Only Tool Permission Refactoring?", "How does Overview work?",
     "How does Problem Statement work?"
 
+- **File**: `docs/development/terminal-program-resume.md`
+  - **Content**: Terminal program resume
+  - **Topics**: Adoption and existing telemetry, Lifecycle, Ownership and privacy, Verification
+  - **User Questions**: "What can you tell me about Terminal program resume?", "How does Adoption and existing telemetry
+    work?", "How does Lifecycle work?"
+
 - **File**: `docs/development/terminal-program-status.md`
   - **Content**: Terminal program status
   - **Topics**: Adoption and existing telemetry, Terminal pane icons (Rex/Ghostty), iTerm2 session status (OSC 21337),

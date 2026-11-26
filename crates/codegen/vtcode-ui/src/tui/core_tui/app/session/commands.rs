@@ -45,6 +45,7 @@ pub(super) fn to_core_command(command: &InlineCommand) -> Option<crate::tui::cor
             CoreCommand::SetConfiguredInputStatus { left: left.clone(), right: right.clone() }
         }
         InlineCommand::ProgramStatus(update) => CoreCommand::ProgramStatus(*update),
+        InlineCommand::ProgramResume(update) => CoreCommand::ProgramResume(update.clone()),
         InlineCommand::SetActivityState(state) => CoreCommand::SetActivityState(*state),
         InlineCommand::UpdateProgress(update) => CoreCommand::UpdateProgress(*update),
         InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems { items: items.clone() },

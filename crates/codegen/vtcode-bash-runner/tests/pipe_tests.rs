@@ -70,6 +70,49 @@ async fn test_pipe_process_borrowed_arg0() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// OSC 7577: pipe children must never observe the resume token, whether they
+/// inherit the parent environment or receive an explicit map containing it.
+/// The control probe must arrive intact in both cases, proving the child ran
+/// with a working environment rather than an emptied one.
+#[cfg(unix)]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_pipe_child_never_receives_resume_token() -> anyhow::Result<()> {
+    use vtcode_commons::program_resume::RESUME_TOKEN_ENV;
+
+    let env_guard = vtcode_commons::env_lock::lock();
+    let previous_token = std::env::var_os(RESUME_TOKEN_ENV);
+    env_guard.set_var(RESUME_TOKEN_ENV, "canary-parent-token-7577");
+    env_guard.set_var("VTCODE_TEST_PIPE_PROBE", "probe-intact-42");
+
+    let script = "echo \"probe=[$VTCODE_TEST_PIPE_PROBE] token=[$OSC7577_TOKEN]\"";
+
+    // Inherited environment path (`env: None`).
+    let (program, args) = shell_command(script);
+    let spawned = spawn_pipe_process_with_options(PipeSpawnOptions::new(program, ".").args(args)).await?;
+    let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
+    let text = String::from_utf8_lossy(&output);
+    assert_eq!(code, 0, "probe child must exit cleanly: {text:?}");
+    assert!(text.contains("probe=[probe-intact-42]"), "control var must pass through: {text:?}");
+    assert!(!text.contains("canary-parent-token-7577"), "resume token must be stripped: {text:?}");
+
+    // Explicit environment path (map contains the token outright).
+    let mut env = HashMap::new();
+    drop(env.insert(RESUME_TOKEN_ENV.to_string(), "canary-explicit-token-7577".to_string()));
+    drop(env.insert("VTCODE_TEST_PIPE_PROBE".to_string(), "probe-explicit-7".to_string()));
+    let (program, args) = shell_command(script);
+    let spawned = spawn_pipe_process_with_options(PipeSpawnOptions::new(program, ".").args(args).env(env)).await?;
+    let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
+    let text = String::from_utf8_lossy(&output);
+    assert_eq!(code, 0, "probe child must exit cleanly: {text:?}");
+    assert!(text.contains("probe=[probe-explicit-7]"), "control var must pass through: {text:?}");
+    assert!(!text.contains("canary-explicit-token-7577"), "resume token must be stripped: {text:?}");
+
+    env_guard.restore_var(RESUME_TOKEN_ENV, previous_token);
+    env_guard.remove_var("VTCODE_TEST_PIPE_PROBE");
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_pipe_process_round_trips_stdin() -> anyhow::Result<()> {
     let Some(python) = find_python() else {

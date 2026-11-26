@@ -264,6 +264,7 @@ pub struct Session {
     navigation_state: ListState,
     input_enabled: bool,
     pub(crate) program_status: super::program_status::ProgramStatus,
+    pub(crate) program_resume: super::program_resume::ProgramResume,
     pub(crate) activity_state: ActivityState,
     image_input_enabled: bool,
     cursor_visible: bool,
