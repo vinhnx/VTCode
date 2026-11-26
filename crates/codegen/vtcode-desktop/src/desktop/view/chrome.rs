@@ -633,6 +633,7 @@ impl DesktopView {
             .shadow_md()
             .fade_in("zen-toggle-float", cx.theme())
             .child(self.render_go_home_button(true))
+            .child(self.render_new_thread_button())
             .child(self.render_browse_threads_button(cx))
             .child(self.render_utilities_button(cx))
             .child(self.render_navigation_buttons())

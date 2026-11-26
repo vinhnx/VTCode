@@ -27,11 +27,13 @@ fn zen_floating_chrome_keeps_the_toggle_slot_and_exposes_navigation(cx: &mut Tes
         );
 
         let home = window.find("nav-home").bounds();
+        let new_thread = window.find("nav-new-thread").bounds();
         let browse = window.find("nav-browse-threads").bounds();
         let utilities = window.find("nav-utilities").bounds();
         let back = window.find("navigate-back").bounds();
         let forward = window.find("navigate-forward").bounds();
-        assert!(home.right() <= browse.origin.x, "Home leads Browse Threads: {home:?} {browse:?}");
+        assert!(home.right() <= new_thread.origin.x, "Home leads New thread: {home:?} {new_thread:?}");
+        assert!(new_thread.right() <= browse.origin.x, "New thread leads Browse Threads: {new_thread:?} {browse:?}");
         assert!(browse.right() <= utilities.origin.x, "Browse Threads precedes Utilities: {browse:?} {utilities:?}");
         assert!(utilities.right() <= back.origin.x, "Utilities precedes Back: {utilities:?} {back:?}");
         assert!(back.right() <= forward.origin.x, "Back precedes Forward left-to-right: {back:?} {forward:?}");
@@ -143,6 +145,28 @@ fn zen_utilities_button_opens_the_utilities_inspector(cx: &mut TestAppContext) {
         assert!(view.read(cx).inspector_open, "Zen Utilities opens the inspector");
         assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
         assert!(!view.read(cx).zen_mode, "revealing the inspector exits Zen");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_new_thread_button_starts_a_thread(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(std::env::temp_dir());
+            view.toggle_zen_mode(window, cx);
+        });
+        window.render_frame(cx);
+        let button = window.find("nav-new-thread");
+        assert_eq!(button.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(button.label(), Some("New thread"));
+        assert_ne!(button.disabled(), Some(true), "new thread is available in Zen");
+        window.click("nav-new-thread", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
     })
     .unwrap();
 }

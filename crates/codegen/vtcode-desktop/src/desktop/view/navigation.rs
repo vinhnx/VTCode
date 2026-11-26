@@ -104,6 +104,20 @@ impl DesktopView {
             .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone())
     }
 
+    /// New-thread shortcut in Zen's floating chrome. The normal-mode rail
+    /// pins it next to Home; Zen keeps the same action and availability gate.
+    pub(super) fn render_new_thread_button(&self) -> Button {
+        let label = rust_i18n::t!(i18n::NAVIGATION_NEW_THREAD).to_string();
+        desktop_ghost_button("nav-new-thread")
+            .icon(IconName::Plus)
+            .small()
+            .rounded_lg()
+            .accessibility_label(label.clone())
+            .tooltip_with_action(label, &NewSession, Some(key_context::DESKTOP))
+            .desktop_disabled(!self.new_thread_available())
+            .dispatches_desktop_action(NewSession, self.focus_handle.clone())
+    }
+
     /// Workspace utilities shortcut in Zen's floating chrome. The normal-mode
     /// rail keeps Utilities in its overflow, so Zen gets a direct button that
     /// dispatches the same action from the same focus origin.
