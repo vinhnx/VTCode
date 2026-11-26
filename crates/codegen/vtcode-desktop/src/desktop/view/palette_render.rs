@@ -647,6 +647,9 @@ pub(super) fn palette_action_command_id(action: &PaletteAction) -> Option<shortc
         PaletteAction::ChooseWorkspace => Some(shortcuts::CommandId::Workspace),
         PaletteAction::ToggleInspector => Some(shortcuts::CommandId::Inspector),
         PaletteAction::ToggleZenMode => Some(shortcuts::CommandId::ZenMode),
+        // Browse threads runs exactly the same `OpenThreadBrowser` action the
+        // new `cmd-t` binding dispatches, so it earns a badge too.
+        PaletteAction::BrowseThreads => Some(shortcuts::CommandId::BrowseThreads),
         PaletteAction::OpenDeepLink(link) => match link.as_ref() {
             deeplinks::DeepLink::Command(id) => Some(*id),
             _ => None,
@@ -746,11 +749,11 @@ mod tests {
         assert_eq!(palette_action_command_id(&PaletteAction::ChooseWorkspace), Some(CommandId::Workspace));
         assert_eq!(palette_action_command_id(&PaletteAction::ToggleInspector), Some(CommandId::Inspector));
         assert_eq!(palette_action_command_id(&PaletteAction::ToggleZenMode), Some(CommandId::ZenMode));
+        assert_eq!(palette_action_command_id(&PaletteAction::BrowseThreads), Some(CommandId::BrowseThreads));
         // Unmapped asymmetric sides: near-miss neighbors stay badge-free so no
         // badge implies a chord that runs something else.
         assert_eq!(palette_action_command_id(&PaletteAction::ToggleTheme), None);
         assert_eq!(palette_action_command_id(&PaletteAction::CopyLatestMessage), None);
-        assert_eq!(palette_action_command_id(&PaletteAction::BrowseThreads), None);
         assert_eq!(palette_action_command_id(&PaletteAction::RefreshFiles), None);
         assert_eq!(
             palette_action_command_id(&PaletteAction::SelectModel { provider: "p".into(), model: "m".into() }),

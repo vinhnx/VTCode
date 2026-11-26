@@ -17,6 +17,7 @@ use rio_vt::event::{RioEvent, WindowSize};
 use rio_vt::selection::SelectionType;
 
 use super::terminal_process::{TerminalProcess, TerminalProcessEvent};
+use super::terminal_program_status::{TerminalProgramStatus, TerminalProgramStatusSummary};
 use super::terminal_screen::TerminalScreen;
 
 const MAX_EVENTS_PER_DRAIN: usize = 64;
@@ -101,6 +102,7 @@ pub(super) struct TerminalTab {
     size: PtySize,
     palette: List,
     pub(super) screen: TerminalScreen,
+    program_status: TerminalProgramStatus,
     pub(super) exit_status: Option<String>,
     pub(super) error: Option<String>,
     pub(super) output_closed: bool,
@@ -117,11 +119,14 @@ impl TerminalTab {
     }
 
     fn with_process(process: TerminalProcess, size: PtySize, palette: List) -> Result<Self> {
+        let mut screen = TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES);
+        screen.enable_program_status();
         Ok(Self {
             process: Some(process),
             size,
             palette,
-            screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
+            screen,
+            program_status: TerminalProgramStatus::default(),
             exit_status: None,
             error: None,
             output_closed: false,
@@ -137,6 +142,7 @@ impl TerminalTab {
             size,
             palette,
             screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
+            program_status: TerminalProgramStatus::default(),
             exit_status: None,
             error: None,
             output_closed: true,
@@ -191,6 +197,12 @@ impl TerminalTab {
 
     pub(super) fn current_directory(&self) -> Option<std::path::PathBuf> {
         self.screen.current_directory().map(Path::to_path_buf)
+    }
+
+    /// Aggregate OSC 7501 program status for the tab header, if any record
+    /// deserves the eye. Read at render time like the working directory.
+    pub(super) fn program_status_summary(&self) -> Option<TerminalProgramStatusSummary> {
+        self.program_status.summary()
     }
 
     pub(super) fn app_cursor(&self) -> bool {
@@ -265,6 +277,10 @@ impl TerminalTab {
             match process.try_recv() {
                 Ok(TerminalProcessEvent::Output(bytes)) => {
                     for event in self.screen.process(&bytes) {
+                        if let RioEvent::ProgramStatus(status) = &event {
+                            self.program_status.apply(status);
+                            continue;
+                        }
                         let reply = terminal_reply(&event, self.size, &self.screen, &self.palette);
                         if let Some(reply) = reply
                             && let Some(process) = self.process.as_ref()
@@ -279,7 +295,10 @@ impl TerminalTab {
                     }
                 }
                 Ok(TerminalProcessEvent::OutputClosed) => self.output_closed = true,
-                Ok(TerminalProcessEvent::Exited(status)) => self.exit_status = Some(status),
+                Ok(TerminalProcessEvent::Exited(status)) => {
+                    self.program_status.on_process_exit();
+                    self.exit_status = Some(status);
+                }
                 Ok(TerminalProcessEvent::Error(error)) => self.error = Some(error),
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
                     return TerminalDrain { changed: processed > 0, events: view_events };
@@ -292,6 +311,8 @@ impl TerminalTab {
 
 // Child output is untrusted. OSC clipboard operations must not bypass the
 // user's explicit copy/paste actions or expose clipboard contents to a shell.
+// OSC 7501 program status is consumed into the tab's record store on the
+// interactive drain path; monitors drop it here (no record surface there).
 fn may_forward_to_view(event: &RioEvent) -> bool {
     !matches!(
         event,
@@ -300,6 +321,7 @@ fn may_forward_to_view(event: &RioEvent) -> bool {
             | RioEvent::ColorRequest(..)
             | RioEvent::ClipboardStore(..)
             | RioEvent::ClipboardLoad(..)
+            | RioEvent::ProgramStatus(..)
     )
 }
 
@@ -412,6 +434,168 @@ mod tests {
                     _ => assert!(!replied && forwarded, "{event:?} must forward without replying"),
                 }
             }
+        }
+    }
+
+    #[test]
+    fn terminal_answers_program_status_queries_and_consumes_reports() {
+        let mut screen = TerminalScreen::new(80, 24, 10);
+        screen.enable_program_status();
+        let palette = List::from(&Colors::default());
+        let size = PtySize::default();
+
+        // Feature query answers to the PTY only, with the fixed state/kind
+        // list (never anything a program reported).
+        let events = screen.process(b"\x1b]7501;?\x07");
+        assert_eq!(events.len(), 1, "query must answer exactly once: {events:?}");
+        let reply = terminal_reply(&events[0], size, &screen, &palette).expect("query must reply");
+        assert_eq!(reply, "\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x07");
+        assert!(!may_forward_to_view(&events[0]), "reply must not reach the view");
+
+        // A validated report is consumed into the tab store: no PTY reply,
+        // no view event. Both terminators parse.
+        for bytes in [
+            &b"\x1b]7501;state=working:app=demo:msg=V29ya2luZw==\x1b\\"[..],
+            &b"\x1b]7501;state=blocked:kind=permission:app=demo\x07"[..],
+        ] {
+            let events = screen.process(bytes);
+            assert_eq!(events.len(), 1, "report must surface exactly once: {bytes:?}");
+            assert!(
+                matches!(events[0], RioEvent::ProgramStatus(rio_vt::event::ProgramStatusEvent::Report(_))),
+                "{:?} must be a status report",
+                events[0]
+            );
+            assert_eq!(terminal_reply(&events[0], size, &screen, &palette), None);
+            assert!(!may_forward_to_view(&events[0]), "reports never reach the view");
+        }
+
+        // Unknown states are rejected whole: nothing surfaces.
+        assert!(screen.process(b"\x1b]7501;state=bogus\x07").is_empty());
+
+        // Lifecycle events follow the same consumed path.
+        let events = screen.process(b"\x1b]133;A\x07");
+        let lifecycle: Vec<_> = events
+            .iter()
+            .filter(|event| matches!(event, RioEvent::ProgramStatus(_)))
+            .collect();
+        assert!(
+            lifecycle
+                .iter()
+                .any(|event| matches!(event, RioEvent::ProgramStatus(rio_vt::event::ProgramStatusEvent::PromptStart))),
+            "prompt must retire transient records: {events:?}"
+        );
+        assert!(
+            lifecycle
+                .iter()
+                .all(|event| terminal_reply(event, size, &screen, &palette).is_none() && !may_forward_to_view(event)),
+            "lifecycle stays off the view and the PTY: {events:?}"
+        );
+        let events = screen.process(b"\x1bc");
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, RioEvent::ProgramStatus(rio_vt::event::ProgramStatusEvent::Reset))),
+            "RIS must drop every record: {events:?}"
+        );
+    }
+
+    #[test]
+    fn terminal_parses_vtcode_own_emitter_reports_losslessly() {
+        // Cross-crate interop pin: bytes from vtcode-commons' encoder must
+        // survive a real terminal parser with every field intact, so emitter
+        // and consumer cannot drift apart unnoticed.
+        use rio_vt::event::{BlockedKind, ProgramState, ProgramStatusEvent};
+        use vtcode_commons::program_status::{
+            InteractionKind, ProgramState as EmitState, encode_clear, encode_report,
+        };
+
+        let mut screen = TerminalScreen::new(80, 24, 10);
+        screen.enable_program_status();
+        let wire = encode_report(
+            "tsession/tchild",
+            EmitState::Blocked,
+            Some(InteractionKind::Permission),
+            Some(40),
+            "VT Code",
+            "Waiting for permission",
+        )
+        .expect("encoder must accept protocol-shaped input");
+        let events = screen.process(wire.as_bytes());
+        assert_eq!(events.len(), 1, "one report in, one report out: {events:?}");
+        match &events[0] {
+            RioEvent::ProgramStatus(ProgramStatusEvent::Report(parsed)) => {
+                assert_eq!(parsed.state, ProgramState::Blocked);
+                assert_eq!(parsed.kind, Some(BlockedKind::Permission));
+                assert_eq!(parsed.app.as_deref(), Some("vtcode"));
+                assert_eq!(parsed.title.as_deref(), Some("VT Code"));
+                assert_eq!(parsed.msg.as_deref(), Some("Waiting for permission"));
+                assert_eq!(parsed.progress, Some(40));
+                assert_eq!(parsed.id.as_deref(), Some("tsession/tchild"));
+            }
+            other => panic!("expected a parsed report, got {other:?}"),
+        }
+
+        let wire = encode_clear("tsession/tchild").expect("clear must encode");
+        let events = screen.process(wire.as_bytes());
+        assert_eq!(events.len(), 1, "clear must surface exactly once: {events:?}");
+        match &events[0] {
+            RioEvent::ProgramStatus(ProgramStatusEvent::Report(parsed)) => {
+                assert_eq!(parsed.state, ProgramState::Clear);
+                assert_eq!(parsed.id.as_deref(), Some("tsession/tchild"));
+            }
+            other => panic!("expected a parsed clear, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn terminal_without_opt_in_stays_silent_on_program_status_bytes() {
+        // Monitors and any future non-interactive screen construct the grid
+        // without the opt-in: queries go unanswered and reports never surface,
+        // so programs cannot believe in a protocol nobody acts on.
+        let mut screen = TerminalScreen::new(80, 24, 10);
+        assert!(screen.process(b"\x1b]7501;?\x07").is_empty());
+        assert!(screen.process(b"\x1b]7501;state=working:app=demo\x07").is_empty());
+        // A full reset still emits its own grid events, but never status ones.
+        let events = screen.process(b"\x1b]133;A\x07\x1bc");
+        assert!(
+            events
+                .iter()
+                .all(|event| !matches!(event, RioEvent::ProgramStatus(_) | RioEvent::PtyWrite(..))),
+            "unopted screens must not speak 7501: {events:?}"
+        );
+    }
+
+    #[test]
+    fn terminal_tab_drain_feeds_program_status_into_the_header_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        let size = PtySize { rows: 4, cols: 80, pixel_width: 0, pixel_height: 0 };
+        let mut tab =
+            TerminalTab::spawn(dir.path(), Path::new("/bin/sh"), size, List::from(&Colors::default())).unwrap();
+        assert_eq!(tab.program_status_summary(), None);
+        tab.input(b"printf '\\033]7501;state=working:app=demo:msg=V29ya2luZw==\\007'\n".to_vec())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let _drained = tab.drain();
+            if tab.program_status_summary().is_some() {
+                break;
+            }
+            assert!(Instant::now() < deadline, "live report never reached the store");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let summary = tab.program_status_summary().expect("report must be stored");
+        assert_eq!(summary.state, rio_vt::event::ProgramState::Working);
+        assert_eq!(summary.detail, "Working");
+        // A root clear retires the record; the header goes quiet again.
+        tab.input(b"printf '\\033]7501;state=clear\\007'\n".to_vec()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let _drained = tab.drain();
+            if tab.program_status_summary().is_none() {
+                break;
+            }
+            assert!(Instant::now() < deadline, "clear never retired the record");
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 

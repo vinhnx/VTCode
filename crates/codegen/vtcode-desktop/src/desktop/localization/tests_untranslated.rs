@@ -110,29 +110,6 @@ fn login_items_copy_resolves_in_every_language() {
 }
 
 #[test]
-fn swipe_navigation_copy_resolves_in_every_language() {
-    // English literals by design until full translations ship: this pins
-    // resolution (no assert_ne).
-    for language in UiLanguage::ALL {
-        let locale = language.locale();
-        for key in ["app.navigation.swipe_back_to", "app.navigation.swipe_forward_to"] {
-            let text = rust_i18n::t!(key, locale = locale, thread = "Demo thread").to_string();
-            assert!(!text.is_empty(), "{locale}/{key}");
-            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
-            assert!(text.contains("Demo thread"), "{locale}/{key} dropped the thread name");
-        }
-    }
-    assert_eq!(
-        rust_i18n::t!("app.navigation.swipe_back_to", locale = "en", thread = "Demo").to_string(),
-        "Back to Demo"
-    );
-    assert_eq!(
-        rust_i18n::t!("app.navigation.swipe_forward_to", locale = "en", thread = "Demo").to_string(),
-        "Forward to Demo"
-    );
-}
-
-#[test]
 fn update_install_copy_resolves_in_every_language() {
     // English literals by design until full translations ship: every locale
     // carries the English text, so this pins resolution (no assert_ne).
@@ -360,4 +337,27 @@ fn onboarding_copy_resolves_in_every_language() {
         assert!(ready.contains("gpt-6.2-astra"), "{locale} dropped the model");
     }
     assert_eq!(rust_i18n::t!("app.welcome.onboarding_title", locale = "en").to_string(), "Set up this workspace");
+}
+
+#[test]
+fn terminal_program_status_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.navigation.terminal_status_working",
+            "app.navigation.terminal_status_blocked",
+            "app.navigation.terminal_status_done",
+            "app.navigation.terminal_status_error",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+    }
+    assert_eq!(rust_i18n::t!("app.navigation.terminal_status_working", locale = "en").to_string(), "Working");
+    assert_eq!(rust_i18n::t!("app.navigation.terminal_status_blocked", locale = "en").to_string(), "Needs input");
+    assert_eq!(rust_i18n::t!("app.navigation.terminal_status_done", locale = "en").to_string(), "Done");
+    assert_eq!(rust_i18n::t!("app.navigation.terminal_status_error", locale = "en").to_string(), "Failed");
 }

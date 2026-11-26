@@ -864,12 +864,12 @@ fn sidebar_shows_running_for_background_work_after_turn_completion(cx: &mut Test
 #[gpui_kit::test]
 fn zen_empty_state_shows_workspace_identity_below_the_greeting(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let expected = format!("Change workspace, current: {}", workspace.path().file_name().unwrap().to_str().unwrap());
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
         view.workspace = Some(workspace.path().to_path_buf());
         view.zen_mode = true;
     });
-
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("welcome").is_none());
@@ -877,12 +877,16 @@ fn zen_empty_state_shows_workspace_identity_below_the_greeting(cx: &mut TestAppC
         assert!(window.try_find("send-prompt").is_some());
         let prompt = window.find("zen-welcome-prompt");
         assert_eq!(prompt.role(), Some(gpui_kit::Role::Heading));
-        let identity = window.find("welcome-workspace-name");
-        assert_eq!(identity.role(), Some(gpui_kit::Role::Label));
-        assert_eq!(identity.label(), workspace.path().file_name().unwrap().to_str());
+        let identity = window.find("welcome-workspace");
+        assert_eq!(identity.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(identity.label(), Some(expected.as_str()));
         assert!(identity.bounds().top() >= prompt.bounds().bottom());
-        assert!(window.try_find("welcome-workspace").is_none(), "zen keeps no inline workspace link");
+        let composer = window.find("message-composer-frame").bounds();
+        assert!(identity.bounds().left() >= composer.left() && identity.bounds().right() <= composer.right());
+        assert!(window.try_find("welcome-workspace-name").is_none(), "zen uses the same button as normal mode");
         assert!(window.try_find("open-first-workspace").is_none());
+        window.click("welcome-workspace", cx);
+        assert!(view.read(cx).workspace_picker_open, "Zen can change the project too");
     })
     .unwrap();
 }

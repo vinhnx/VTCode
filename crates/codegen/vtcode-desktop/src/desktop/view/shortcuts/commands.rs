@@ -5,7 +5,7 @@
 
 use super::*;
 
-pub(in crate::desktop::view) const COMMANDS: [ShortcutCommand; 34] = [
+pub(in crate::desktop::view) const COMMANDS: [ShortcutCommand; 36] = [
     ShortcutCommand {
         id: CommandId::Commands,
         label_key: "app.shortcuts.commands_label",
@@ -209,5 +209,18 @@ pub(in crate::desktop::view) const COMMANDS: [ShortcutCommand; 34] = [
         label_key: "app.shortcuts.edit_queue_label",
         description_key: "app.shortcuts.edit_queue_description",
         default_binding: "alt-up",
+    },
+    ShortcutCommand {
+        id: CommandId::BrowseThreads,
+        // Reuses the translated browser label; no second copy to drift.
+        label_key: i18n::BROWSER_BROWSE_THREADS,
+        description_key: "app.shortcuts.browse_threads_description",
+        default_binding: "cmd-t",
+    },
+    ShortcutCommand {
+        id: CommandId::GoHome,
+        label_key: "app.shortcuts.go_home_label",
+        description_key: "app.shortcuts.go_home_description",
+        default_binding: "cmd-shift-h",
     },
 ];

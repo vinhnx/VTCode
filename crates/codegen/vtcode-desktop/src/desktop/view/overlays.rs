@@ -142,7 +142,6 @@ impl DesktopView {
     /// at a time just as they do for Back/Escape.
     pub(super) fn go_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.disarm_double_escape();
-        self.cancel_pending_swipe(cx);
         if std::mem::take(&mut self.navigation_peek) {
             cx.notify();
         }
@@ -624,12 +623,6 @@ impl DesktopView {
             // already ignores a repeat press while a response is in flight.
             self.disarm_double_escape();
             self.submit_interaction(Vec::new(), true, window, cx);
-        } else if self.swipe_arming.pending_direction().is_some() {
-            // Armed swipe sits beneath every modal and panel above: those
-            // dismiss first, then the gesture state. A stale arm (overlay
-            // opened mid-arm) evaporates here instead of lingering.
-            self.disarm_double_escape();
-            self.cancel_pending_swipe(cx);
         } else if self.composer.read(cx).focus_handle(cx).is_focused(window)
             && !self.composer.read(cx).value().is_empty()
         {

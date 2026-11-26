@@ -347,7 +347,7 @@ impl DesktopView {
                         .items_center()
                         .gap_2()
                         .child(rail)
-                        .child(Icon::new(IconName::MessageSquare).small()),
+                        .child(Icon::new(IconName::MessagesSquare).small()),
                 )
                 .suffix(
                     desktop_ghost_button(format!("thread-tab-close-{id}"))

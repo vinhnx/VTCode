@@ -218,3 +218,71 @@ fn utilities_terminal_cta_opens_panel(cx: &mut TestAppContext) {
         assert!(state.terminal.is_some(), "CTA must spawn the shell");
     });
 }
+
+#[gpui_kit::test]
+fn terminal_header_shows_program_status_while_a_record_is_live(cx: &mut TestAppContext) {
+    use std::time::{Duration, Instant};
+
+    let (window, view, _dir) = open_workspace_terminal(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("terminal-status").is_none(), "quiet shell shows no pill");
+    })
+    .unwrap();
+
+    // Drive the real shell: the report travels PTY -> drain -> store, and the
+    // pump-independent drain loop below is all the header needs to repaint.
+    view.update(cx, |view, _| {
+        view.terminal
+            .as_mut()
+            .unwrap()
+            .input(b"printf '\\033]7501;state=blocked:kind=permission:msg=V2FpdGluZw==\\007'\n".to_vec())
+            .unwrap();
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let landed = view.update(cx, |view, cx| {
+            let tab = view.terminal.as_mut().unwrap();
+            let _drained = tab.drain();
+            let landed = tab.program_status_summary().is_some();
+            cx.notify();
+            landed
+        });
+        if landed {
+            break;
+        }
+        assert!(Instant::now() < deadline, "live report never reached the header store");
+    }
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("terminal-status").is_some(), "blocked record must show a pill");
+    })
+    .unwrap();
+
+    view.update(cx, |view, _| {
+        view.terminal
+            .as_mut()
+            .unwrap()
+            .input(b"printf '\\033]7501;state=clear\\007'\n".to_vec())
+            .unwrap();
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let cleared = view.update(cx, |view, cx| {
+            let tab = view.terminal.as_mut().unwrap();
+            let _drained = tab.drain();
+            let cleared = tab.program_status_summary().is_none();
+            cx.notify();
+            cleared
+        });
+        if cleared {
+            break;
+        }
+        assert!(Instant::now() < deadline, "clear never retired the header pill");
+    }
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("terminal-status").is_none(), "cleared record must hide the pill");
+    })
+    .unwrap();
+}

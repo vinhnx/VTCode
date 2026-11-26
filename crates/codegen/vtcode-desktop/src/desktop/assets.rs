@@ -31,6 +31,7 @@ icon_assets!(
         Maximize2,
         Minimize2,
         MessageSquare,
+        MessagesSquare,
         ChevronsDown,
         Paperclip,
         Pencil,

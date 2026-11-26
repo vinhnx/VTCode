@@ -6,10 +6,10 @@ pub(super) use std::time::Duration;
 
 pub(super) use gpui_kit::component::WindowExt as _;
 pub(super) use gpui_kit::component::select::SelectEvent;
-pub(super) use gpui_kit::test::{ClickOptions, TestEventExt as _, TestWindowExt};
+pub(super) use gpui_kit::test::{TestEventExt as _, TestWindowExt};
 pub(super) use gpui_kit::{
-    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, InputEvent, MouseButton, NavigationDirection,
-    ScrollEvent, TestAppContext, TouchPhase, WindowBounds, WindowOptions, point, px, size,
+    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, InputEvent, MouseButton, TestAppContext, WindowBounds,
+    WindowOptions, point, px, size,
 };
 pub(super) use serde_json::json;
 
@@ -598,97 +598,6 @@ fn config_page_setting(path: &str, value: serde_json::Value, group: &str) -> vtc
     }
 }
 
-fn swipe_history_fixture(
-    cx: &mut TestAppContext,
-    view: &Entity<DesktopView>,
-    commands: tokio::sync::mpsc::Sender<BackendCommand>,
-) -> Vec<vtcode_desktop_protocol::SessionSummary> {
-    let workspace = std::env::temp_dir();
-    let summaries = ["swipe-first", "swipe-second", "swipe-third"]
-        .into_iter()
-        .map(|id| vtcode_desktop_protocol::SessionSummary {
-            session_id: id.into(),
-            title: Some(format!("Thread {id}")),
-            workspace: workspace.display().to_string(),
-            completed: true,
-            resumable: true,
-            size_bytes: 0,
-            updated_at: None,
-        })
-        .collect::<Vec<_>>();
-    view.update(cx, |view, _| {
-        view.preferences.swipe_navigation = true;
-        view.backend = Some(BackendHandle { commands });
-        view.workspace = Some(workspace.clone());
-        view.sessions.clone_from(&summaries);
-        view.selected_session_id = Some(summaries[1].session_id.clone());
-        for summary in &summaries {
-            view.navigation_history.record(NavigationLocation {
-                workspace: workspace.clone(),
-                session_id: Some(summary.session_id.clone()),
-            });
-        }
-        assert!(view.navigation_history.navigate_to(1));
-    });
-    summaries
-}
-
-fn swipe_navigate(window: AnyWindowHandle, direction: NavigationDirection, cx: &mut TestAppContext) {
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        window.click_with_options("pane-root", ClickOptions::new().with_button(MouseButton::Navigate(direction)), cx);
-    })
-    .unwrap();
-}
-
-fn scroll_swipe(window: AnyWindowHandle, dx_px: f32, dy_px: f32, cx: &mut TestAppContext) {
-    cx.update_window(window, |_, window, cx| {
-        window.scroll("pane-root", gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))), cx);
-    })
-    .unwrap();
-}
-
-/// Full-path scroll dispatch with an explicit gesture phase: `window.scroll`
-/// always sends `Moved`, so finger-lift (`Ended`) and gesture-abort
-/// (`Cancelled`) commits need this helper. The body-level swipe listener
-/// spans the window, so the viewport center always lands inside it.
-fn scroll_swipe_with_phase(
-    window: AnyWindowHandle,
-    dx_px: f32,
-    dy_px: f32,
-    phase: TouchPhase,
-    cx: &mut TestAppContext,
-) {
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        let viewport = window.viewport_size();
-        let position = point(viewport.width * 0.5, viewport.height * 0.5);
-        let _dispatched = window.dispatch_event(
-            ScrollEvent {
-                position,
-                delta: gpui_kit::ScrollDelta::Pixels(point(px(dx_px), px(dy_px))),
-                touch_phase: phase,
-                modifiers: window.modifiers(),
-                ..Default::default()
-            }
-            .to_platform_input(),
-            cx,
-        );
-        window.render_frame(cx);
-    })
-    .unwrap();
-}
-
-/// Advances the background clock past the swipe settle delay and drains the
-/// resulting commit task. Deterministic: no wall-clock sleep. The clock
-/// advance runs outside `cx.update`: it polls newly-ready tasks inline, and
-/// the commit task borrows the app itself.
-fn settle_swipe_commit(cx: &mut TestAppContext) {
-    let background = cx.update(|cx| cx.background_executor().clone());
-    background.advance_clock(super::navigation_history::SWIPE_COMMIT_DELAY + Duration::from_millis(1));
-    cx.run_until_parked();
-}
-
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
     serde_json::from_value(json!({
         "provider": "openai", "model": "gpt-5.6-sol", "authenticated": true, "credentialSetupCommand": "",
@@ -845,7 +754,6 @@ mod slash_options;
 mod startup_interactions;
 mod steer_result;
 mod storage_settings;
-mod swipe_navigation_debounce;
 mod tab_queue;
 mod tasks_viewer;
 mod terminal_chrome;

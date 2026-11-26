@@ -1,6 +1,7 @@
 //! Zen floating chrome: back/forward placement and a toggle that never jumps.
 
 use super::*;
+use crate::desktop::view::InspectorTab;
 
 #[gpui_kit::test]
 fn zen_floating_chrome_keeps_the_toggle_slot_and_exposes_navigation(cx: &mut TestAppContext) {
@@ -27,10 +28,12 @@ fn zen_floating_chrome_keeps_the_toggle_slot_and_exposes_navigation(cx: &mut Tes
 
         let home = window.find("nav-home").bounds();
         let browse = window.find("nav-browse-threads").bounds();
+        let utilities = window.find("nav-utilities").bounds();
         let back = window.find("navigate-back").bounds();
         let forward = window.find("navigate-forward").bounds();
         assert!(home.right() <= browse.origin.x, "Home leads Browse Threads: {home:?} {browse:?}");
-        assert!(browse.right() <= back.origin.x, "Browse Threads precedes Back: {browse:?} {back:?}");
+        assert!(browse.right() <= utilities.origin.x, "Browse Threads precedes Utilities: {browse:?} {utilities:?}");
+        assert!(utilities.right() <= back.origin.x, "Utilities precedes Back: {utilities:?} {back:?}");
         assert!(back.right() <= forward.origin.x, "Back precedes Forward left-to-right: {back:?} {forward:?}");
         assert!(
             forward.right() <= floating.origin.x,
@@ -119,6 +122,27 @@ fn fullscreen_zen_browse_threads_keeps_the_browser_header_reachable(cx: &mut Tes
         window.click("browser-dismiss", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).current_route(), Route::Workspace);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_utilities_button_opens_the_utilities_inspector(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.toggle_zen_mode(window, cx);
+        });
+        window.render_frame(cx);
+        let button = window.find("nav-utilities");
+        assert_eq!(button.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(button.label(), Some("Workspace utilities"));
+        window.click("nav-utilities", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_open, "Zen Utilities opens the inspector");
+        assert_eq!(view.read(cx).inspector_tab, InspectorTab::Utilities);
+        assert!(!view.read(cx).zen_mode, "revealing the inspector exits Zen");
     })
     .unwrap();
 }

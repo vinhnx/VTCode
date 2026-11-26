@@ -41,6 +41,7 @@ logger. Keep these responsibilities distinct:
 | ATIF | Structured trajectory export for evaluation and interchange |
 | Trajectory logger | Routing, tool, and diagnostic records |
 | OSC 7501 | Bounded current terminal state with generic labels |
+| Desktop embedded terminal | Consumes OSC 7501 from shell programs into its header tab ([guide](desktop-terminal.md)) |
 
 Do not read telemetry files or parse display strings to drive status. Actual interaction ownership belongs to wait
 guards; execution outcomes come from runtime evidence. OSC 7501 is the machine-readable authority for external

@@ -104,6 +104,23 @@ impl DesktopView {
             .dispatches_desktop_action(OpenThreadBrowser, self.focus_handle.clone())
     }
 
+    /// Workspace utilities shortcut in Zen's floating chrome. The normal-mode
+    /// rail keeps Utilities in its overflow, so Zen gets a direct button that
+    /// dispatches the same action from the same focus origin.
+    pub(super) fn render_utilities_button(&self, cx: &mut Context<Self>) -> Button {
+        let colors = cx.theme().colors;
+        let label = rust_i18n::t!(i18n::NAVIGATION_WORKSPACE_UTILITIES).to_string();
+        desktop_ghost_button("nav-utilities")
+            .icon(IconName::Wrench)
+            .small()
+            .rounded_lg()
+            .desktop_selected(self.inspector_open && self.inspector_tab == InspectorTab::Utilities, &colors)
+            .accessibility_label(label.clone())
+            .tooltip_with_action(label, &OpenUtilities, Some(key_context::DESKTOP))
+            .desktop_disabled(self.workspace.is_none())
+            .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone())
+    }
+
     /// The House button returns to the main workspace landing page from any
     /// route. Shared by the rail and Zen's floating chrome so every Home
     /// affordance dispatches the same action.

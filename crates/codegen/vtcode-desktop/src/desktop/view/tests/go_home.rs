@@ -75,3 +75,52 @@ fn home_button_on_workspace_keeps_the_composer_draft(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn command_palette_suggests_home_threads_and_zen(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.open_command_palette(window, cx);
+        });
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        let home = super::super::PaletteAction::OpenDeepLink(Box::new(super::super::deeplinks::DeepLink::Command(
+            super::super::shortcuts::CommandId::GoHome,
+        )));
+        let entries: Vec<_> = view.read(cx).palette_groups.iter().flat_map(|(_, rows)| rows).collect();
+        assert!(entries.iter().any(|row| row.action == home), "Home is suggested in ⌘K");
+        assert!(
+            entries
+                .iter()
+                .any(|row| row.action == super::super::PaletteAction::BrowseThreads),
+            "Browse threads is suggested in ⌘K"
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|row| row.action == super::super::PaletteAction::ToggleZenMode && row.label.contains("Zen")),
+            "Toggle Zen mode stays in the default ⌘K View group"
+        );
+        assert!(
+            view.read(cx).palette_groups.iter().any(|(label, _)| label == "Workspace"),
+            "workspace actions are suggested when a workspace is open"
+        );
+
+        window.within("command-palette").input("Home", cx);
+        window.render_frame(cx);
+        assert!(
+            window.try_find(format!("{}-shortcut", palette_action_id(&home))).is_some(),
+            "the Home row shows its cmd-shift-h badge"
+        );
+
+        view.update(cx, |view, cx| view.run_palette_action(home, window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "confirming the suggestion closes the palette");
+        assert_eq!(view.read(cx).current_route(), Route::Workspace);
+    })
+    .unwrap();
+}

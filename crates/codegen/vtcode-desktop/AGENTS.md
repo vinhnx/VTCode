@@ -9,7 +9,7 @@
 - `src/desktop/files/` workspace snapshot, fuzzy search, launch/mutate (`launch.rs` fixed-argv); `themes/` tokens (`custom.rs`, `fills.rs` ramps); `preferences/`; `transport.rs`.
 - `src/desktop/transcript/` projections: rows in `item.rs`, turns in `turn.rs`, user-echo attachments in `user_attachments.rs`; `view/` only renders.
 - `src/desktop/output_tail.rs` owns bounded raw, inspector, and compact output projections.
-- `src/desktop/terminal_{process,screen,tab}.rs`, `view/terminal_panel.rs`, `preferences/terminal.rs`, `themes/terminal.rs`: embedded user-shell PTY (scrollback, ANSI, drag-select).
+- `src/desktop/terminal_{process,program_status,screen,tab}.rs`, `view/terminal_panel.rs`, `preferences/terminal.rs`, `themes/terminal.rs`: embedded user-shell PTY (scrollback, ANSI, drag-select).
 - `src/desktop/localization/` + per-surface `locales/app.<ns>.yml`; `app_icon.rs` artwork/Dock; `assets.rs` extra icons; `build_info.rs` About stamp; `startup.rs` argv/URL handoff.
 
 ## Rules

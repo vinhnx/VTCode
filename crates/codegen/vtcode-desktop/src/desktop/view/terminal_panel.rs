@@ -9,7 +9,9 @@ use super::*;
 
 mod input;
 mod mouse;
+mod status;
 use input::*;
+use status::*;
 
 /// Drain cadence: bounded redraws without a busy loop on floods.
 const TERMINAL_PUMP_INTERVAL: Duration = Duration::from_millis(16);
@@ -304,6 +306,7 @@ impl DesktopView {
             .or_else(|| terminal_shell_dir(self.workspace.as_ref()))
             .map(|dir| terminal_short_dir(&dir))
             .unwrap_or_default();
+        let program_status = self.terminal.as_ref().and_then(|tab| tab.program_status_summary());
         let position = self.preferences.terminal_position();
         let collapse_icon = match position {
             preferences::TerminalPosition::Bottom => IconName::ChevronDown,
@@ -375,6 +378,31 @@ impl DesktopView {
                             .min_w_0()
                             .child(Icon::new(IconName::Folder).small())
                             .child(div().text_sm().truncate().min_w_0().child(cwd_label))
+                            .when_some(program_status, |tab, status| {
+                                let label = terminal_status_label(&status);
+                                tab.child(
+                                    div()
+                                        .id("terminal-status")
+                                        .test_support()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .min_w_0()
+                                        .child(
+                                            Icon::new(terminal_status_icon(status.state))
+                                                .small()
+                                                .text_color(terminal_status_tone(status.state, &colors)),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .truncate()
+                                                .min_w_0()
+                                                .text_color(colors.muted_foreground)
+                                                .child(label),
+                                        ),
+                                )
+                            })
                             .child(
                                 desktop_ghost_button("terminal-tab-close")
                                     .icon(IconName::X)

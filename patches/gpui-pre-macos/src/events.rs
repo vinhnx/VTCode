@@ -220,33 +220,6 @@ pub(crate) unsafe fn platform_input_from_native(
                     })
                 })
             }
-            // Some mice (like Logitech MX Master) send navigation buttons as swipe events
-            NSEventType::Swipe => {
-                let navigation_direction = match native_event.phase() {
-                    NSEventPhase::Ended => match native_event.deltaX() {
-                        x if x > 0.0 => Some(NavigationDirection::Back),
-                        x if x < 0.0 => Some(NavigationDirection::Forward),
-                        _ => return None,
-                    },
-                    _ => return None,
-                };
-
-                match navigation_direction {
-                    Some(direction) => window_height.map(|window_height| {
-                        PlatformInput::MouseDown(MouseDownEvent {
-                            button: MouseButton::Navigate(direction),
-                            position: point(
-                                px(native_event.locationInWindow().x as f32),
-                                window_height - px(native_event.locationInWindow().y as f32),
-                            ),
-                            modifiers: read_modifiers(native_event),
-                            click_count: 1,
-                            first_mouse: false,
-                        })
-                    }),
-                    _ => None,
-                }
-            }
             NSEventType::Magnify => window_height.map(|window_height| {
                 let phase = match native_event.phase() {
                     NSEventPhase::MayBegin | NSEventPhase::Began => TouchPhase::Started,

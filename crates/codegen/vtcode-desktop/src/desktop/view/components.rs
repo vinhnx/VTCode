@@ -530,6 +530,36 @@ pub(super) fn vtcode_nav_mark() -> Icon {
     Icon::default().data(VTCODE_NAV_MARK_SVG)
 }
 
+/// Icon choice for places that mix catalog glyphs with the VT Code brand V.
+/// Keeping the choice typed lets mapping tables stay comparable in tests while
+/// the brand mark remains raw SVG data (an `IconName` cannot carry it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum UiIcon {
+    Named(IconName),
+    BrandV,
+}
+
+impl UiIcon {
+    pub(super) fn into_icon(self) -> Icon {
+        match self {
+            Self::Named(name) => Icon::new(name),
+            Self::BrandV => vtcode_nav_mark(),
+        }
+    }
+}
+
+impl From<IconName> for UiIcon {
+    fn from(icon: IconName) -> Self {
+        Self::Named(icon)
+    }
+}
+
+impl From<UiIcon> for Icon {
+    fn from(icon: UiIcon) -> Self {
+        icon.into_icon()
+    }
+}
+
 /// Shared inspector tab container: every inspector tab (Changes, Files,
 /// Activity, Output, Utilities) fills the card below the tab rail with the
 /// same flex geometry. Returns `Div` so callers chain their stable id,
@@ -819,15 +849,16 @@ pub(super) fn session_display_title(session_id: &str, title: Option<&str>) -> St
 pub(super) fn empty_state(
     title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,
-    icon: IconName,
+    icon: impl Into<UiIcon>,
 ) -> EmptyState {
     let title = title.into();
+    let icon = icon.into();
     EmptyState::new().header(
         EmptyHeader::new()
-            .media(if matches!(icon, IconName::Bot) {
+            .media(if icon == UiIcon::BrandV {
                 EmptyMedia::new().child(brand_logo(40.))
             } else {
-                EmptyMedia::new().with_variant(EmptyMediaVariant::Icon).child(Icon::new(icon))
+                EmptyMedia::new().with_variant(EmptyMediaVariant::Icon).child(icon.into_icon())
             })
             .title(EmptyTitle::new().text_lg().font_semibold().child(title))
             .description(EmptyDescription::new().child(description.into())),

@@ -17,6 +17,16 @@ fn title_needs_update(applied: &RefCell<Option<String>>, title: &str) -> bool {
 }
 
 impl DesktopView {
+    /// Display title for a session id: the stored title when present and
+    /// non-blank. Shared by the native window title and thread rows.
+    pub(super) fn session_title(&self, session_id: &str) -> Option<&str> {
+        self.sessions
+            .iter()
+            .find(|session| session.session_id.as_str() == session_id)
+            .and_then(|session| session.title.as_deref())
+            .filter(|title| !title.trim().is_empty())
+    }
+
     /// Native window title: the selected thread title, or the app name when
     /// no thread is selected or its title is blank.
     pub(super) fn window_title(&self) -> &str {
@@ -354,28 +364,16 @@ impl Render for DesktopView {
                     view.navigate_forward(cx);
                 }
             }))
+            // Physical mouse back/forward buttons share the keyboard's route-
+            // first navigation; only the trackpad gesture was removed.
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
-                cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Back) {
-                        view.arm_pending_swipe(NavigationDirection::Back, cx);
-                    }
-                }),
+                cx.listener(|_, _, window, cx| window.dispatch_action(Box::new(NavigateBack), cx)),
             )
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Forward),
-                cx.listener(|view, _, _, cx| {
-                    if view.swipe_navigation_allowed() && view.swipe_direction_available(NavigationDirection::Forward) {
-                        view.arm_pending_swipe(NavigationDirection::Forward, cx);
-                    }
-                }),
+                cx.listener(|_, _, window, cx| window.dispatch_action(Box::new(NavigateForward), cx)),
             )
-            // Trackpads without the system "swipe between pages" gesture
-            // report sideways movement as scroll deltas instead of discrete
-            // swipes; sustained horizontal scrolling navigates the same way.
-            .on_scroll(cx.listener(|view, event: &ScrollEvent, window, cx| {
-                view.handle_swipe_scroll(event, window, cx);
-            }))
             .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
             .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
@@ -504,13 +502,6 @@ impl Render for DesktopView {
             }
         } else {
             body = body.child(main);
-        }
-        // Armed-swipe pill paints beneath the modals, and only while the
-        // swipe gate passes: a route or overlay opened mid-arm hides the
-        // pill (reopening it if the arm outlives the interruption), while
-        // the commit re-check keeps the navigation itself fail-closed.
-        if self.swipe_arming.pending_direction().is_some() && self.swipe_navigation_allowed() {
-            body = body.child(self.render_swipe_navigation_overlay(cx));
         }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));

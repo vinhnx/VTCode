@@ -25,7 +25,10 @@ runloop, the harness event stream, or `ThreadEvent`.
   workspace rhythm (12px gaps, shared spines); zen mode docks it flush.
 - The header tab shows the shell's directory (`~` for home) with a close button; the chevron at the
   right collapses the panel. Both hide the panel without killing the session. A Terminal row in the
-  Utilities pane opens the panel from the inspector.
+  Utilities pane opens the panel from the inspector. When a shell program reports
+  [program status](https://www.superlogical.com/rex/docs/build/program-status) (OSC 7501),
+  the tab also shows the most urgent record as an icon plus one line of its message.
+  Finished records stay until new reports replace or clear them.
 
 ## Input and paste
 
@@ -81,6 +84,12 @@ Child output is untrusted. The panel enforces an output-trust boundary:
   directory (OSC 7) shows in the tab label after control characters are stripped, so hostile
   output cannot break the single-line layout.
 - Device, size, and color queries are answered back to the PTY only, never to the UI.
+- Program status (OSC 7501) is parsed on the interactive shell only. Support
+  queries are answered to the PTY; reports fold into a bounded 64-record set
+  (least-recently-updated eviction) that prompts, shell exit, and RIS retire
+  per the protocol. Record text is untrusted child output: controls and bidi
+  overrides are neutralized and length is capped before the header shows it.
+  Read-only monitors never parse it.
 - Drain batches are bounded (64 PTY events, 256 view events, 10k scrollback) so hostile output (bell
   floods, unbounded lines) degrades to dropped events, not hangs or unbounded memory.
 - Closing the panel kills the shell's foreground process group and reaps the shell. Detached background
@@ -92,7 +101,7 @@ Child output is untrusted. The panel enforces an output-trust boundary:
 ## Files
 
 - `crates/codegen/vtcode-desktop/src/desktop/terminal_{process,screen,tab}.rs`: PTY spawn/drain,
-  Rio grid wrapper, retained session.
+  Rio grid wrapper, retained session; `terminal_program_status.rs` keeps the OSC 7501 record set.
 - `crates/codegen/vtcode-desktop/src/desktop/view/terminal_panel.rs`: toggle, pump, rows, input,
   selection, wheel, palette sync.
 - `crates/codegen/vtcode-desktop/src/desktop/preferences/terminal.rs`: height bounds, ANSI setting.

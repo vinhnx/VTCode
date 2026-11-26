@@ -27,7 +27,7 @@ fn goto_palette_lists_destinations_and_lands_on_confirm(cx: &mut TestAppContext)
         assert_eq!(groups.len(), 3);
         assert_eq!(groups[0].1.len(), 16);
         assert_eq!(groups[1].1.len(), 10);
-        assert_eq!(groups[2].1.len(), 34);
+        assert_eq!(groups[2].1.len(), 36);
         // Command rows reuse the shared badge mapping: filter to one and
         // its saved chord badge renders.
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));

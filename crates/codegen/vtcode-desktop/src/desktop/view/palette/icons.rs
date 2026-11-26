@@ -8,38 +8,39 @@ use super::*;
 /// rows (see [`permission_palette_mode`]), so `None` only affects future
 /// palettes. Icons reuse siblings' choices where they exist
 /// (`SettingsTab::icon`, `files_panel::file_tree_row_icon`).
-pub(in crate::desktop::view) fn palette_action_icon(action: &PaletteAction) -> Option<IconName> {
+pub(in crate::desktop::view) fn palette_action_icon(action: &PaletteAction) -> Option<UiIcon> {
     let icon = match action {
-        PaletteAction::NewSession => IconName::Plus,
-        PaletteAction::CloseSession => IconName::X,
+        PaletteAction::NewSession => IconName::Plus.into(),
+        PaletteAction::CloseSession => IconName::X.into(),
         PaletteAction::CopyThreadTitle | PaletteAction::CopyLatestMessage | PaletteAction::CopyFilePath => {
-            IconName::Copy
+            IconName::Copy.into()
         }
-        PaletteAction::CloseOtherTabs => IconName::CopyX,
-        PaletteAction::OpenInCli | PaletteAction::ShowActivityOutput { .. } => IconName::Terminal,
-        PaletteAction::OpenConversationSearch { .. } | PaletteAction::OpenGoTo => IconName::Search,
+        PaletteAction::CloseOtherTabs => IconName::CopyX.into(),
+        PaletteAction::OpenInCli | PaletteAction::ShowActivityOutput { .. } => IconName::Terminal.into(),
+        PaletteAction::OpenConversationSearch { .. } | PaletteAction::OpenGoTo => IconName::Search.into(),
         // Browse Threads owns the tree glyph everywhere (rail, zen chrome,
-        // palette); session rows keep the conversation square.
-        PaletteAction::BrowseThreads => IconName::ListTree,
-        PaletteAction::JumpToTranscriptItem { .. } | PaletteAction::LoadSession(_) => IconName::MessageSquare,
-        PaletteAction::ChooseModel | PaletteAction::SelectModel { .. } => IconName::Bot,
-        PaletteAction::ChooseWorkspace => IconName::FolderOpen,
-        PaletteAction::RefreshSessions | PaletteAction::RefreshFiles => IconName::RefreshCw,
-        PaletteAction::ToggleInspector => IconName::PanelRight,
-        PaletteAction::ToggleTheme => IconName::SunMoon,
-        PaletteAction::SelectFont { .. } => IconName::ALargeSmall,
-        PaletteAction::SelectSettingsTab(tab) => return tab.icon(),
-        PaletteAction::EditConfigSetting(_) => IconName::Wrench,
-        PaletteAction::PreviewFile(_) => files_panel::file_tree_row_icon(false, false),
+        // palette); message and session rows use the plural conversation glyph.
+        PaletteAction::BrowseThreads => IconName::ListTree.into(),
+        PaletteAction::JumpToTranscriptItem { .. } | PaletteAction::LoadSession(_) => IconName::MessagesSquare.into(),
+        // The AI model wears the VT Code brand V, not a robot.
+        PaletteAction::ChooseModel | PaletteAction::SelectModel { .. } => UiIcon::BrandV,
+        PaletteAction::ChooseWorkspace => IconName::FolderOpen.into(),
+        PaletteAction::RefreshSessions | PaletteAction::RefreshFiles => IconName::RefreshCw.into(),
+        PaletteAction::ToggleInspector => IconName::PanelRight.into(),
+        PaletteAction::ToggleTheme => IconName::SunMoon.into(),
+        PaletteAction::SelectFont { .. } => IconName::ALargeSmall.into(),
+        PaletteAction::SelectSettingsTab(tab) => return tab.icon().map(UiIcon::Named),
+        PaletteAction::EditConfigSetting(_) => IconName::Wrench.into(),
+        PaletteAction::PreviewFile(_) => files_panel::file_tree_row_icon(false, false).into(),
         PaletteAction::SelectSessionOptions(_) => return None,
-        PaletteAction::ToggleZenMode => IconName::Leaf,
-        PaletteAction::ToggleComputerUse => return settings::SettingsTab::ComputerUse.icon(),
-        PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => IconName::Paperclip,
-        PaletteAction::InsertFileMention(_) => IconName::AtSign,
-        PaletteAction::CompleteSlashCommand(_) | PaletteAction::InsertDraft(_) => IconName::Slash,
-        PaletteAction::InsertHistoryPrompt(_) => IconName::Clock,
-        PaletteAction::SelectWorkspaceReviewFile(_) => IconName::GitCompare,
-        PaletteAction::OpenDeepLink(_) => IconName::ExternalLink,
+        PaletteAction::ToggleZenMode => IconName::Leaf.into(),
+        PaletteAction::ToggleComputerUse => return settings::SettingsTab::ComputerUse.icon().map(UiIcon::Named),
+        PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => IconName::Paperclip.into(),
+        PaletteAction::InsertFileMention(_) => IconName::AtSign.into(),
+        PaletteAction::CompleteSlashCommand(_) | PaletteAction::InsertDraft(_) => IconName::Slash.into(),
+        PaletteAction::InsertHistoryPrompt(_) => IconName::Clock.into(),
+        PaletteAction::SelectWorkspaceReviewFile(_) => IconName::GitCompare.into(),
+        PaletteAction::OpenDeepLink(_) => IconName::ExternalLink.into(),
     };
     Some(icon)
 }
@@ -71,7 +72,7 @@ mod tests {
                     item_id: "item-1".to_string(),
                     from_search: true,
                 },
-                Some(IconName::MessageSquare),
+                Some(IconName::MessagesSquare),
             ),
             (
                 PaletteAction::ShowActivityOutput {
@@ -80,7 +81,6 @@ mod tests {
                 },
                 Some(IconName::Terminal),
             ),
-            (PaletteAction::ChooseModel, Some(IconName::Bot)),
             (PaletteAction::ChooseWorkspace, Some(IconName::FolderOpen)),
             (PaletteAction::RefreshSessions, Some(IconName::RefreshCw)),
             (PaletteAction::RefreshFiles, Some(IconName::RefreshCw)),
@@ -99,15 +99,8 @@ mod tests {
             (PaletteAction::SelectSettingsTab(settings::SettingsTab::About), Some(IconName::Info)),
             (PaletteAction::SelectSettingsTab(settings::SettingsTab::VtCode), None),
             (PaletteAction::EditConfigSetting("tab".to_string()), Some(IconName::Wrench)),
-            (PaletteAction::LoadSession("session-1".to_string()), Some(IconName::MessageSquare)),
+            (PaletteAction::LoadSession("session-1".to_string()), Some(IconName::MessagesSquare)),
             (PaletteAction::PreviewFile("src/main.rs".to_string()), Some(IconName::FileText)),
-            (
-                PaletteAction::SelectModel {
-                    provider: "acme".to_string(),
-                    model: "m1".to_string(),
-                },
-                Some(IconName::Bot),
-            ),
             (PaletteAction::SelectSessionOptions(protocol::SessionOptionsSelectParams::default()), None),
             (PaletteAction::ToggleZenMode, Some(IconName::Leaf)),
             (PaletteAction::ToggleComputerUse, Some(IconName::Computer)),
@@ -126,8 +119,17 @@ mod tests {
     #[test]
     fn palette_action_icon_uses_expected_glyphs() {
         for (action, expected) in icon_cases() {
-            assert_eq!(palette_action_icon(&action), expected, "{action:?}");
+            assert_eq!(palette_action_icon(&action), expected.map(UiIcon::Named), "{action:?}");
         }
+        // Model rows use the brand V, never a robot glyph.
+        assert_eq!(palette_action_icon(&PaletteAction::ChooseModel), Some(UiIcon::BrandV));
+        assert_eq!(
+            palette_action_icon(&PaletteAction::SelectModel {
+                provider: "acme".to_string(),
+                model: "m1".to_string(),
+            }),
+            Some(UiIcon::BrandV)
+        );
         // Same-verb rows share one glyph; close/new verbs stay distinct.
         assert_eq!(
             palette_action_icon(&PaletteAction::RefreshSessions),
@@ -180,7 +182,7 @@ mod tests {
         // mapped icon must load through the desktop asset source.
         let assets = DesktopAssets;
         for (action, _) in icon_cases() {
-            if let Some(icon) = palette_action_icon(&action) {
+            if let Some(UiIcon::Named(icon)) = palette_action_icon(&action) {
                 assert!(
                     assets.load(&icon.path()).expect("load icon asset").is_some(),
                     "desktop asset source must include {}",

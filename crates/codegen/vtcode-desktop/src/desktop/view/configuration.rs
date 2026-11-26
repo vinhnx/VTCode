@@ -743,20 +743,20 @@ pub(super) fn build_config_catalog_cache(
 
 /// Rail icon per catalog group. Unknown groups (CLI additions, test fixtures)
 /// fall back to a neutral glyph so the rail never breaks.
-pub(super) fn config_group_icon(group: &str) -> IconName {
+pub(super) fn config_group_icon(group: &str) -> UiIcon {
     if group == curated::CURATED_GROUP_NAME {
-        return IconName::House;
+        return UiIcon::Named(IconName::House);
     }
     match group {
-        "Model & Provider" => IconName::Bot,
-        "Agent & Automation" => IconName::RefreshCw,
-        "Approvals & Security" => IconName::ShieldCheck,
-        "Tools & Integrations" => IconName::Wrench,
-        "Context & Memory" => IconName::FileText,
-        "Interface & Terminal" => IconName::Terminal,
-        "Performance & Diagnostics" => IconName::Activity,
-        "Advanced settings" => IconName::Settings2,
-        _ => IconName::Ellipsis,
+        "Model & Provider" => UiIcon::BrandV,
+        "Agent & Automation" => UiIcon::Named(IconName::RefreshCw),
+        "Approvals & Security" => UiIcon::Named(IconName::ShieldCheck),
+        "Tools & Integrations" => UiIcon::Named(IconName::Wrench),
+        "Context & Memory" => UiIcon::Named(IconName::FileText),
+        "Interface & Terminal" => UiIcon::Named(IconName::Terminal),
+        "Performance & Diagnostics" => UiIcon::Named(IconName::Activity),
+        "Advanced settings" => UiIcon::Named(IconName::Settings2),
+        _ => UiIcon::Named(IconName::Ellipsis),
     }
 }
 

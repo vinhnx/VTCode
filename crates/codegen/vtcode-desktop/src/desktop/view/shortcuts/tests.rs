@@ -15,22 +15,22 @@ fn accessible_shortcut_labels_use_the_platform_formatted_key() {
 #[gpui_kit::test]
 fn rejects_conflicting_reserved_typing_and_unknown_shortcuts(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        assert_eq!(bindings(&BTreeMap::new(), cx).unwrap().len(), 36);
+        assert_eq!(bindings(&BTreeMap::new(), cx).unwrap().len(), 38);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())]), cx).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())]), cx).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())]), cx).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())]), cx).unwrap().len(), 35);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())]), cx).unwrap().len(), 37);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]), cx)
                 .unwrap()
                 .len(),
-            34
+            36
         );
         assert_eq!(
             bindings(&BTreeMap::from([("settings".into(), String::new())]), cx)
                 .unwrap()
                 .len(),
-            34,
+            36,
             "unbinding Settings removes both its desktop and in-settings bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())]), cx).is_err());
@@ -234,6 +234,8 @@ fn command_ids_round_trip_and_pin_the_persisted_table() {
         "queue_batched",
         "prompt_history",
         "edit_queue",
+        "browse_threads",
+        "go_home",
     ];
     assert_eq!(CommandId::ALL.map(CommandId::as_str), pinned);
     assert_eq!(COMMANDS.map(|command| command.id), CommandId::ALL);
@@ -349,7 +351,7 @@ fn secondary_alias_resolves_to_the_host_modifier(cx: &mut TestAppContext) {
         // Cmd+S preview save, `j` with the fixed Ctrl+J composer chord).
         let loaded = bindings(&BTreeMap::from([("model".into(), "secondary-y".into())]), cx)
             .expect("secondary- resolves on the host OS");
-        assert_eq!(loaded.len(), 36, "full table builds with the secondary override");
+        assert_eq!(loaded.len(), 38, "full table builds with the secondary override");
         #[cfg(target_os = "macos")]
         let expected = "cmd-y";
         #[cfg(not(target_os = "macos"))]
@@ -463,5 +465,14 @@ fn retiring_the_full_table_shadows_every_binding(cx: &mut TestAppContext) {
         for command in COMMANDS.iter() {
             assert_chord_dead(cx, command.default_binding, context_for(command.id));
         }
+    });
+}
+
+#[gpui_kit::test]
+fn navigation_chords_reach_browse_threads_and_home(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        reinstall(&BTreeMap::new(), &BTreeMap::new(), cx);
+        assert_chord_resolves_to(cx, "cmd-t", key_context::DESKTOP, &OpenThreadBrowser);
+        assert_chord_resolves_to(cx, "cmd-shift-h", key_context::DESKTOP, &GoHome);
     });
 }

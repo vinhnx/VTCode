@@ -169,7 +169,7 @@ impl DesktopView {
             empty_state(
                 rust_i18n::t!("app.browser.empty_title").to_string(),
                 rust_i18n::t!("app.browser.empty_description").to_string(),
-                IconName::MessageSquare,
+                IconName::MessagesSquare,
             )
             .into_any_element()
         } else {
@@ -295,7 +295,7 @@ impl DesktopView {
                                                                 .items_center()
                                                                 .gap_2()
                                                                 .child(
-                                                                    Icon::new(IconName::MessageSquare).text_color(
+                                                                    Icon::new(IconName::MessagesSquare).text_color(
                                                                         if selected { primary } else { muted },
                                                                     ),
                                                                 )

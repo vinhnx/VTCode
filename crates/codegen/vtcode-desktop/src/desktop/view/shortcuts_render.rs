@@ -12,10 +12,6 @@ const VIM_NAVIGATION_TITLE: gpui_kit::SharedString = gpui_kit::SharedString::new
 const VIM_NAVIGATION_HINT: gpui_kit::SharedString = gpui_kit::SharedString::new_static(
     "Move with j/k, jump with g/G, switch tabs with h/l, focus the composer with i, search with /.",
 );
-const SWIPE_NAVIGATION_TITLE: gpui_kit::SharedString = gpui_kit::SharedString::new_static("Swipe navigation");
-const SWIPE_NAVIGATION_HINT: gpui_kit::SharedString = gpui_kit::SharedString::new_static(
-    "Navigate thread history with a two-finger swipe, horizontal scroll, or mouse back/forward buttons. Toolbar buttons and shortcuts always work.",
-);
 
 /// Cloned render inputs for the shortcuts editor (see
 /// `NotificationSettingsProps` for the Kit-hosting rationale).
@@ -29,7 +25,6 @@ pub(super) struct ShortcutSettingsProps {
     pub(super) cli_shortcuts_available: bool,
     pub(super) message: Option<String>,
     pub(super) vim_navigation: bool,
-    pub(super) swipe_navigation: bool,
 }
 
 impl ShortcutSettingsProps {
@@ -49,7 +44,6 @@ impl ShortcutSettingsProps {
                 .is_some(),
             message: view.shortcut_message.clone(),
             vim_navigation: view.preferences.vim_navigation,
-            swipe_navigation: view.preferences.swipe_navigation,
         }
     }
 }
@@ -216,22 +210,6 @@ impl DesktopView {
                 }),
             colors,
         ));
-        // Same English-literal rule as the vim toggle above: settings rows
-        // stay untranslated until full native-quality translations ship.
-        let swipe_group = settings_group_box(SWIPE_NAVIGATION_TITLE.clone(), colors).child(settings_row(
-            SWIPE_NAVIGATION_TITLE.clone(),
-            SWIPE_NAVIGATION_HINT,
-            gpui_kit::component::switch::Switch::new("swipe-navigation")
-                .accessibility_label(SWIPE_NAVIGATION_TITLE.clone())
-                .checked(props.swipe_navigation)
-                .on_click({
-                    let view = view.clone();
-                    move |_, _: &mut Window, cx: &mut App| {
-                        view.update(cx, |view, cx| view.toggle_swipe_navigation(cx));
-                    }
-                }),
-            colors,
-        ));
         // The experimental toggle sits below the shortcut table so existing
         // rows keep their positions (headed tests click them unscrolled).
         div()
@@ -244,7 +222,6 @@ impl DesktopView {
                 group,
             ))
             .child(accessible_group_box("vim-navigation-group", VIM_EXPERIMENTAL_TITLE, vim_group))
-            .child(accessible_group_box("swipe-navigation-group", SWIPE_NAVIGATION_TITLE, swipe_group))
             .into_any_element()
     }
 
@@ -260,16 +237,6 @@ impl DesktopView {
         self.preferences.vim_navigation.toggle();
         self.save_preferences();
         bootstrap::apply_vim_navigation(cx, self.preferences.vim_navigation);
-        cx.notify();
-    }
-
-    /// Flips swipe navigation, retiring any live arm so the pill unmounts
-    /// immediately instead of lingering to the commit attempt. Toolbar
-    /// buttons and keyboard shortcuts bypass the gate and keep working.
-    pub(super) fn toggle_swipe_navigation(&mut self, cx: &mut Context<Self>) {
-        self.preferences.swipe_navigation.toggle();
-        self.save_preferences();
-        self.cancel_pending_swipe(cx);
         cx.notify();
     }
 
@@ -405,23 +372,15 @@ impl DesktopView {
         // its single role as the persistence point.
         let defaults = shortcuts::draft_from(&std::collections::BTreeMap::new());
         self.shortcut_capture = None;
-        // Vim and swipe navigation are immediately-applied Switches with no
-        // draft, so their reset persists at once while shortcuts keep staged
-        // semantics. Both switches live on this page, so "Reset all to
-        // defaults" covers both.
+        // Vim navigation is an immediately-applied Switch with no draft, so
+        // its reset persists at once while shortcuts keep staged semantics.
         let vim_reset = std::mem::replace(&mut self.preferences.vim_navigation, false);
-        let swipe_reset = std::mem::replace(&mut self.preferences.swipe_navigation, false);
-        if vim_reset || swipe_reset {
-            self.save_preferences();
-        }
         if vim_reset {
+            self.save_preferences();
             bootstrap::apply_vim_navigation(cx, false);
         }
-        if swipe_reset {
-            self.cancel_pending_swipe(cx);
-        }
         let shortcuts_staged = defaults != self.shortcut_draft;
-        if !shortcuts_staged && !vim_reset && !swipe_reset {
+        if !shortcuts_staged && !vim_reset {
             self.shortcut_message = Some(rust_i18n::t!("app.shortcuts.already_default").to_string());
             cx.notify();
             return;

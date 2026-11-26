@@ -115,8 +115,8 @@ fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit
                 contrast_ratio(colors.background, hover) >= 1.01,
                 "{id}: hover surface is too close to the surrounding background"
             );
-            // Zen's floating chrome is a popover surface whose armed-swipe cue
-            // uses the hover fill; it must not collapse onto the pill itself.
+            // Zen's floating chrome is a popover surface, so its hover fill
+            // must not collapse onto the pill itself.
             assert!(
                 contrast_ratio(colors.accent, colors.popover) >= 1.01,
                 "{id}: hover fill must stay visible on a popover surface"

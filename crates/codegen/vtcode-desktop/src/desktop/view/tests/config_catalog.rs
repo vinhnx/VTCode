@@ -238,18 +238,19 @@ fn config_rail_labels_drop_counts_for_scannability(cx: &mut TestAppContext) {
 
 #[test]
 fn config_group_icons_cover_the_catalog_with_a_neutral_fallback() {
+    use crate::desktop::view::components::UiIcon;
     use gpui_kit::assets::IconName;
-    assert_eq!(config_group_icon("Configuration"), IconName::House);
-    assert_eq!(config_group_icon("Model & Provider"), IconName::Bot);
-    assert_eq!(config_group_icon("Agent & Automation"), IconName::RefreshCw);
-    assert_eq!(config_group_icon("Approvals & Security"), IconName::ShieldCheck);
-    assert_eq!(config_group_icon("Tools & Integrations"), IconName::Wrench);
-    assert_eq!(config_group_icon("Context & Memory"), IconName::FileText);
-    assert_eq!(config_group_icon("Interface & Terminal"), IconName::Terminal);
-    assert_eq!(config_group_icon("Performance & Diagnostics"), IconName::Activity);
-    assert_eq!(config_group_icon("Advanced settings"), IconName::Settings2);
-    assert_eq!(config_group_icon("Tools"), IconName::Ellipsis);
-    assert_eq!(config_group_icon("Some future group"), IconName::Ellipsis);
+    assert_eq!(config_group_icon("Configuration"), UiIcon::Named(IconName::House));
+    assert_eq!(config_group_icon("Model & Provider"), UiIcon::BrandV);
+    assert_eq!(config_group_icon("Agent & Automation"), UiIcon::Named(IconName::RefreshCw));
+    assert_eq!(config_group_icon("Approvals & Security"), UiIcon::Named(IconName::ShieldCheck));
+    assert_eq!(config_group_icon("Tools & Integrations"), UiIcon::Named(IconName::Wrench));
+    assert_eq!(config_group_icon("Context & Memory"), UiIcon::Named(IconName::FileText));
+    assert_eq!(config_group_icon("Interface & Terminal"), UiIcon::Named(IconName::Terminal));
+    assert_eq!(config_group_icon("Performance & Diagnostics"), UiIcon::Named(IconName::Activity));
+    assert_eq!(config_group_icon("Advanced settings"), UiIcon::Named(IconName::Settings2));
+    assert_eq!(config_group_icon("Tools"), UiIcon::Named(IconName::Ellipsis));
+    assert_eq!(config_group_icon("Some future group"), UiIcon::Named(IconName::Ellipsis));
 }
 
 #[test]

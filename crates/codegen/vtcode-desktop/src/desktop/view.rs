@@ -100,10 +100,7 @@ use cli_handoff::CliHandoff;
 use file_rename::FileRenameState;
 use full_access_confirm::FullAccessConfirmState;
 use ids::{opaque_path_element_id, uuid_like_id};
-use navigation_history::{
-    ArmOutcome, NavigationHistory, NavigationLocation, PendingNavigation, SWIPE_COMMIT_DELAY, SwipeArming,
-    SwipeScrollAccumulator, is_vertical_dominant_scroll, natural_scroll_enabled, swipe_direction_for_dx,
-};
+use navigation_history::{NavigationHistory, NavigationLocation, PendingNavigation};
 use overlays::{DiscardIntent, Route, RouteHistory, dismissable_route_page, dismissable_route_page_with_layout};
 
 mod about;
@@ -184,7 +181,6 @@ mod shortcuts_render;
 mod skills_consent;
 mod storage;
 mod submit;
-mod swipe_navigation_overlay;
 mod tabs;
 mod terminal_panel;
 mod transcript_activity;
@@ -448,8 +444,6 @@ struct DesktopView {
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
-    swipe_scroll: SwipeScrollAccumulator,
-    swipe_arming: SwipeArming,
     workspace_selection_pending: bool,
     workspace_selection_task: Option<Task<()>>,
     workspace_picker_open: bool,

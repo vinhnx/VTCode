@@ -109,22 +109,6 @@ impl DesktopView {
     }
 
     fn render_welcome_workspace(&self, name: String, color: gpui_kit::Hsla) -> AnyElement {
-        if self.zen_mode {
-            return div()
-                .id("welcome-workspace-name")
-                .test_support()
-                .role(gpui_kit::Role::Label)
-                .aria_label(name.clone())
-                .min_w_0()
-                .truncate()
-                .tooltip({
-                    let name = name.clone();
-                    move |window, cx| gpui_kit::component::tooltip::Tooltip::new(name.clone()).build(window, cx)
-                })
-                .child(name)
-                .into_any_element();
-        }
-
         let label = rust_i18n::t!("app.transcript.change_workspace", name = name.as_str()).to_string();
         desktop_ghost_button("welcome-workspace")
             .text_sm()

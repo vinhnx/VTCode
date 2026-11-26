@@ -14,6 +14,7 @@ mod project_tags;
 mod startup;
 mod strings;
 mod terminal_process;
+mod terminal_program_status;
 mod terminal_screen;
 mod terminal_tab;
 mod themes;

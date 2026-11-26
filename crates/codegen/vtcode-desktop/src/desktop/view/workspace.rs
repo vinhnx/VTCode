@@ -1,7 +1,6 @@
 //! Workspace selection, backend startup, and navigation history.
 
 use super::*;
-use gpui_kit::TouchPhase;
 
 enum WorkspaceSelection {
     Explicit,
@@ -106,10 +105,6 @@ impl DesktopView {
     }
 
     pub(super) fn record_current_navigation(&mut self) {
-        // A new history entry moves the cursor, so an armed swipe's advertised
-        // target is stale: retire the arm before recording. The canceled arm's
-        // timer no-ops, and the next render unmounts the pill.
-        let _retired = self.swipe_arming.cancel();
         if let Some(location) = self.current_navigation_location() {
             self.navigation_history.record(location);
         }
@@ -146,160 +141,18 @@ impl DesktopView {
         }
     }
 
-    /// Whether a trackpad swipe or mouse back/forward button may navigate.
-    /// History, pending-transition, and session guards live in
-    /// `can_navigate_back`/`can_navigate_forward`; this adds the modal-overlay
-    /// guard so a swipe over an open palette, settings, preview, or review
-    /// cannot navigate the background underneath it.
-    pub(super) fn swipe_navigation_allowed(&self) -> bool {
-        self.preferences.swipe_navigation
-            && self.current_route() == Route::Workspace
-            && self.palette.is_none()
-            && !self.config_page_open
-            && self.config_editor.is_none()
-            && self.file_preview.is_none()
-    }
-
-    /// Whether history exists in `direction` and no transition blocks it.
-    /// Shared by the scroll path and the toolbar cue so the cue never
-    /// advertises a navigation that would no-op.
-    pub(super) fn swipe_direction_available(&self, direction: NavigationDirection) -> bool {
-        match direction {
-            NavigationDirection::Back => self.can_navigate_back(),
-            NavigationDirection::Forward => self.can_navigate_forward(),
-        }
-    }
-
-    /// Feeds a trackpad/mouse scroll event into swipe navigation. Sustained
-    /// horizontal scrolling arms like a discrete swipe; everything else —
-    /// including all vertical scrolling — is left for the scrollable under the
-    /// cursor. Observes only: never stops propagation. The toolbar cue updates
-    /// only when the armed direction changes, not on every scroll event.
-    pub(super) fn handle_swipe_scroll(&mut self, event: &ScrollEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.swipe_navigation_allowed() {
-            let was_armed = self.swipe_scroll.armed().is_some();
-            self.swipe_scroll.reset();
-            self.cancel_pending_swipe(cx);
-            if was_armed {
-                cx.notify();
-            }
-            return;
-        }
-        let natural_scroll = natural_scroll_enabled();
-        let before = self.swipe_scroll.armed();
-        let delta = event.delta.pixel_delta(window.line_height());
-        let dx_px = f32::from(delta.x);
-        let dy_px = f32::from(delta.y);
-        // While an arm is pending, input that fights the gesture cancels it:
-        // non-finite deltas, vertical-dominant drift, or a lean toward the
-        // opposite direction. Same-direction input just holds the arm; the
-        // `Ended` fast path or the settle timer commits it.
-        if matches!(event.touch_phase, TouchPhase::Moved)
-            && self.swipe_arming.pending_direction().is_some()
-            && (!dx_px.is_finite()
-                || !dy_px.is_finite()
-                || is_vertical_dominant_scroll(dx_px, dy_px)
-                || swipe_direction_for_dx(dx_px, natural_scroll)
-                    .is_some_and(|lean| Some(lean) != self.swipe_arming.pending_direction()))
-        {
-            self.cancel_pending_swipe(cx);
-        }
-        let crossed = self.swipe_scroll.push(dx_px, dy_px, event.touch_phase, natural_scroll);
-        if self.swipe_scroll.armed() != before {
-            cx.notify();
-        }
-        match event.touch_phase {
-            // The terminal phases never carry a crossing (`push` resets
-            // without firing), so they only resolve a pending arm: finger
-            // lift commits, a fresh touch or cancellation fails closed.
-            TouchPhase::Ended => self.commit_pending_swipe_current(cx),
-            TouchPhase::Cancelled | TouchPhase::Started => self.cancel_pending_swipe(cx),
-            TouchPhase::Moved => {
-                if let Some(direction) = crossed.filter(|direction| self.swipe_direction_available(*direction)) {
-                    self.arm_pending_swipe(direction, cx);
-                }
-            }
-        }
-    }
-
-    /// Arms a swipe navigation toward `direction`, showing the window-level
-    /// overlay until the commit (finger lift or settle timer) or a cancel.
-    /// Same-direction input while armed is ignored; opposite input supersedes
-    /// and restarts the timer.
-    pub(super) fn arm_pending_swipe(&mut self, direction: NavigationDirection, cx: &mut Context<Self>) {
-        let (outcome, generation) = self.swipe_arming.arm(direction, Instant::now());
-        match outcome {
-            ArmOutcome::Ignored => {}
-            ArmOutcome::Armed | ArmOutcome::Superseded => {
-                cx.notify();
-                cx.spawn(async move |view, cx| {
-                    cx.background_executor().timer(SWIPE_COMMIT_DELAY).await;
-                    let _updated = view.update(cx, |view, cx| {
-                        view.commit_pending_swipe(generation, cx);
-                    });
-                })
-                .detach();
-            }
-        }
-    }
-
-    /// Drops a pending swipe arm, hiding the overlay. Redraws only when an
-    /// arm was actually pending.
-    pub(super) fn cancel_pending_swipe(&mut self, cx: &mut Context<Self>) {
-        if self.swipe_arming.cancel() {
-            cx.notify();
-        }
-    }
-
-    /// Commits the arm held by `generation` (settle-timer path). Re-validates
-    /// the overlay and history guards, so a stale arm can never fire into a
-    /// blocked navigation; records the arm cooldown only when a navigation
-    /// actually issues.
-    pub(super) fn commit_pending_swipe(&mut self, generation: u64, cx: &mut Context<Self>) {
-        let Some(direction) = self.swipe_arming.take_for_commit(generation) else {
-            return;
-        };
-        if !self.swipe_navigation_allowed() || !self.swipe_direction_available(direction) {
-            cx.notify();
-            return;
-        }
-        // The cooldown starts only when a navigation actually issues: a
-        // guard-passing commit can still fail (target thread deleted by a
-        // list refresh mid-arm, queue full), and a failed commit must not
-        // eat the user's retry.
-        let issued = self.navigate_history_toward(direction, cx);
-        if issued {
-            self.swipe_arming.record_commit(Instant::now());
-        }
-        cx.notify();
-    }
-
-    /// Commits whatever arm is live now (finger-lift path).
-    pub(super) fn commit_pending_swipe_current(&mut self, cx: &mut Context<Self>) {
-        let generation = self.swipe_arming.generation();
-        self.commit_pending_swipe(generation, cx);
-    }
-
-    /// Step back in session history. Retires any armed swipe first:
-    /// toolbar, keyboard, and menu entries land here directly, bypassing
-    /// the arm layer, so without this the stale arm's timer would fire
-    /// into the moved cursor as a second navigation.
+    /// Step back in session history (toolbar, keyboard, or menu).
     pub(super) fn navigate_back(&mut self, cx: &mut Context<Self>) {
-        self.cancel_pending_swipe(cx);
         let _issued = self.navigate_history_toward(NavigationDirection::Back, cx);
     }
 
-    /// Step forward in session history. Retires any armed swipe first,
-    /// like [`Self::navigate_back`].
+    /// Step forward in session history.
     pub(super) fn navigate_forward(&mut self, cx: &mut Context<Self>) {
-        self.cancel_pending_swipe(cx);
         let _issued = self.navigate_history_toward(NavigationDirection::Forward, cx);
     }
 
-    /// Gate and dispatch one history step toward `direction`. Shared by the
-    /// direct entries above and the swipe commit (whose arm is already
-    /// consumed, so it must not re-cancel). Returns whether a navigation
-    /// issued; the commit starts its cooldown only on `true`.
+    /// Gate and dispatch one history step toward `direction`. Returns whether
+    /// a navigation issued.
     fn navigate_history_toward(&mut self, direction: NavigationDirection, cx: &mut Context<Self>) -> bool {
         let index = match direction {
             NavigationDirection::Back if self.can_navigate_back() => self.navigation_history.back_index(),
@@ -360,7 +213,7 @@ impl DesktopView {
     /// session-list continuation load the thread — the same path as
     /// back/forward workspace navigation.
     pub(super) fn arm_session_link(&mut self, workspace: PathBuf, session_id: String, cx: &mut Context<Self>) {
-        self.record_handoff_target(&workspace, session_id, cx);
+        self.record_handoff_target(&workspace, session_id);
         self.select_workspace(workspace.clone(), cx);
         if self.workspace.as_ref() != Some(&workspace)
             && self.pending_workspace.as_ref() != Some(&workspace)
@@ -370,9 +223,7 @@ impl DesktopView {
         }
     }
 
-    fn record_handoff_target(&mut self, workspace: &Path, session_id: String, cx: &mut Context<Self>) {
-        // A handoff rewrites history, so any armed swipe must retire first.
-        self.cancel_pending_swipe(cx);
+    fn record_handoff_target(&mut self, workspace: &Path, session_id: String) {
         self.navigation_history.record(NavigationLocation {
             workspace: workspace.to_path_buf(),
             session_id: Some(session_id),
@@ -384,8 +235,7 @@ impl DesktopView {
     }
 
     /// Drive the cursor or session load toward `index`. Returns whether a
-    /// navigation issued: the swipe commit starts its cooldown only on
-    /// `true`, so every silent failure below must return `false`.
+    /// navigation issued, so every silent failure below returns `false`.
     fn navigate_to_history_index(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
         let Some(target) = self.navigation_history.location(index).cloned() else {
             return false;
@@ -540,7 +390,7 @@ impl DesktopView {
                 match canonical {
                     Some(canonical) => {
                         if let WorkspaceSelection::Handoff { session_id } = selection {
-                            view.record_handoff_target(&canonical, session_id, cx);
+                            view.record_handoff_target(&canonical, session_id);
                         }
                         view.select_canonical_workspace(canonical, cx);
                     }

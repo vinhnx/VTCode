@@ -377,7 +377,7 @@ impl DesktopView {
                                                 let jump_id = row.id.clone();
                                                 let jump_title = row.title.to_string();
                                                 desktop_ghost_button(format!("activity-jump-{}", row.id))
-                                                    .icon(IconName::MessageSquare)
+                                                    .icon(IconName::MessagesSquare)
                                                     .small()
                                                     .accessibility_label(
                                                         rust_i18n::t!(

@@ -620,43 +620,6 @@ fn composer_activation_dismisses_browser_and_focuses_input(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn trackpad_swipe_over_open_browser_does_not_navigate(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    let _summaries = swipe_history_fixture(cx, &view, commands);
-
-    cx.update_window(window, |_, window, cx| {
-        window.click("nav-browse-threads", cx);
-        window.render_frame(cx);
-        assert!(window.try_find("thread-browser").is_some());
-        window.click_with_options(
-            "thread-browser",
-            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
-            cx,
-        );
-    })
-    .unwrap();
-    assert!(requests.try_recv().is_err(), "a swipe over an open browser must not navigate the background");
-
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| view.close_browser(window, cx));
-        window.render_frame(cx);
-        window.click_with_options(
-            "pane-root",
-            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
-            cx,
-        );
-    })
-    .unwrap();
-    assert!(requests.try_recv().is_err(), "the swipe arms instead of navigating");
-    settle_swipe_commit(cx);
-    let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
-        panic!("closing the browser must re-arm background swipe navigation");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
-}
-
-#[gpui_kit::test]
 fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

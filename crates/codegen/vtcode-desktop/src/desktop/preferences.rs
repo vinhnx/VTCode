@@ -606,11 +606,6 @@ pub(super) struct Preferences {
     /// Experimental vim-style navigation (`j`/`k`/`g`/`G`/`h`/`l`, `i`, `/`).
     /// Missing values keep existing installs on the default off behavior.
     pub vim_navigation: bool,
-    /// Navigate thread history with a trackpad swipe; off by default.
-    /// Missing values keep swipe disabled. Physical mouse back/forward
-    /// buttons share the swipe event and follow this gate; toolbar buttons
-    /// and keyboard shortcuts bypass it and keep working.
-    pub swipe_navigation: bool,
     pub ui_font_family: Option<String>,
     pub code_font_family: Option<String>,
     pub ui_font_size: Option<u8>,

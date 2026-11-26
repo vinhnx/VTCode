@@ -51,6 +51,13 @@ impl TerminalScreen {
         Self { terminal, parser: Processor::default(), events }
     }
 
+    /// Opt in to OSC 7501 program status: Rio answers support queries and
+    /// emits validated reports plus prompt/reset lifecycle events. Interactive
+    /// shells only; read-only monitors leave parsing off.
+    pub(super) fn enable_program_status(&mut self) {
+        self.terminal.set_program_status_enabled(true);
+    }
+
     pub(super) fn process(&mut self, bytes: &[u8]) -> Vec<RioEvent> {
         self.parser.advance(&mut self.terminal, bytes);
         std::mem::take(&mut *self.events.0.borrow_mut())

@@ -40,7 +40,7 @@ Animation reviewed 2026-11-24 against the
 `gpui-fast 0.1.17` `Animation`/`AnimationExt` and `gpui-base 0.10.0` `Easing`). The three-level choice (mounted
 one-shot → GPUI `Animation`, retargetable target → Base motion, styled control → `motion_tokens()`), one-shot ID and
 replay semantics, interruption/reversal, domain-derived channel ids, reduced-motion endpoints, and "a spinner needs a
-static text cue" are ALREADY PRESENT in `view/motion.rs`, `NavigationMotion`, `swipe_navigation_overlay.rs`,
+static text cue" are ALREADY PRESENT in `view/motion.rs`, `NavigationMotion`, `view/overlays.rs`,
 `components.rs::shimmer_label`, `preferences.rs`, and every spinner call site. `Presence`, `with_spring`,
 `with_animations` and `repeat_synced` stay SKIPPED: no consumer and the recorded decisions stand. APPLIED: both
 opacity wrappers (`FadeInExt`, `NavigationFadeExt`) now delegate to the single `motion::opacity_fade` builder, so the

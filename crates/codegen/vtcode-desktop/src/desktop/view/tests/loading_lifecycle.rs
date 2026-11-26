@@ -43,15 +43,7 @@ fn connecting_status_keeps_the_welcome_greeting_in_place(cx: &mut TestAppContext
             assert_eq!(window.find("welcome-brand-mark").bounds(), mark, "logo stays fixed in Zen={zen}");
             assert_eq!(window.find(prompt_id).bounds(), title);
             assert!(window.try_find("workspace-connecting").is_none());
-            assert!(
-                window
-                    .try_find(if zen {
-                        "welcome-workspace-name"
-                    } else {
-                        "welcome-workspace"
-                    })
-                    .is_some()
-            );
+            assert!(window.try_find("welcome-workspace").is_some());
         }
     })
     .unwrap();

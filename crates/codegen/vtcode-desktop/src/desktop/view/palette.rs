@@ -181,11 +181,8 @@ impl DesktopView {
         groups.push((
             rust_i18n::t!("app.palette.sections.view").to_string(),
             vec![
+                suggested_shortcut(shortcuts::CommandId::GoHome, &self.preferences.shortcuts),
                 command(rust_i18n::t!(i18n::BROWSER_BROWSE_THREADS).to_string(), PaletteAction::BrowseThreads),
-                command(
-                    rust_i18n::t!(i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR).to_string(),
-                    PaletteAction::ToggleInspector,
-                ),
                 command(rust_i18n::t!("app.palette.command.toggle_zen_mode").to_string(), PaletteAction::ToggleZenMode),
                 command(
                     if self.theme_mode == ThemeMode::Light {
@@ -195,6 +192,15 @@ impl DesktopView {
                     },
                     PaletteAction::ToggleTheme,
                 ),
+                suggested_shortcut(shortcuts::CommandId::Sidebar, &self.preferences.shortcuts),
+                command(
+                    rust_i18n::t!(i18n::PALETTE_COMMAND_TOGGLE_INSPECTOR).to_string(),
+                    PaletteAction::ToggleInspector,
+                ),
+                suggested_shortcut(shortcuts::CommandId::StatusBar, &self.preferences.shortcuts),
+                suggested_shortcut(shortcuts::CommandId::PromptHistory, &self.preferences.shortcuts),
+                suggested_shortcut(shortcuts::CommandId::NavigateBack, &self.preferences.shortcuts),
+                suggested_shortcut(shortcuts::CommandId::NavigateForward, &self.preferences.shortcuts),
                 {
                     // English literal until full translations ship (see the
                     // session-group precedent above).
@@ -230,23 +236,38 @@ impl DesktopView {
         ));
         groups.push((
             rust_i18n::t!("app.settings.search.group_settings").to_string(),
-            vec![{
-                let mut entry = command(
-                    settings::SettingsTab::Shortcuts.label(),
-                    PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts),
-                );
-                entry.description = Some(rust_i18n::t!("app.shortcuts.group_label").to_string().into());
-                entry.keywords = settings::SettingsTab::Shortcuts
-                    .search_keywords()
-                    .iter()
-                    .map(|keyword| (*keyword).to_string())
-                    .collect();
-                entry
-                    .keywords
-                    .push(rust_i18n::t!("app.settings.search.group_settings").to_string());
-                entry
-            }],
+            vec![
+                {
+                    let mut entry = command(
+                        settings::SettingsTab::Shortcuts.label(),
+                        PaletteAction::SelectSettingsTab(settings::SettingsTab::Shortcuts),
+                    );
+                    entry.description = Some(rust_i18n::t!("app.shortcuts.group_label").to_string().into());
+                    entry.keywords = settings::SettingsTab::Shortcuts
+                        .search_keywords()
+                        .iter()
+                        .map(|keyword| (*keyword).to_string())
+                        .collect();
+                    entry
+                        .keywords
+                        .push(rust_i18n::t!("app.settings.search.group_settings").to_string());
+                    entry
+                },
+                suggested_shortcut(shortcuts::CommandId::SettingsSearch, &self.preferences.shortcuts),
+            ],
         ));
+        if self.workspace.is_some() {
+            let mut workspace_rows = vec![
+                suggested_shortcut(shortcuts::CommandId::WorkspaceFiles, &self.preferences.shortcuts),
+                suggested_shortcut(shortcuts::CommandId::RefreshWorkspace, &self.preferences.shortcuts),
+                suggested_shortcut(shortcuts::CommandId::Utilities, &self.preferences.shortcuts),
+            ];
+            if self.backend.is_some() && self.service_info.is_some() {
+                workspace_rows
+                    .push(suggested_shortcut(shortcuts::CommandId::WorkspaceReview, &self.preferences.shortcuts));
+            }
+            groups.push((rust_i18n::t!(i18n::WORKSPACE_SECTION).to_string(), workspace_rows));
+        }
         if let Some(session_id) = self.selected_session_id.clone()
             && self.has_searchable_conversation_content()
         {
@@ -912,6 +933,26 @@ pub(super) fn command(label: impl Into<String>, action: PaletteAction) -> Palett
         shared_keywords: Vec::new(),
         action,
     }
+}
+
+/// Suggested ⌘K row for a configurable command. The label and description
+/// come from the shortcut table, and the `DeepLink::Command` action inherits
+/// the command's badge through `palette_action_command_id`, so a suggested
+/// row can never imply a chord that runs something else.
+fn suggested_shortcut(
+    id: shortcuts::CommandId,
+    overrides: &std::collections::BTreeMap<String, String>,
+) -> PaletteCommand {
+    let shortcut = shortcuts::lookup(id);
+    let link = deeplinks::DeepLink::Command(id);
+    let mut entry = command(shortcut.label(), PaletteAction::OpenDeepLink(Box::new(link.clone())));
+    entry.description = Some(shortcut.description().into());
+    entry.keywords = vec![id.as_str().to_string(), link.path().unwrap_or_default()];
+    let staged = shortcuts::staged_value(overrides, shortcut);
+    if !staged.is_empty() {
+        entry.keywords.push(staged.to_string());
+    }
+    entry
 }
 
 /// Shield mode for permission-picker rows (Commands rows use icons instead).

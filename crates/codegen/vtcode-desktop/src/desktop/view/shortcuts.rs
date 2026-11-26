@@ -47,10 +47,12 @@ pub(super) enum CommandId {
     QueueBatched,
     PromptHistory,
     EditQueue,
+    BrowseThreads,
+    GoHome,
 }
 
 impl CommandId {
-    pub(super) const ALL: [Self; 34] = [
+    pub(super) const ALL: [Self; 36] = [
         Self::Commands,
         Self::ConversationSearch,
         Self::NewSession,
@@ -85,6 +87,8 @@ impl CommandId {
         Self::QueueBatched,
         Self::PromptHistory,
         Self::EditQueue,
+        Self::BrowseThreads,
+        Self::GoHome,
     ];
 
     pub(super) const fn as_str(self) -> &'static str {
@@ -123,6 +127,8 @@ impl CommandId {
             Self::QueueBatched => "queue_batched",
             Self::PromptHistory => "prompt_history",
             Self::EditQueue => "edit_queue",
+            Self::BrowseThreads => "browse_threads",
+            Self::GoHome => "go_home",
         }
     }
 
@@ -171,6 +177,17 @@ impl ShortcutCommand {
     }
 }
 
+/// Static table entry for one command id. Every id has a row by construction;
+/// the pinned table test in `shortcuts::tests` keeps that invariant honest, so
+/// callers can use the first row only as an unreachable fallback instead of
+/// panicking on a lookup that cannot fail.
+pub(super) fn lookup(id: CommandId) -> &'static ShortcutCommand {
+    let fallback = match &COMMANDS {
+        [first, ..] => first,
+    };
+    COMMANDS.iter().find(|command| command.id == id).unwrap_or(fallback)
+}
+
 pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
     match id {
         CommandId::Commands => Box::new(OpenCommandPalette),
@@ -207,6 +224,8 @@ pub(super) fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
         CommandId::QueueBatched => Box::new(QueueBatched),
         CommandId::PromptHistory => Box::new(OpenPromptHistory),
         CommandId::EditQueue => Box::new(TakeLatestQueued),
+        CommandId::BrowseThreads => Box::new(OpenThreadBrowser),
+        CommandId::GoHome => Box::new(GoHome),
     }
 }
 

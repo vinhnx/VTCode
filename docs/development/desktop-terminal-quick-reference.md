@@ -31,3 +31,4 @@ One login shell per workspace, bottom panel. See the [full guide](desktop-termin
 | Panel height | 72–600px, persisted |
 | Drain batch | 64 PTY events, 256 view events |
 | Clipboard escape (OSC-52) | Denied both directions |
+| Program status (OSC 7501) | 64 records; most urgent state in the header tab |

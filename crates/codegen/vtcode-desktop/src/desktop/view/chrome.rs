@@ -262,7 +262,7 @@ impl DesktopView {
                                                         })
                                                         .child(navigation_label(
                                                             label,
-                                                            IconName::MessageSquare,
+                                                            IconName::MessagesSquare,
                                                             selected,
                                                             session_primary,
                                                         ))
@@ -417,28 +417,12 @@ impl DesktopView {
     }
 
     /// Back/Forward pair shared by the normal toolbar and the zen floating
-    /// chrome. IDs, labels, pending/swipe cues, disabled state, and actions
-    /// stay identical so switching modes never changes their behavior.
-    ///
-    /// The armed-swipe highlight is surface-aware: the toolbar supplies a
-    /// raised fill for its rail surface, while the zen pill supplies its hover
-    /// fill because a popover-on-popover highlight would be invisible.
-    fn render_navigation_buttons(
-        &self,
-        cue_background: gpui_kit::Hsla,
-        cue_foreground: gpui_kit::Hsla,
-    ) -> impl IntoElement {
+    /// chrome. IDs, labels, pending cues, disabled state, and actions stay
+    /// identical so switching modes never changes their behavior.
+    fn render_navigation_buttons(&self) -> impl IntoElement {
         let pending_direction = self.pending_navigation_direction();
         let pending_back = pending_direction == Some(NavigationDirection::Back);
         let pending_forward = pending_direction == Some(NavigationDirection::Forward);
-        // Scroll-gesture cue: lights the arrow a sustained horizontal scroll
-        // is about to fire. Gated render-side so a stale gesture can never
-        // advertise a blocked navigation (overlay opened mid-swipe, pending
-        // transition). The caller owns the color choice for its surface.
-        let swipe_cue = self
-            .swipe_scroll
-            .armed()
-            .filter(|direction| self.swipe_navigation_allowed() && self.swipe_direction_available(*direction));
         div()
             .flex()
             .items_center()
@@ -453,11 +437,8 @@ impl DesktopView {
                     .icon(IconName::ArrowLeft)
                     .small()
                     .loading(pending_back)
-                    .when(swipe_cue == Some(NavigationDirection::Back), |button| {
-                        button.bg(cue_background).text_color(cue_foreground)
-                    })
                     .tooltip_with_action(
-                        rust_i18n::t!("app.navigation.back_swipe").to_string(),
+                        rust_i18n::t!("app.navigation.back").to_string(),
                         &NavigateBack,
                         Some(key_context::DESKTOP),
                     )
@@ -474,11 +455,8 @@ impl DesktopView {
                     .icon(IconName::ArrowRight)
                     .small()
                     .loading(pending_forward)
-                    .when(swipe_cue == Some(NavigationDirection::Forward), |button| {
-                        button.bg(cue_background).text_color(cue_foreground)
-                    })
                     .tooltip_with_action(
-                        rust_i18n::t!("app.navigation.forward_swipe").to_string(),
+                        rust_i18n::t!("app.navigation.forward").to_string(),
                         &NavigateForward,
                         Some(key_context::DESKTOP),
                     )
@@ -492,10 +470,6 @@ impl DesktopView {
     pub(super) fn render_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let workspace_foreground = theme.colors.foreground;
-        // The rail surface is a resting panel fill, so the armed-swipe cue uses
-        // the raised popover fill to stand out.
-        let swipe_cue_background = theme.colors.popover;
-        let swipe_cue_foreground = theme.colors.foreground;
         // The toolbar is chrome, not content: in translucent mode it floats
         // fully transparent on the window vibrancy instead of painting a
         // band over it (see `toolbar_chrome`).
@@ -551,7 +525,7 @@ impl DesktopView {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
+                        .child(self.render_navigation_buttons())
                         .child(div().text_sm().font_semibold().child(app::NAME))
                         .when(show_details, |row| {
                             row.child(
@@ -645,10 +619,6 @@ impl DesktopView {
         const FLOATING_TRAILING_INSET: f32 = 15.;
 
         let colors = cx.theme().colors;
-        // The pill itself is a raised popover surface: use the hover fill for
-        // the armed cue so the highlight is visible against it.
-        let swipe_cue_background = colors.accent;
-        let swipe_cue_foreground = colors.accent_foreground;
         div()
             .absolute()
             .top(px(FLOATING_TOP_INSET))
@@ -664,7 +634,8 @@ impl DesktopView {
             .fade_in("zen-toggle-float", cx.theme())
             .child(self.render_go_home_button(true))
             .child(self.render_browse_threads_button(cx))
-            .child(self.render_navigation_buttons(swipe_cue_background, swipe_cue_foreground))
+            .child(self.render_utilities_button(cx))
+            .child(self.render_navigation_buttons())
             .child(zen_mode_toggle(true, None, &self.focus_handle))
     }
 
