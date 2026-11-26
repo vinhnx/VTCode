@@ -275,6 +275,12 @@ run_release_contract_tests() {
 		print_error "Release-assets contract tests failed."
 		failed=1
 	fi
+	if bash scripts/tests/test_install_checksum.sh; then
+		print_success "Installer checksum contract tests passed."
+	else
+		print_error "Installer checksum contract tests failed."
+		failed=1
+	fi
 	if [ "$failed" -eq 0 ]; then
 		print_success "Release contract tests passed."
 		return 0

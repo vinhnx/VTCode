@@ -31,6 +31,8 @@ WITH_DESKTOP_EXPLICIT=0
 DESKTOP_APP_NAME="VT Code.app"
 DESKTOP_INSTALL_DIR="${DESKTOP_INSTALL_DIR:-}"
 DESKTOP_NEEDS_SUDO=0
+# Bound checksum metadata like the native updater (src/updater/download.rs).
+MAX_CHECKSUM_BYTES=65536
 # Set by main() before the EXIT trap is installed. The trap handler cannot use
 # main()'s locals: they are unset by the time EXIT fires.
 VTCODE_WORK_DIR=""
@@ -272,52 +274,70 @@ download_binary() {
     fi
 }
 
-# Verify checksum if available
-verify_checksum() {
-    local binary_file="$1"
-    local release_tag="$2"
-    local release_filename="${3:-}"
-    local strict="${4:-0}"
+# Extract the expected SHA-256 digest of `archive_name` from a downloaded
+# checksum file. Mirrors src/updater/download.rs::parse_checksum_metadata:
+# a per-archive sidecar may hold one bare digest, named records must match the
+# exact archive filename, and conflicting or malformed records make the file
+# unusable. Prints the lower-case digest on success; fails closed otherwise.
+checksum_digest_from_metadata() {
+    local metadata_file="$1" archive_name="$2" sidecar="$3"
+    awk -v want="$archive_name" -v sidecar="$sidecar" '
+    NF == 0 { next }
+    {
+        lines++; digest = $1
+        if (length(digest) != 64 || digest !~ /^[0-9a-fA-F]+$/) { bad = 1; next }
+        if (NF == 1) { if (!sidecar || lines != 1) bad = 1; bare = tolower(digest); next }
+        if (NF != 2) { bad = 1; next }
+        name = $NF; sub(/^\*/, "", name)
+        if (name != want) { other++; next }
+        if (found && tolower(digest) != expected) bad = 1
+        expected = tolower(digest); found = 1
+    }
+    END {
+        if (bad || lines == 0) exit 1
+        if (bare != "") { if (lines != 1 || found) exit 1; print bare; exit }
+        if ((sidecar && other > 0) || !found) exit 1
+        print expected
+    }
+    ' "$metadata_file"
+}
 
+# Fail-closed archive verification for both the CLI archive and the desktop
+# ZIP; see docs/SECURITY.md ("Self-update verification").
+verify_checksum() {
+    local binary_file="$1" release_tag="$2"
+    local archive_name="${3:-$(basename "$binary_file")}"
     log_info "Verifying binary integrity..."
 
-    local basename_file
-    if [[ -n "$release_filename" ]]; then
-        basename_file="$release_filename"
-    else
-        basename_file=$(basename "$binary_file")
-    fi
+    # Preference order matches the native updater: per-archive sidecar, the
+    # legacy extension-stripped sidecar, then the aggregate manifest.
+    local legacy_name="${archive_name%.tar.gz}"
+    [[ "$legacy_name" == "$archive_name" ]] && legacy_name="${archive_name%.zip}"
+    local -a candidates=("${archive_name}.sha256")
+    [[ "$legacy_name" == "$archive_name" ]] || candidates+=("${legacy_name}.sha256")
+    candidates+=("checksums.txt")
 
-    local temp_checksums
+    local temp_checksums expected_checksum="" asset sidecar size checksum_url
     temp_checksums=$(mktemp)
-
-    # Try to download checksums.txt first (aggregated file from release)
-    local checksums_url="${GITHUB_RELEASES}/${release_tag}/checksums.txt"
-    local expected_checksum=""
-
-    if curl -fsSL -o "$temp_checksums" "$checksums_url" 2>/dev/null; then
-        # checksums.txt format: <hash>  <filename> (two spaces, from sha256sum/shasum)
-        # Use grep with fixed string match and extract the hash (first field)
-        expected_checksum=$(grep -F "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' | head -n1 || true)
-    fi
-
-    # If not found in checksums.txt, try individual .sha256 file (backwards compat)
-    if [[ -z "$expected_checksum" ]]; then
-        local sha_url="${GITHUB_RELEASES}/${release_tag}/${basename_file%.tar.gz}.sha256"
-        if curl -fsSL -o "$temp_checksums" "$sha_url" 2>/dev/null; then
-            expected_checksum=$(awk '{print $1}' "$temp_checksums" | head -n1)
+    for asset in "${candidates[@]}"; do
+        sidecar=1; [[ "$asset" == "checksums.txt" ]] && sidecar=0
+        expected_checksum=""
+        checksum_url="${GITHUB_RELEASES}/${release_tag}/${asset}"
+        if curl -fsSL --max-filesize "$MAX_CHECKSUM_BYTES" -o "$temp_checksums" "$checksum_url" 2>/dev/null; then
+            size=$(wc -c <"$temp_checksums" | tr -d '[:space:]')
+            if ((size <= MAX_CHECKSUM_BYTES)); then
+                expected_checksum=$(checksum_digest_from_metadata "$temp_checksums" "$archive_name" "$sidecar") || expected_checksum=""
+            fi
         fi
+        [[ -z "$expected_checksum" ]] || break
+    done
+    rm -f "$temp_checksums"
+
+    if [[ -z "$expected_checksum" ]]; then
+        log_error "Checksum not found for $archive_name; refusing to install it unverified"
+        return 1
     fi
 
-    rm -f "$temp_checksums"
-    
-    if [[ -z "$expected_checksum" ]]; then
-        [[ "$strict" -eq 1 ]] && log_error "Checksum not found for $basename_file; refusing to install it unverified" && return 1
-        log_warning "Checksum not found for $basename_file, skipping verification"
-        return 0
-    fi
-    
-    # Compute actual checksum
     local actual_checksum=""
     if command -v sha256sum &> /dev/null; then
         actual_checksum=$(sha256sum "$binary_file" | awk '{print $1}')
@@ -326,18 +346,18 @@ verify_checksum() {
     elif command -v sha256 &> /dev/null; then
         actual_checksum=$(sha256 -q "$binary_file")
     else
-        [[ "$strict" -eq 1 ]] && log_error "No checksum tool (sha256sum/shasum/sha256) found; refusing to install unverified" && return 1
-        log_warning "No checksum tool (sha256sum/shasum/sha256) found, skipping verification"
-        return 0
+        log_error "No checksum tool (sha256sum/shasum/sha256) found; refusing to install unverified"
+        return 1
     fi
-    
+    # PowerShell's Get-FileHash emits upper case; normalize like the native updater.
+    actual_checksum=$(printf '%s' "$actual_checksum" | tr '[:upper:]' '[:lower:]')
+
     if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-        log_error "Checksum mismatch for $basename_file!"
+        log_error "Checksum mismatch for $archive_name!"
         log_error "Expected: $expected_checksum"
         log_error "Got:      $actual_checksum"
-        exit 1
+        return 1
     fi
-    
     log_success "Checksum verified: $expected_checksum"
 }
 
@@ -526,11 +546,7 @@ install_desktop_release_asset() {
         log_error "Failed to download the desktop app ($asset_name)"
         return 1
     fi
-    # Subshell: verify_checksum exits on mismatch instead of returning. Strict
-    # (4th arg): a missing checksum or checksum tool fails instead of warning.
-    if ! (verify_checksum "$archive_file" "$release_tag" "$asset_name" 1); then
-        return 1
-    fi
+    verify_checksum "$archive_file" "$release_tag" "$asset_name" || return 1
 
     local extract_dir="$work_dir/desktop-extract"
     # Start clean: a shared work dir may hold a previous extraction whose
@@ -818,8 +834,8 @@ main() {
     download_binary "$download_url" "$archive_file"
     log_success "Downloaded successfully"
 
-    # Verify checksum
-    verify_checksum "$archive_file" "$release_tag" "$(basename "$download_url")"
+    # Verify checksum (fail closed: missing metadata or no hashing tool aborts).
+    verify_checksum "$archive_file" "$release_tag" "$(basename "$download_url")" || exit 1
 
     # Extract binary
     extract_binary "$archive_file" "$platform"
