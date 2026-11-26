@@ -12,6 +12,8 @@ const TERMINAL_CTA_LABEL: &str = "Monitor in bottom terminal";
 /// unchanged. A single dashed stroke replaces the old loop of up to 1024
 /// filled quads built during paint, and does not truncate rows wider than
 /// 3072 px. The half-pixel offset keeps the 1 px stroke pixel-aligned.
+/// Collapsed bounds tessellate to an empty path that paints nothing; a failed
+/// build degrades the same way instead of panicking inside prepaint.
 fn dotted_rule_path(bounds: gpui_kit::Bounds<Pixels>) -> Option<gpui_kit::Path<Pixels>> {
     let mut builder = gpui_kit::PathBuilder::stroke(px(1.0)).dash_array(&[px(1.0), px(2.0)]);
     let y = bounds.origin.y + px(0.5);
@@ -342,6 +344,23 @@ mod tests {
             "the half-pixel stroke stays on the resolved row: {:?}",
             short_path.bounds
         );
+    }
+
+    #[test]
+    fn dotted_rule_degenerate_bounds_never_tessellate_a_wide_rule() {
+        // A path is built in prepaint from resolved bounds, which can collapse
+        // to zero width before layout settles. Asymmetric boundary widths:
+        // pinned lyon tessellates zero width to an empty path and a sub-pixel
+        // width to a real narrow path; neither may become a stray wide rule.
+        for size in [size(px(0.), px(1.)), size(px(0.5), px(1.))] {
+            let bounds = gpui_kit::Bounds { origin: point(px(13.), px(7.)), size };
+            let path = dotted_rule_path(bounds).expect("a narrow rule still tessellates");
+            assert!(
+                path.bounds.size.width <= px(1.),
+                "a collapsed rule must not tessellate into a wide shape: {:?}",
+                path.bounds
+            );
+        }
     }
 
     #[test]

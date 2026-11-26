@@ -212,6 +212,41 @@ is a sibling, not a child). Re-verify: `cargo fmt --all -- --check`,
 `cargo nextest run --locked -p vtcode-desktop` (1916/1916 passed, 1 skipped),
 `./scripts/check-dev.sh --changed` (all checks passed).
 
+Painting reviewed 2026-11-26 against the
+[GPUI Kit paint guide](https://gpui-kit.com/docs/paint/) (site v0.11.0,
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adapted; claims
+re-verified against pinned `gpui-pre 0.3.12` `canvas`/`PathBuilder` and
+`gpui-fast 0.1.17` window painting, plus the vendored `gpui-component 0.10.0`
+chart sources). ALREADY PRESENT: the only first-party painting paths are
+`view/transcript_activity.rs::filename_dotted_underline`, which uses
+`canvas(prepaint, paint)` to build one 1 px dashed `Path<Pixels>` from resolved
+window bounds in prepaint and passes it, owned, to a paint callback that only
+calls `paint_path`, and `view/terminal_panel.rs::TerminalOriginProbe`, the sole
+custom `Element`, which stays paint-free and records bounds into its sink in
+prepaint without `cx.notify()`. The phase choice, one-directional state flow,
+non-zero window-space origin, half-pixel alignment and `build().ok()` failure
+handling are pinned by
+`transcript_activity.rs::tests::dotted_rule_prepaint_builds_a_full_width_half_pixel_path`.
+The guide's "avoid unnecessary tessellation" point was already applied on
+2026-11-25 through the Elements review (commit `03d1d4694`): the underline used
+to emit up to 1024 `paint_quad`s during paint and now tessellates one dashed
+path per frame. Keyed-window-state path caching stays SKIPPED (KISS): one
+dashed path is already cheap, it carries absolute window coordinates that
+change on scroll, and a second owner plus shape key would add complexity with
+no measured win. The three ownership choices are N/A in first-party code: no
+interactive drawing, no retained geometry, no chart hover; the other canvas
+calls live in vendored upstream chart/attachment code and must not diverge
+from the re-vendor contract. Bounds do not automatically clip, but this path
+is built from `bounds.left()` to `bounds.right()` and its test asserts
+containment, so no `with_content_mask` is needed; a painted path is decoration
+inside an already-accessible button, so no separate hitbox or accessibility
+node is warranted. APPLIED 2026-11-26:
+`dotted_rule_degenerate_bounds_never_tessellate_a_wide_rule` pins the guide's
+"do not assume arbitrary geometry tessellates" case with asymmetric zero and
+sub-pixel widths: pinned lyon returns an empty `Path` for zero width (paints
+nothing) and a real narrow path at sub-pixel width, so neither can produce a
+stray wide rule or a panic.
+
 The supplied VT Code concept guides the design: quiet navigation,
 conversation-first hierarchy, recessed inspector surfaces, compact native actions,
 and a branded composer. Reuse behavior without replacing the existing runtime,
