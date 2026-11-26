@@ -65,7 +65,7 @@ const TERMINAL_CONTROL_REPLACEMENT: char = '\u{FFFD}';
 fn is_bidi_control(character: char) -> bool {
     matches!(
         character,
-        '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
     )
 }
 
@@ -402,6 +402,8 @@ mod tests {
         assert_eq!(sanitize_terminal_text("ui://\u{202e}evil/app", 64), "ui://�evil/app");
         assert_eq!(sanitize_terminal_text("a\u{2066}b\u{2069}c", 64), "a�b�c");
         assert_eq!(sanitize_terminal_text("x\u{200e}y\u{200f}z", 64), "x�y�z");
+        // Arabic Letter Mark is an invisible directional mark too.
+        assert_eq!(sanitize_terminal_text("a\u{061c}b", 64), "a�b");
         // Zero-width joiners keep emoji sequences intact.
         assert_eq!(sanitize_terminal_text("fam 👨\u{200d}👩\u{200d}👧 ok", 64), "fam 👨\u{200d}👩\u{200d}👧 ok");
     }
