@@ -152,7 +152,7 @@ impl SearchableListItem for UiLanguageOption {
     }
 
     fn render(&self, _: &mut gpui_kit::Window, _: &mut gpui_kit::App) -> impl gpui_kit::IntoElement {
-        super::accessible_select_option(format!("language-option-{}", self.0.locale()), self.title())
+        super::accessible_select_option("language-option", self.0.locale(), self.title())
     }
 
     fn value(&self) -> &Self::Value {

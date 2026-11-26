@@ -12,7 +12,7 @@ fn file_destination_dropdown_click_persists_and_relaunch_applies_it(cx: &mut Tes
         scroll_settings_into_view(window, "file-open-destination-select", cx);
         window.within("file-open-destination-select").click("input", cx);
         window.render_frame(cx);
-        window.click("destination-option-system", cx);
+        window.click(option_element_id("destination-option", "system"), cx);
     })
     .unwrap();
     cx.run_until_parked();

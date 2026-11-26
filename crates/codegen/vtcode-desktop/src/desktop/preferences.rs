@@ -330,7 +330,7 @@ impl SearchableListItem for FileDestinationOption {
     }
 
     fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
-        super::accessible_select_option(format!("destination-option-{}", self.0.id()), self.title())
+        super::accessible_select_option("destination-option", self.0.id(), self.title())
     }
 
     fn value(&self) -> &Self::Value {
@@ -435,7 +435,7 @@ impl SearchableListItem for CliTerminalOption {
     }
 
     fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
-        super::accessible_select_option(format!("terminal-option-{}", self.0.id()), self.title())
+        super::accessible_select_option("terminal-option", self.0.id(), self.title())
     }
 
     fn value(&self) -> &Self::Value {
@@ -520,7 +520,7 @@ impl SearchableListItem for TurnCompletionModeOption {
     }
 
     fn render(&self, _: &mut gpui_kit::Window, _: &mut App) -> impl gpui_kit::IntoElement {
-        super::accessible_select_option(format!("notification-mode-option-{}", self.0.id()), self.title())
+        super::accessible_select_option("notification-mode-option", self.0.id(), self.title())
     }
 
     fn value(&self) -> &Self::Value {

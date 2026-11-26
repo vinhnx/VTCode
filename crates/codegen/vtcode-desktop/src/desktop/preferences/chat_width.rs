@@ -85,7 +85,7 @@ impl SearchableListItem for ChatWidthOption {
     }
 
     fn render(&self, _: &mut Window, _: &mut App) -> impl gpui_kit::IntoElement {
-        super::super::accessible_select_option(format!("chat-width-option-{}", self.0.id()), self.title())
+        super::super::accessible_select_option("chat-width-option", self.0.id(), self.title())
     }
 
     fn value(&self) -> &Self::Value {

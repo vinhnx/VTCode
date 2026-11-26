@@ -346,8 +346,8 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
         assert!(select.read(cx).focus_handle(cx).is_focused(window), "the enum picker receives initial focus");
         window.within("cli-config-option-select").click("input", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("config-option-auto").label(), Some("auto"));
-        assert_eq!(window.find("config-option-fast").label(), Some("fast"));
+        assert_eq!(window.find(option_element_id("config-option", "auto")).label(), Some("auto"));
+        assert_eq!(window.find(option_element_id("config-option", "fast")).label(), Some("fast"));
         window.press("down", cx);
         window.press("enter", cx);
         window.render_frame(cx);

@@ -27,6 +27,7 @@ pub(super) use super::{
     workspace_picker_options,
 };
 pub(super) use crate::desktop::files::{ExternalEditor, FileEntry};
+pub(super) use crate::desktop::option_element_id;
 pub(super) use crate::desktop::preferences::{CliTerminal, FileOpenDestination};
 pub(super) use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 pub(super) use crate::desktop::transcript::TranscriptItem;
@@ -833,6 +834,7 @@ mod running_confirm;
 mod search_config;
 mod search_config_conversation;
 mod secret_store;
+mod select_option_identity;
 mod service_navigation;
 mod session_link;
 mod session_navigation;
