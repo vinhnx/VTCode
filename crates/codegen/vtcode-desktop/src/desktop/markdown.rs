@@ -442,6 +442,12 @@ pub(super) fn render_selectable_output_text(id: impl Into<gpui_kit::ElementId>, 
 
 fn harden_transcript_text_view(text_view: TextView) -> TextView {
     text_view
+        // Conversation prose is selectable, but the surrounding transcript row
+        // also responds to clicks. An I-beam on hover would read as an editing
+        // field and a pointing hand would promise navigation over every word:
+        // keep the arrow over text, links, and in-progress drags keep their own
+        // cursors (pinned Kit `TextView` contract, CC BY 4.0).
+        .cursor_default()
         // Shared by the Markdown and HTML transcript paths so conversation
         // text and app previews keep the same vertical rhythm.
         .line_height(relative(TRANSCRIPT_LINE_HEIGHT))

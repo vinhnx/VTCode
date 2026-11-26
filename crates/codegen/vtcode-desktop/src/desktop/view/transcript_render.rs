@@ -397,10 +397,18 @@ impl DesktopView {
             .justify_center()
             // Clicking a row anchors the keyboard highlight as position
             // memory (and reveals its actions); the row is already visible,
-            // so no scroll is needed. Child buttons keep their own cursors,
-            // so the row's control-free area advertises the pointing hand.
+            // so no scroll is needed. Child buttons keep their own cursors and
+            // selectable prose keeps the text cursor, so the remaining
+            // control-free area advertises the pointing hand.
             .cursor_pointer()
-            .on_click(cx.listener(move |view, _, _, cx| {
+            .on_click(cx.listener(move |view, _, window, cx| {
+                // Releasing a text-selection drag or double-clicking a word also
+                // produces a click on this row. The prose is selectable, so
+                // yield to the selection instead of moving the keyboard anchor
+                // (pinned Kit `TextSelection` contract, CC BY 4.0).
+                if gpui_kit::base::TextSelection::has_selection(window, cx) {
+                    return;
+                }
                 view.keyboard_focused_message = Some(clicked_id.clone());
                 cx.notify();
             }))

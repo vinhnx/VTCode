@@ -137,6 +137,29 @@ participant pattern to the one real gap: the inspector output body now renders t
 the compact transcript excerpt stays plain (its row owns click-to-expand and a full-output copy button). Pinned
 by `markdown/tests.rs::captured_output_text_selects_and_copies_from_a_drag`.
 
+TextSystem reviewed 2026-11-26 against the
+[GPUI Kit TextSystem guide](https://gpui-kit.com/docs/text-system/) (site v0.11.0, pinned to `gpui-pre` 0.3.14;
+VT Code pins `gpui-kit` 0.10.0 / `gpui-pre` 0.3.12, so every claim was re-checked against
+`gpui-pre-0.3.12/src/text_system.rs` and `gpui-base-0.10.0/src/{element_ext.rs,text/{text_view,state}.rs}`
+before use). ALREADY PRESENT: shaping and wrapping are Kit-owned (`TextView`, `SelectableText`, `Editor`,
+`Diff`); the only first-party font metric is the measured `advance('M')` cell width in
+`view/terminal_panel.rs::terminal_column_width` with a finite/positive guard and a 0.6 fallback, plus the pinned
+`phi` row height and `transcript.remeasure()` on typography changes. The only custom `Element` is the zero-draw
+`TerminalOriginProbe`, whose prepaint records window-space bounds — no first-party shaping to migrate. SKIPPED
+(with pinned-source proof): `shape_line`/`shape_text`/`TextRun`/`ShapedLine` (no custom text element paints glyphs);
+`text!` ids (the recorded a11y pattern is domain-id'd wrappers with `Role`/`aria_label`, not bare text nodes);
+`keep_text_selection` (no control acts on the window selection — `copy-output` copies the whole capture, and
+terminal selection stays rio-vt-owned); `is_selectable_at` (no custom long-press gesture); `prewarm_fonts` (no
+measured font-cache hitch, and families resolve before the first frame); `with_foreground_ranges` and
+`shape_line_by_hash`/`try_layout_line_by_hash` do not exist in pinned 0.3.12. APPLIED two claims: selectable
+prose on a clickable surface takes the text view's own cursor, so `markdown.rs::harden_transcript_text_view`
+now sets `.cursor_default()` (links keep the pointing hand, I-beam only mid-drag — pinned
+`text/state.rs::shows_text_cursor`); and a click handler on such a surface must yield to a finished selection,
+so `view/transcript_render.rs` checks `TextSelection::has_selection` before moving the keyboard anchor. Pinned by
+`view/tests/transcript_navigation.rs::transcript_selection_drag_does_not_anchor_the_row`, verified to fail with
+the guard removed (`left: Some("select-body")`, `right: None`); the plain-click path stays covered by
+`::transcript_row_click_anchors_highlight_without_moving_the_viewport`.
+
 Base text view reviewed 2026-11-24 against the
 [GPUI Kit TextView guide](https://gpui-kit.com/base/text-view/) (site v0.11.0; the pinned
 [`v0.10.0` page](https://gpui-kit.com/versions/v0.10.0/base/text-view) carries identical prose, re-verified

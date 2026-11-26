@@ -148,6 +148,72 @@ fn transcript_row_click_anchors_highlight_without_moving_the_viewport(cx: &mut T
 }
 
 #[gpui_kit::test]
+fn transcript_selection_drag_does_not_anchor_the_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "select-body".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "alpha beta gamma delta".into(),
+            ));
+        });
+        window.render_frame(cx);
+        let body = window.find("message-body-select-body").bounds();
+        let start = point(body.origin.x + px(2.), body.origin.y + px(10.));
+        let end = point(body.origin.x + px(body.size.width.as_f32() * 0.8), body.origin.y + px(10.));
+        let dispatch = |event: gpui_kit::PlatformInput, window: &mut gpui_kit::Window, cx: &mut gpui_kit::App| {
+            let _ = window.dispatch_event(event, cx);
+        };
+        dispatch(
+            gpui_kit::MouseDownEvent {
+                position: start,
+                button: MouseButton::Left,
+                modifiers: gpui_kit::Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+        dispatch(
+            gpui_kit::MouseMoveEvent {
+                position: end,
+                pressed_button: Some(MouseButton::Left),
+                modifiers: gpui_kit::Modifiers::default(),
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+        dispatch(
+            gpui_kit::MouseUpEvent {
+                position: end,
+                button: MouseButton::Left,
+                modifiers: gpui_kit::Modifiers::default(),
+                click_count: 1,
+            }
+            .to_platform_input(),
+            window,
+            cx,
+        );
+        window.render_frame(cx);
+        assert!(
+            gpui_kit::base::TextSelection::has_selection(window, cx),
+            "dragging over assistant prose must select text"
+        );
+        assert_eq!(
+            view.read(cx).keyboard_focused_message.as_deref(),
+            None,
+            "releasing a selection drag must not move the keyboard anchor"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn scroll_first_button_appears_off_top_and_returns_to_the_first_row(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let scroller = cx.update(|cx| {
