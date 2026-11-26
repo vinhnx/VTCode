@@ -342,14 +342,58 @@ fn recommended_pill_marks_only_the_recommended_row(cx: &mut TestAppContext) {
         assert!(window.try_find("choice-recommended-second").is_none(), "a plain row carries no pill");
         // The visual pill splits off the label, but screen readers still hear
         // the recommendation on the row itself.
-        let first_row = window.find("interaction-question-choice-0");
+        let first_row = window.find("interaction-question-choice-first");
         let first = first_row.label().unwrap_or_default();
         assert!(first.contains("Recommended"), "recommended row announces it: {first}");
-        let second_row = window.find("interaction-question-choice-1");
+        let second_row = window.find("interaction-question-choice-second");
         let second = second_row.label().unwrap_or_default();
         assert!(!second.contains("Recommended"), "plain row stays quiet: {second}");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn wizard_choice_identity_follows_the_choice_id_not_its_slot(cx: &mut TestAppContext) {
+    // Two identical labels under distinct ids: identity must come from the
+    // domain key so keyed row state (hover) cannot follow the wrong choice
+    // when a later step swaps/reorders options (Render / ElementId rule).
+    let (window, view) = open_desktop(cx);
+    let mut interaction = two_step_question();
+    let choices = vec![
+        InteractionChoice {
+            id: "alpha".into(),
+            label: "Same label".into(),
+            description: None,
+            recommended: false,
+        },
+        InteractionChoice {
+            id: "beta".into(),
+            label: "Same label".into(),
+            description: None,
+            recommended: false,
+        },
+    ];
+    interaction.choices = choices.clone();
+    interaction.steps[0].choices = choices;
+    deliver(&view, interaction, cx);
+    focus_panel(&view, window, cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("interaction-question-choice-alpha").is_some());
+        assert!(window.try_find("interaction-question-choice-beta").is_some());
+        assert!(
+            window.try_find("interaction-question-choice-0").is_none()
+                && window.try_find("interaction-question-choice-1").is_none(),
+            "positional ids must not key wizard rows"
+        );
+        window.click("interaction-question-choice-beta", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-choice-beta").selected(), Some(true));
+    })
+    .unwrap();
+    view.update(cx, |view, _| {
+        assert_eq!(view.interaction_choice_ids[0].as_deref(), Some("beta"));
+    });
 }
 
 #[gpui_kit::test]
@@ -616,8 +660,8 @@ fn digit_selects_without_submitting_for_question_steps(cx: &mut TestAppContext) 
     cx.update_window(window, |_, window, cx| {
         window.press("2", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-first").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-second").selected(), Some(true));
     })
     .unwrap();
     assert!(requests.try_recv().is_err(), "selecting a question row never submits");
@@ -649,8 +693,8 @@ fn single_step_question_hides_stepper_and_counter(cx: &mut TestAppContext) {
             }
             // The decision itself still renders: options group plus both rows.
             assert!(window.find("interaction-question-options").visible());
-            assert!(window.find("interaction-question-choice-0").visible());
-            assert!(window.find("interaction-question-choice-1").visible());
+            assert!(window.find("interaction-question-choice-first").visible());
+            assert!(window.find("interaction-question-choice-second").visible());
             assert!(window.find("continue-question").visible());
         })
         .unwrap();
@@ -663,16 +707,16 @@ fn hovering_choice_card_never_selects_or_commits(cx: &mut TestAppContext) {
     deliver(&view, question_interaction(false), cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.hover("interaction-question-choice-1", cx);
+        window.hover("interaction-question-choice-second", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-first").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-second").selected(), Some(false));
         assert!(view.read(cx).pending_interaction_response.is_none(), "hover never submits");
         // Hover leaves the card fully interactive: the same row still selects.
-        window.click("interaction-question-choice-1", cx);
+        window.click("interaction-question-choice-second", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-first").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-second").selected(), Some(true));
     })
     .unwrap();
 }
@@ -765,7 +809,7 @@ fn wizard_header_orders_counter_above_title_above_choices(cx: &mut TestAppContex
         assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 2"));
         let counter = window.find("question-step-counter").bounds();
         let title = window.find("interaction-title-row").bounds();
-        let first_choice = window.find("interaction-question-choice-0").bounds();
+        let first_choice = window.find("interaction-question-choice-first").bounds();
         assert!(
             counter.origin.y < title.origin.y,
             "progress eyebrow sits above the title: counter={counter:?} title={title:?}"

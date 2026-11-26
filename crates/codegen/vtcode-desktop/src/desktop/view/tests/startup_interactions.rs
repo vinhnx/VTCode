@@ -705,7 +705,7 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         let options = window.find("interaction-question-options");
         assert_eq!(options.role(), Some(gpui_kit::Role::RadioGroup));
         assert_eq!(options.label(), Some("Choose a workspace"));
-        let workspace_choice = window.find("interaction-question-choice-0");
+        let workspace_choice = window.find("interaction-question-choice-workspace");
         assert_eq!(workspace_choice.role(), Some(gpui_kit::Role::RadioButton));
         assert_eq!(workspace_choice.selected(), Some(false));
         assert!(window.try_find("previous-question").is_none());
@@ -717,28 +717,28 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
             view.question_answer
                 .update(cx, |input, cx| input.set_value("Original workspace answer", window, cx));
         });
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-workspace", cx);
         window.render_frame(cx);
         assert_eq!(
             view.read(cx).interaction_choice_ids[0].as_deref(),
             Some("workspace"),
             "selecting a radio must update VT Code's controlled interaction state"
         );
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
-        window.click("interaction-question-choice-1", cx);
+        assert_eq!(window.find("interaction-question-choice-workspace").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-another-workspace").selected(), Some(false));
+        window.click("interaction-question-choice-another-workspace", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-workspace").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-another-workspace").selected(), Some(true));
         assert_eq!(
             view.read(cx).interaction_choice_ids[0].as_deref(),
             Some("another-workspace"),
             "selecting another radio must update the controlled interaction state"
         );
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-workspace", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
-        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-workspace").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-another-workspace").selected(), Some(false));
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 2 of 3"));
@@ -750,7 +750,7 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Original workspace answer");
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-workspace").selected(), Some(true));
         view.update(cx, |view, cx| {
             view.question_answer
                 .update(cx, |input, cx| input.set_value("Revised workspace answer", window, cx));
@@ -758,11 +758,11 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Task draft");
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-task", cx);
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 3 of 3"));
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-review", cx);
         window.click("continue-question", cx);
     })
     .unwrap();

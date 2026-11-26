@@ -57,7 +57,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
             });
         });
         window.render_frame(cx);
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-accept", cx);
         window.click("continue-question", cx);
         assert!(requests.try_recv().is_err(), "oversized answers stay local and retryable");
         assert!(view.read(cx).error.as_deref().unwrap().contains("request limit"));
@@ -70,7 +70,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
         assert!(requests.try_recv().is_ok());
         assert!(window.find("interaction-response-status").visible());
         assert_eq!(window.find("continue-question").disabled(), Some(true));
-        assert_eq!(window.find("interaction-question-choice-0").disabled(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-accept").disabled(), Some(true));
         assert_eq!(window.find("cancel-interaction").disabled(), Some(true));
         view.update(cx, |view, cx| {
             view.submit_interaction(vec!["accept".into()], false, window, cx);
@@ -89,7 +89,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
         assert!(requests.try_recv().is_err(), "pending decisions cannot be submitted twice");
         window.render_frame(cx);
         assert_ne!(window.find("continue-question").disabled(), Some(true));
-        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-accept").selected(), Some(true));
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Keep this answer");
         window.click("continue-question", cx);
         let BackendCommand::Request { params, .. } = requests.try_recv().expect("retry response") else {
@@ -109,7 +109,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
                 .update(cx, |input, cx| input.set_value("New answer", window, cx));
         });
         window.render_frame(cx);
-        window.click("interaction-question-choice-0", cx);
+        window.click("interaction-question-choice-accept", cx);
         window.click("continue-question", cx);
         assert!(requests.try_recv().is_ok());
         view.update(cx, |view, cx| {

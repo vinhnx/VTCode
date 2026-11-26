@@ -578,7 +578,12 @@ impl DesktopView {
                 choice_index,
                 self.render_choice_card(
                     ChoiceCard {
-                        element_id: format!("interaction-question-choice-{choice_index}"),
+                        // Element identity follows the choice id, not its slot:
+                        // steps can swap/reorder choices, and keyed row state
+                        // (hover) must follow the choice. Position/digit/bounds
+                        // stay positional by design (aria set position, digit
+                        // shortcut, prepaint bounds) — see `interaction_choice_row`.
+                        element_id: format!("interaction-question-choice-{}", choice.id),
                         choice,
                         position: choice_index + 1,
                         total: step.choices.len(),
