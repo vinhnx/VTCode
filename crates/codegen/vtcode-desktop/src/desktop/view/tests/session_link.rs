@@ -447,7 +447,7 @@ fn windowless_handoff_reopens_a_window_instead_of_dropping(cx: &mut TestAppConte
     let (window, _view) = open_desktop(cx);
     cx.update_window(window, |_, window, _| window.remove_window()).unwrap();
     cx.update(|cx| assert!(cx.windows().is_empty(), "precondition: no live window"));
-    cx.update(|cx| {
+    let reopened = cx.update(|cx| {
         super::super::dispatch_handoff_links(
             cx,
             vec![HandoffLink {
@@ -456,6 +456,19 @@ fn windowless_handoff_reopens_a_window_instead_of_dropping(cx: &mut TestAppConte
             }],
         );
         assert_eq!(cx.windows().len(), 1, "handoff must reopen a window to land on");
+        cx.windows().first().copied().unwrap()
+    });
+    // The reopened window is built inside `dispatch_handoff_links`, so the
+    // test has no view handle from `open_desktop`; resolve it the same way
+    // delivery does and assert the links actually reached it.
+    cx.update(|cx| {
+        let view = reopened
+            .read::<gpui_kit::base::Root, _, _>(cx, |root, cx| {
+                root.read(cx).view().clone().downcast::<DesktopView>().ok()
+            })
+            .unwrap()
+            .expect("reopened window must host a DesktopView");
+        assert!(view.read(cx).error.is_some(), "handoff must reach the reopened window's view");
     });
 }
 
@@ -463,7 +476,7 @@ fn windowless_handoff_reopens_a_window_instead_of_dropping(cx: &mut TestAppConte
 fn warm_handoff_reuses_the_existing_window(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::handoff_url::HandoffLink;
 
-    let (window, _view) = open_desktop(cx);
+    let (window, view) = open_desktop(cx);
     cx.update(|cx| {
         super::super::dispatch_handoff_links(
             cx,
@@ -474,6 +487,9 @@ fn warm_handoff_reuses_the_existing_window(cx: &mut TestAppContext) {
         );
         assert_eq!(cx.windows(), vec![window], "handoff must not duplicate the window");
     });
+    view.update(cx, |view, _| {
+        assert!(view.error.is_some(), "handoff must reach the existing window's view");
+    });
 }
 
 #[gpui_kit::test]
@@ -483,5 +499,54 @@ fn empty_handoff_opens_no_window(cx: &mut TestAppContext) {
     cx.update(|cx| {
         super::super::dispatch_handoff_links(cx, Vec::new());
         assert!(cx.windows().is_empty(), "no links must not spawn a window");
+    });
+}
+
+#[gpui_kit::test]
+fn handoff_targets_the_active_window_when_multiple_are_open(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let (_first, first_view) = open_desktop(cx);
+    let (second, second_view) = open_desktop(cx);
+    cx.update_window(second, |_, window, _| window.activate_window()).unwrap();
+    cx.update(|cx| assert_eq!(cx.active_window(), Some(second)));
+    cx.update(|cx| {
+        super::super::dispatch_handoff_links(
+            cx,
+            vec![HandoffLink {
+                session_id: "linked-session".into(),
+                workspace: PathBuf::from("/missing/workspace"),
+            }],
+        );
+    });
+    second_view.update(cx, |view, _| {
+        assert!(view.error.is_some(), "handoff must land on the active window");
+    });
+    first_view.update(cx, |view, _| {
+        assert!(view.error.is_none(), "the inactive window must stay untouched");
+    });
+}
+
+#[gpui_kit::test]
+fn handoff_after_the_first_window_closed_reaches_the_survivor(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::handoff_url::HandoffLink;
+
+    let (first, first_view) = open_desktop(cx);
+    let (second, second_view) = open_desktop(cx);
+    cx.update_window(first, |_, window, _| window.remove_window()).unwrap();
+    drop(first_view);
+    cx.update(|cx| assert_eq!(cx.windows(), vec![second], "precondition: only the survivor remains"));
+    cx.update(|cx| {
+        super::super::dispatch_handoff_links(
+            cx,
+            vec![HandoffLink {
+                session_id: "linked-session".into(),
+                workspace: PathBuf::from("/missing/workspace"),
+            }],
+        );
+        assert_eq!(cx.windows(), vec![second], "handoff must not reopen over a survivor");
+    });
+    second_view.update(cx, |view, _| {
+        assert!(view.error.is_some(), "a closed first window must not strand the handoff");
     });
 }

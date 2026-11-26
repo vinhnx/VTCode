@@ -138,7 +138,6 @@ pub(super) fn open_or_activate_main_window(
             }
         });
     })?;
-    cx.set_global(MainWindow { view: view.downgrade(), window });
     if zoom_after_open {
         // Fallback when the visible-frame probe failed: macOS ignores
         // WindowBounds::Maximized at creation, so zoom after opening to
