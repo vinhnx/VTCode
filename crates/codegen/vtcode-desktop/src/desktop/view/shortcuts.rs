@@ -242,6 +242,32 @@ pub(super) const EDITOR_CONTEXT_CHORDS: [(&str, CommandId); 3] = [
     ("cmd-]", CommandId::NavigateForward),
 ];
 
+/// Normalized chord for a saved source, or `None` when empty/unparsable.
+/// Keeps override/default collision checks identical to binding validation.
+fn normalized_chord(source: &str) -> Option<String> {
+    if source.is_empty() {
+        return None;
+    }
+    let os = host_operating_system();
+    gpui_kit::Keystroke::parse_with_os(source, os).ok().map(|key| key.unparse(os))
+}
+
+/// A default newly introduced in a later release can collide with a chord a
+/// user already assigned to another command. Their override wins: leave the
+/// new command unbound instead of rejecting the whole table and silently
+/// reverting every customization on launch.
+fn suppressed_default(overrides: &BTreeMap<String, String>, command: &ShortcutCommand) -> bool {
+    if overrides.contains_key(command.id.as_str()) {
+        return false;
+    }
+    let Some(default) = normalized_chord(command.default_binding) else {
+        return false;
+    };
+    overrides
+        .iter()
+        .any(|(id, source)| id != command.id.as_str() && normalized_chord(source).is_some_and(|chord| chord == default))
+}
+
 pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result<Vec<KeyBinding>, String> {
     if overrides.keys().any(|key| CommandId::from_id(key).is_none()) {
         return Err(rust_i18n::t!("app.shortcuts.unknown_action").to_string());
@@ -253,10 +279,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>, cx: &App) -> Result
     COMMANDS
         .iter()
         .map(|command| {
-            let source = overrides
-                .get(command.id.as_str())
-                .map(String::as_str)
-                .unwrap_or(command.default_binding);
+            let source = staged_value(overrides, command);
             let label = command.label();
             if source.is_empty() {
                 return Ok(Vec::new());
@@ -419,8 +442,13 @@ pub(super) fn draft_from(overrides: &BTreeMap<String, String>) -> BTreeMap<Strin
         .collect()
 }
 
-/// Staged binding for one command: the override when present, else the default.
+/// Staged binding for one command: the override when present, else the
+/// default, unless that default collides with a user override (see
+/// [`suppressed_default`]).
 pub(super) fn staged_value<'a>(overrides: &'a BTreeMap<String, String>, command: &ShortcutCommand) -> &'a str {
+    if suppressed_default(overrides, command) {
+        return "";
+    }
     overrides
         .get(command.id.as_str())
         .map(String::as_str)

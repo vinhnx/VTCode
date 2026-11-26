@@ -34,8 +34,19 @@ fn rejects_conflicting_reserved_typing_and_unknown_shortcuts(cx: &mut TestAppCon
             "unbinding Settings removes both its desktop and in-settings bindings"
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())]), cx).is_err());
+        // Two saved overrides sharing a chord still conflict; a saved chord
+        // that only collides with another command's default is reconciled.
+        assert!(
+            bindings(
+                &BTreeMap::from([
+                    ("commands".into(), "cmd-n".into()),
+                    ("new_session".into(), "cmd-n".into()),
+                ]),
+                cx
+            )
+            .is_err()
+        );
         for (action, key) in [
-            ("commands", "cmd-n"),
             ("commands", "cmd-q"),
             ("commands", "k"),
             ("zen_mode", "cmd-shift-z"),
@@ -474,5 +485,24 @@ fn navigation_chords_reach_browse_threads_and_home(cx: &mut TestAppContext) {
         reinstall(&BTreeMap::new(), &BTreeMap::new(), cx);
         assert_chord_resolves_to(cx, "cmd-t", key_context::DESKTOP, &OpenThreadBrowser);
         assert_chord_resolves_to(cx, "cmd-shift-h", key_context::DESKTOP, &GoHome);
+    });
+}
+
+#[gpui_kit::test]
+fn saved_override_suppresses_a_new_default_without_reverting_the_table(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        // A chord that became Browse Threads' default was already assigned to
+        // Workspace Files by the user. The override must win and the rest of
+        // the saved table must stay valid.
+        let overrides = BTreeMap::from([("workspace_files".into(), "cmd-t".into())]);
+        let bound = bindings(&overrides, cx).expect("override/default collision must not reject the table");
+        cx.bind_keys(bound);
+        assert_chord_resolves_to(cx, "cmd-t", key_context::DESKTOP, &OpenWorkspaceFiles);
+        assert_eq!(staged_value(&overrides, lookup(CommandId::BrowseThreads)), "");
+        assert!(draft_from(&overrides)["browse_threads"].is_empty());
+        assert!(
+            stale_shadows(&overrides, &draft_from(&overrides), cx).is_empty(),
+            "reconciliation must not shadow the user's chord on save"
+        );
     });
 }
