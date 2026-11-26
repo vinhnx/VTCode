@@ -1,6 +1,7 @@
 use super::fills::{RAISED_FILL_MAX_STEP, RESTING_FILL_MAX_STEP, filled_surface};
 use super::*;
 use gpui_kit::component::theme::ActiveTheme;
+use gpui_kit::px;
 
 /// The subtle-border contract: opaque, at the hairline floor on the panel
 /// seats it outlines most, and separated from every other fill it can sit on.

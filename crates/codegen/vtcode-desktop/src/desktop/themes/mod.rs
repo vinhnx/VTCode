@@ -13,7 +13,7 @@ use fills::{
     apply_filled_surfaces, apply_unified_hover_surface, filled_surface, hover_surface, primary_state_surface,
 };
 use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
-use gpui_kit::{App, Hsla, Window, px, rems, rgb};
+use gpui_kit::{App, Hsla, Window, rems, rgb};
 use std::collections::HashMap;
 use vtcode_ui::theme::{self, UiThemeColors};
 
