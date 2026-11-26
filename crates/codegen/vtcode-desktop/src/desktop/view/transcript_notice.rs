@@ -261,9 +261,9 @@ impl DesktopView {
 
     /// Body of one callout, always visible in its own row on the title spine.
     /// Collapsed notices show the short lead; the Details CTA reveals the full
-    /// text. Diagnostic evidence keeps its Markdown treatment (fenced blocks
-    /// still read as code); plain notices stay literal so backend backticks
-    /// are never reinterpreted.
+    /// text. Diagnostic evidence and goal objectives keep their Markdown
+    /// treatment; plain notices stay literal so backend backticks are never
+    /// reinterpreted.
     fn render_notice_body(
         &self,
         id: &str,
@@ -324,7 +324,15 @@ impl DesktopView {
             } else {
                 gpui_kit::Role::Status
             })
-            .aria_label(format!("{}: {}", title, entry.text))
+            .aria_label(format!(
+                "{}: {}",
+                title,
+                if entry.markdown {
+                    prepared_markdown(&entry.text).accessible_text
+                } else {
+                    entry.text.clone()
+                }
+            ))
             .w_full()
             .pl(themes::layout::padding::ROW_INSET)
             .pr_0()
@@ -356,12 +364,21 @@ impl DesktopView {
                     .pl(themes::layout::padding::BODY_INSET)
                     .text_size(themes::layout::typography::ROW)
                     .text_color(entry_chrome.body_color)
-                    .child(
+                    .child(if entry.markdown {
+                        render_markdown_with_style(
+                            format!("notice-stack-markdown-{}", entry.id),
+                            entry.text.clone(),
+                            false,
+                            markdown_style(cx).with_foreground(entry_chrome.body_color),
+                        )
+                        .into_any_element()
+                    } else {
                         div()
                             .id(format!("notice-text-{}", entry.id))
                             .test_support()
-                            .child(capitalize_first(entry.text.as_str())),
-                    ),
+                            .child(capitalize_first(entry.text.as_str()))
+                            .into_any_element()
+                    }),
             );
         }
         body.into_any_element()

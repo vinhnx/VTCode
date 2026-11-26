@@ -57,6 +57,9 @@ pub(super) struct NoticePayload {
     pub(super) title: SharedString,
     pub(super) text: SharedString,
     pub(super) severity: NoticeSeverity,
+    /// Goal notices carry Markdown objectives; folded entries keep that
+    /// treatment so raw markers never surface in the expanded stack.
+    pub(super) markdown: bool,
 }
 
 /// Canonical activity-status labels.
@@ -453,6 +456,7 @@ impl Transcript {
                     title: item.title.clone(),
                     text: item.text.clone(),
                     severity: item.notice_severity,
+                    markdown: item.notice_markdown,
                 });
                 head.notice_severity = head.notice_severity.max(item.notice_severity);
                 self.bump_revision();

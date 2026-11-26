@@ -111,7 +111,7 @@ impl DesktopView {
                                         "utilities-goal-objective-view".to_string(),
                                         prepared.markdown,
                                         false,
-                                        markdown_style(cx),
+                                        markdown_style(cx).with_foreground(colors.muted_foreground),
                                     ))
                             })
                             .child(div().text_xs().text_color(colors.muted_foreground).child(format!(

@@ -254,7 +254,7 @@ impl DesktopView {
                             "goal-bar-objective-view".to_string(),
                             prepared.markdown.clone(),
                             false,
-                            markdown_style(cx),
+                            markdown_style(cx).with_foreground(colors.muted_foreground),
                         ))
                     })
                     .when(!self.goal_expanded, |body| body.child(objective)),

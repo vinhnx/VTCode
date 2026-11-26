@@ -567,3 +567,33 @@ fn goal_notice_renders_the_objective_as_markdown(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn folded_goal_notices_keep_markdown_treatment(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.note_goal_transition(Some(&snapshot("**First** objective", GoalState::Active)));
+            view.note_goal_transition(Some(&snapshot("**Second** objective", GoalState::Blocked)));
+        });
+        window.render_frame(cx);
+        let notices: Vec<_> = view
+            .read(cx)
+            .transcript
+            .items()
+            .filter(|item| item.is_notice())
+            .cloned()
+            .collect();
+        assert_eq!(notices.len(), 1, "consecutive goal notices still fold into one callout");
+        assert_eq!(notices[0].notice_count(), 2);
+        let id = notices[0].id.clone();
+        window.click(format!("notice-stack-toggle-{id}"), cx);
+        window.render_frame(cx);
+        for entry in &notices[0].notice_stack {
+            let body = window.find(format!("notice-stack-entry-{}", entry.id));
+            let label = body.label().unwrap();
+            assert!(!label.contains("**"), "folded goal entry strips markdown markers: {label:?}");
+        }
+    })
+    .unwrap();
+}
