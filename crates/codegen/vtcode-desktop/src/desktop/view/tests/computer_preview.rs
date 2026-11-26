@@ -344,8 +344,72 @@ fn session_reset_clears_the_computer_preview_cache(cx: &mut TestAppContext) {
             assert!(view.computer_preview_errors.is_empty());
             assert!(view.computer_preview_expired.is_empty());
             assert!(view.computer_preview_pending.is_empty());
-            assert!(view.computer_preview_task.is_none());
         });
     })
     .unwrap();
+}
+
+/// A screenshot decode detached by `begin_computer_preview` outlives an
+/// intervening session reset; the cleared pending map must reject its result.
+#[gpui_kit::test]
+fn stale_computer_preview_decode_does_not_publish_after_session_reset(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        let _previous = view.computer_preview_pending.insert(
+            "preview-read-1".into(),
+            PendingComputerPreviewRead {
+                request_id: "preview-read-1".into(),
+                item_id: "cua-1".into(),
+                uri: "computer-preview://cua-1".into(),
+            },
+        );
+        view.begin_computer_preview(json!(preview_body()), cx);
+        view.reset_session_state();
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert!(view.computer_preview_bodies.is_empty(), "a late decode must not repopulate a reset session");
+        assert!(view.computer_preview_errors.is_empty());
+    });
+}
+
+/// Screenshots on two different rows can be requested and answered in the
+/// same event batch. Each decode must own its task so neither read is cancelled
+/// by the other taking the owner's task slot.
+#[gpui_kit::test]
+fn concurrent_computer_preview_reads_both_resolve(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let first = preview_body();
+    let mut second = first.clone();
+    second.request_id = "preview-read-2".into();
+    second.uri = "computer-preview://cua-2".into();
+    view.update(cx, |view, cx| {
+        for (request_id, uri) in [
+            ("preview-read-1", "computer-preview://cua-1"),
+            ("preview-read-2", "computer-preview://cua-2"),
+        ] {
+            let _previous = view.computer_preview_pending.insert(
+                request_id.into(),
+                PendingComputerPreviewRead {
+                    request_id: request_id.into(),
+                    item_id: "cua-1".into(),
+                    uri: uri.into(),
+                },
+            );
+        }
+        view.begin_computer_preview(json!(first), cx);
+        view.begin_computer_preview(json!(second), cx);
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert!(view.computer_preview_pending.is_empty(), "both in-flight reads must resolve");
+        assert!(view.computer_preview_bodies.contains_key(&ComputerPreviewBodyKey {
+            item_id: "cua-1".into(),
+            uri: "computer-preview://cua-1".into(),
+        }));
+        assert!(view.computer_preview_bodies.contains_key(&ComputerPreviewBodyKey {
+            item_id: "cua-1".into(),
+            uri: "computer-preview://cua-2".into(),
+        }));
+    });
 }

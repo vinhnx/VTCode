@@ -333,6 +333,71 @@ fn mcp_app_loading_row_shows_while_read_pending(cx: &mut TestAppContext) {
     .unwrap();
 }
 
+/// Two previews on one row are requested and answered back-to-back. A single
+/// retained decode task slot would drop the first handle before its completion
+/// runs, leaving that pending read unresolved forever. Each read owns its task.
+#[gpui_kit::test]
+fn concurrent_mcp_app_reads_both_resolve(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let first = app_body();
+    let mut second = first.clone();
+    second.request_id = "app-read-2".into();
+    second.uri = "ui://demo/second.html".into();
+    view.update(cx, |view, cx| {
+        for (request_id, uri) in [
+            ("app-read-1", "ui://demo/app.html"),
+            ("app-read-2", "ui://demo/second.html"),
+        ] {
+            let _previous = view.mcp_app_pending.insert(
+                request_id.into(),
+                PendingMcpAppRead {
+                    request_id: request_id.into(),
+                    item_id: "app-1".into(),
+                    uri: uri.into(),
+                },
+            );
+        }
+        view.begin_mcp_app_preview(json!(first), cx);
+        view.begin_mcp_app_preview(json!(second), cx);
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert!(view.mcp_app_pending.is_empty(), "both in-flight reads must resolve");
+        assert!(view.mcp_app_bodies.contains_key(&McpAppBodyKey {
+            item_id: "app-1".into(),
+            uri: "ui://demo/app.html".into(),
+        }));
+        assert!(view.mcp_app_bodies.contains_key(&McpAppBodyKey {
+            item_id: "app-1".into(),
+            uri: "ui://demo/second.html".into(),
+        }));
+    });
+}
+
+/// A decode detached by `begin_mcp_app_preview` outlives an intervening
+/// session reset. The cleared pending map must make its late result a no-op.
+#[gpui_kit::test]
+fn stale_mcp_app_decode_does_not_publish_after_session_reset(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        let _previous = view.mcp_app_pending.insert(
+            "app-read-1".into(),
+            PendingMcpAppRead {
+                request_id: "app-read-1".into(),
+                item_id: "app-1".into(),
+                uri: "ui://demo/app.html".into(),
+            },
+        );
+        view.begin_mcp_app_preview(json!(app_body()), cx);
+        view.reset_session_state();
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert!(view.mcp_app_bodies.is_empty(), "a late decode must not repopulate a reset session");
+        assert!(view.mcp_app_errors.is_empty());
+    });
+}
+
 #[gpui_kit::test]
 fn session_reset_clears_the_mcp_app_preview_cache(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -363,7 +428,6 @@ fn session_reset_clears_the_mcp_app_preview_cache(cx: &mut TestAppContext) {
             );
             assert!(view.mcp_app_errors.is_empty());
             assert!(view.mcp_app_pending.is_empty());
-            assert!(view.mcp_app_task.is_none());
         });
     })
     .unwrap();

@@ -156,7 +156,6 @@ impl DesktopView {
         let Some(pending) = self.mcp_app_pending.remove(request_id) else {
             return;
         };
-        self.mcp_app_task = None;
         let key = McpAppBodyKey { item_id: pending.item_id, uri: pending.uri };
         let _previous = self
             .mcp_app_errors
@@ -319,7 +318,11 @@ impl DesktopView {
         let Some(pending) = self.mcp_app_pending.get(&request_id).cloned() else {
             return;
         };
-        self.mcp_app_task = Some(cx.spawn(async move |view, cx| {
+        // Each read is a finite decode, so it owns a detached task instead of
+        // a shared slot: several previews can be in flight at once, and a
+        // newer read must not drop an older handle before it resolves. The
+        // pending map plus the guard below reject results from cleared/old reads.
+        cx.spawn(async move |view, cx| {
             let parsed = cx
                 .background_spawn(async move { serde_json::from_value::<McpAppReadResult>(result) })
                 .await;
@@ -327,7 +330,6 @@ impl DesktopView {
                 if view.mcp_app_pending.get(&request_id) != Some(&pending) {
                     return;
                 }
-                detach_task_slot(&mut view.mcp_app_task);
                 let Ok(page) = parsed else {
                     view.fail_mcp_app_preview(&request_id, cx);
                     return;
@@ -341,6 +343,7 @@ impl DesktopView {
                 let _previous = view.mcp_app_bodies.insert(key, page);
                 cx.notify();
             });
-        }));
+        })
+        .detach();
     }
 }

@@ -808,11 +808,9 @@ impl DesktopView {
         self.retained_submission = None;
         self.prune_attachment_thumbnails();
         self.mcp_app_pending.clear();
-        self.mcp_app_task = None;
         self.mcp_app_bodies.clear();
         self.mcp_app_errors.clear();
         self.computer_preview_pending.clear();
-        self.computer_preview_task = None;
         self.computer_preview_bodies.clear();
         self.computer_preview_errors.clear();
         self.computer_preview_expired.clear();

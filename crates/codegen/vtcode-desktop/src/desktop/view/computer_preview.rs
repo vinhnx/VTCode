@@ -128,7 +128,6 @@ impl DesktopView {
         let Some(pending) = self.computer_preview_pending.remove(request_id) else {
             return;
         };
-        self.computer_preview_task = None;
         let key = ComputerPreviewBodyKey { item_id: pending.item_id, uri: pending.uri };
         let _previous = self
             .computer_preview_errors
@@ -265,7 +264,11 @@ impl DesktopView {
         let Some(pending) = self.computer_preview_pending.get(&request_id).cloned() else {
             return;
         };
-        self.computer_preview_task = Some(cx.spawn(async move |view, cx| {
+        // Each screenshot is a finite decode, so it owns a detached task
+        // instead of a shared slot: expanded rows can resolve in the same
+        // event batch and a newer read must not cancel an older one. The
+        // pending map plus the guard below reject stale results.
+        cx.spawn(async move |view, cx| {
             // Base64 and PNG handling stay off the UI thread; `Image` is
             // plain decoded bytes plus an id, so the result crosses back.
             let decoded = cx
@@ -288,7 +291,6 @@ impl DesktopView {
                 if view.computer_preview_pending.get(&request_id) != Some(&pending) {
                     return;
                 }
-                detach_task_slot(&mut view.computer_preview_task);
                 let Some((page, image)) = decoded else {
                     view.fail_computer_preview(&request_id, cx);
                     return;
@@ -314,6 +316,7 @@ impl DesktopView {
                 }
                 cx.notify();
             });
-        }));
+        })
+        .detach();
     }
 }
