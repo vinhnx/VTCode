@@ -109,6 +109,14 @@ output: the latter validates contracts, while the former demonstrates a real cli
 The registration intentionally omits WebMCP's `exposedTo` option. The WebMCP app has no trusted cross-origin embedder,
 so exposing tools to another origin would add authority without a defined trust relationship.
 
+Tool registration identity is the registration-time `AbortSignal`, not the tool name. A new registration attempt aborts
+the previous signal before its first await, synchronously unregisters those tools, and invalidates their in-flight work.
+Every async publication point (initial discovery, `toolchange` discovery, and completion of a `getTools()` read)
+re-checks that signal before reporting names, so a disposed or superseded attempt cannot publish stale tool names or be
+promoted over the newer registration. This mirrors WebMCP's per-registration tool identity rule: a stale handle must
+fail rather than silently act on a same-named tool registered later
+([unregistration/execution race](https://webmachinelearning.github.io/webmcp/#unregistration-execution-race)).
+
 The WebMCP app also supports [Chrome's optional origin trial](https://developer.chrome.com/blog/ai-webmcp-origin-trial)
 without making a token part of source control. Set the singular `VITE_WEBMCP_ORIGIN_TRIAL_TOKEN` for a one-origin build,
 or set the comma- or whitespace-separated `VITE_WEBMCP_ORIGIN_TRIAL_TOKENS` value for one token per published origin.

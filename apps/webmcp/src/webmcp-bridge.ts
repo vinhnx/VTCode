@@ -54,6 +54,9 @@ export function createWebMcpBridge(options: WebMcpBridgeOptions) {
     log, status, toast,
   } = options;
   let webMcpRegistration: WebMcpRegistration | null = null;
+  // Registration identity is owned by the bridge: aborting the previous signal
+  // synchronously unregisters its tools and invalidates its in-flight work.
+  let registrationController: AbortController | null = null;
 
   async function readCurrentFile(path: string): Promise<FileSnapshot> {
     if (!state.files.has(path)) throw webMcpFileNotFoundError(path);
@@ -189,6 +192,13 @@ export function createWebMcpBridge(options: WebMcpBridgeOptions) {
   }
 
   async function registerWebMcp(): Promise<void> {
+    // Supersede any earlier attempt before the first await; a stale attempt can
+    // no longer publish discovery data or leave its tools registered.
+    registrationController?.abort();
+    const controller = new AbortController();
+    registrationController = controller;
+    webMcpRegistration?.dispose();
+    webMcpRegistration = null;
     setRegisteredWebMcpTools([]);
     const modelContext = document.modelContext as ModelContext | undefined;
     const environment = webMcpEnvironmentState();
@@ -270,8 +280,6 @@ export function createWebMcpBridge(options: WebMcpBridgeOptions) {
       reviewDraft: reviewDraftForWebMcp,
       openPanel: openPanelForWebMcp,
     }));
-    webMcpRegistration?.dispose();
-    webMcpRegistration = null;
     try {
       const registration = await registerWebMcpTools(modelContext, tools, {
         onToolChange: (names) => {
@@ -281,7 +289,11 @@ export function createWebMcpBridge(options: WebMcpBridgeOptions) {
           setRegisteredWebMcpTools(names);
           recordWebMcpDiscovery(names, "document.modelContext.getTools");
         },
+        signal: controller.signal,
       });
+      // A superseded attempt disposes its own tools and returns null; never
+      // promote it over the newer registration.
+      if (!registration) return;
       webMcpRegistration = registration;
       $("webmcpCapability").textContent = registration
         ? `WebMCP tools registered: ${registration.names.length} editor and workspace tools.`

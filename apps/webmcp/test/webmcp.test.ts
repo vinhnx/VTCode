@@ -10,12 +10,19 @@ interface RegisteredTool {
 
 class FakeModelContext extends EventTarget implements ModelContext {
   readonly tools: RegisteredTool[] = [];
+  registerToolImpl?: (tool: WebMcpTool, options: WebMcpToolRegistrationOptions) => Promise<void>;
+  getToolsImpl?: () => Promise<WebMcpTool[]>;
 
   async registerTool(tool: WebMcpTool, options: WebMcpToolRegistrationOptions = {}): Promise<void> {
+    if (this.registerToolImpl) {
+      await this.registerToolImpl(tool, options);
+      return;
+    }
     this.tools.push({ tool, options });
   }
 
   async getTools(): Promise<WebMcpTool[]> {
+    if (this.getToolsImpl) return this.getToolsImpl();
     return this.tools.map(({ tool }) => tool).sort((left, right) => left.name.localeCompare(right.name));
   }
 
@@ -225,4 +232,69 @@ test("toolchange notifications reach the registration owner", async () => {
   changed = null;
   context.dispatch("toolchange");
   assert.equal(changed, null);
+});
+
+async function flushMicrotasks(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+test("a disposed registration ignores toolchange discovery that settles later", async () => {
+  const context = new FakeModelContext();
+  const deferred: { resolve?: (tools: WebMcpTool[]) => void } = {};
+  let discoveryCalls = 0;
+  context.getToolsImpl = () => {
+    discoveryCalls += 1;
+    // The registration's own discovery must settle; only the toolchange read hangs.
+    return discoveryCalls === 1
+      ? Promise.resolve(toolsForTest())
+      : new Promise<WebMcpTool[]>((resolve) => { deferred.resolve = resolve; });
+  };
+  let discovered: readonly string[] | null = null;
+  let changes = 0;
+  const registration = await registerWebMcpTools(context, toolsForTest(), {
+    onToolChange: () => { changes += 1; },
+    onToolsDiscovered: (names) => { discovered = names; },
+  });
+  assert.ok(registration);
+  assert.deepEqual(discovered, registration.names);
+
+  context.dispatch("toolchange");
+  assert.equal(changes, 1);
+
+  registration.dispose();
+  registration.dispose();
+  deferred.resolve?.([]);
+  await flushMicrotasks();
+
+  assert.deepEqual(discovered, registration.names, "late discovery must not replace the settled names");
+  assert.equal(changes, 1);
+  context.dispatch("toolchange");
+  assert.equal(changes, 1, "dispose removes the toolchange listener");
+});
+
+test("an aborted registration signal supersedes an in-flight registration", async () => {
+  const context = new FakeModelContext();
+  const release: { now?: () => void } = {};
+  let registrationSignal: AbortSignal | undefined;
+  context.registerToolImpl = async (_tool, options) => {
+    registrationSignal = options.signal;
+    await new Promise<void>((resolve) => { release.now = resolve; });
+  };
+  const external = new AbortController();
+  let discovered: readonly string[] | null = null;
+  const pending = registerWebMcpTools(context, toolsForTest(), {
+    signal: external.signal,
+    onToolsDiscovered: (names) => { discovered = names; },
+  });
+
+  await flushMicrotasks();
+  assert.ok(registrationSignal);
+  assert.equal(registrationSignal.aborted, false);
+
+  external.abort();
+  assert.equal(registrationSignal.aborted, true, "supersession unregisters tools synchronously");
+
+  release.now?.();
+  assert.equal(await pending, null, "a superseded registration is never published");
+  assert.equal(discovered, null);
 });

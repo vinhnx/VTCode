@@ -438,44 +438,76 @@ export function createWebMcpTools({
   return tools.map(applyToolContract);
 }
 
+export interface WebMcpRegistrationOptions {
+  readonly onToolChange?: (names: readonly string[]) => void;
+  readonly onToolsDiscovered?: (names: readonly string[]) => void;
+  /**
+   * Registration-time signal, mirroring WebMCP's per-registration tool identity.
+   * Aborting it unregisters the tools and invalidates any async work started by
+   * this registration, so a superseded attempt cannot publish stale results.
+   */
+  readonly signal?: AbortSignal;
+}
+
 export async function registerWebMcpTools(
   modelContext: ModelContext | undefined,
   tools: readonly WebMcpTool[],
   {
     onToolChange = () => {},
     onToolsDiscovered = () => {},
-  }: {
-    readonly onToolChange?: (names: readonly string[]) => void;
-    readonly onToolsDiscovered?: (names: readonly string[]) => void;
-  } = {},
+    signal,
+  }: WebMcpRegistrationOptions = {},
 ): Promise<WebMcpRegistration | null> {
-  if (!modelContext?.registerTool) return null;
+  if (!modelContext?.registerTool || signal?.aborted) return null;
   const controller = new AbortController();
+  const onExternalAbort = (): void => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", onExternalAbort, { once: true });
+  const abortRegistration = (reason?: unknown): void => {
+    if (!controller.signal.aborted) controller.abort(reason);
+  };
   const names: string[] = [];
+  let disposed = false;
+  const stale = (): boolean => disposed || signal?.aborted === true;
   try {
     for (const tool of tools) {
+      // Re-check identity at the point of use: an overlapping registration may
+      // have aborted our signal while we were awaiting the previous tool.
+      if (stale()) {
+        signal?.removeEventListener("abort", onExternalAbort);
+        abortRegistration(signal?.reason);
+        return null;
+      }
       await modelContext.registerTool({ ...tool, execute: withAbortSignal(tool.execute) }, { signal: controller.signal });
       names.push(tool.name);
     }
   } catch (error: unknown) {
-    controller.abort(error);
+    signal?.removeEventListener("abort", onExternalAbort);
+    abortRegistration(error);
     throw error;
   }
 
   const notifyDiscoveredTools = async (): Promise<void> => {
-    if (!modelContext.getTools) {
-      onToolsDiscovered(names);
-      return;
+    if (stale()) return;
+    let discovered: readonly string[] = names;
+    if (modelContext.getTools) {
+      try {
+        discovered = (await modelContext.getTools()).map((tool) => tool.name);
+      } catch {
+        // Locally registered names are the best available discovery result.
+      }
     }
-    try {
-      const discovered = await modelContext.getTools();
-      onToolsDiscovered(discovered.map((tool) => tool.name));
-    } catch {
-      onToolsDiscovered(names);
-    }
+    // The discovery read races with disposal; ignore a result that settles after it.
+    if (stale()) return;
+    onToolsDiscovered(discovered);
   };
   await notifyDiscoveredTools();
+  if (stale()) {
+    signal?.removeEventListener("abort", onExternalAbort);
+    abortRegistration(signal?.reason);
+    return null;
+  }
   const handleToolChange = (): void => {
+    if (stale()) return;
     onToolChange(names);
     void notifyDiscoveredTools();
   };
@@ -483,8 +515,11 @@ export async function registerWebMcpTools(
   return {
     names,
     dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      signal?.removeEventListener("abort", onExternalAbort);
       modelContext.removeEventListener?.("toolchange", handleToolChange);
-      controller.abort();
+      abortRegistration(signal?.reason);
     },
   };
 }
