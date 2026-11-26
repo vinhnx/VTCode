@@ -1,6 +1,20 @@
 //! Root layout: navigation sidebar, conversation workspace, inspector, and overlays.
+use std::cell::RefCell;
+
 use super::*;
 use gpui_kit::Div;
+
+/// Record `title` as applied to the native window and report whether a call is
+/// needed. Keeping the guard in one place means a frame rendered for any other
+/// reason (a backend event, a fade, a resize) cannot re-issue the native call.
+fn title_needs_update(applied: &RefCell<Option<String>>, title: &str) -> bool {
+    let unchanged = applied.borrow().as_deref() == Some(title);
+    if unchanged {
+        return false;
+    }
+    *applied.borrow_mut() = Some(title.to_owned());
+    true
+}
 
 impl DesktopView {
     /// Native window title: the selected thread title, or the app name when
@@ -157,7 +171,16 @@ impl DesktopView {
 
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        window.set_window_title(self.window_title());
+        // The native title is window state, not render work: on macOS
+        // `set_title` rebuilds the Window-menu entry and relocates the traffic
+        // lights, so calling it on every redraw is continuous native work even
+        // when the title has not changed. Keyed state is window-scoped and
+        // keeps the cache out of the already-large DesktopView struct.
+        let applied_title = window.use_keyed_state("native-window-title", cx, |_, _| RefCell::new(None::<String>));
+        let title = self.window_title();
+        if title_needs_update(applied_title.read(cx), title) {
+            window.set_window_title(title);
+        }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
         let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
@@ -576,4 +599,20 @@ fn render_drop_overlay(cx: &Context<DesktopView>) -> AnyElement {
                 ),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_title_is_applied_once_until_it_changes() {
+        let applied = RefCell::new(None::<String>);
+        assert!(title_needs_update(&applied, "VT Code"), "first render applies the title");
+        assert!(!title_needs_update(&applied, "VT Code"), "an unchanged title is a native no-op");
+        assert!(title_needs_update(&applied, "Fix the login timeout"), "selecting a thread changes the title");
+        assert!(!title_needs_update(&applied, "Fix the login timeout"));
+        assert!(title_needs_update(&applied, "VT Code"), "returning to the app name is a change too");
+        assert!(!title_needs_update(&applied, "VT Code"), "subsequent frames stay silent");
+    }
 }
