@@ -398,3 +398,29 @@ fn slash_catalog_gains_cli_and_loses_desktop(cx: &mut TestAppContext) {
         assert_eq!(view.slash_commands.iter().filter(|entry| entry.name == "cli").count(), 1);
     });
 }
+
+#[gpui_kit::test]
+fn composer_handoff_ctas_appear_only_with_an_active_thread(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.backend = Some(BackendHandle { commands }));
+        window.render_frame(cx);
+        assert!(window.try_find("composer-cli-handoff").is_none(), "no thread means no handoff CTA");
+
+        view.update(cx, |view, _| view.selected_session_id = Some("sess-1".to_string()));
+        window.render_frame(cx);
+        let terminal = window.find("composer-cli-handoff");
+        assert_eq!(terminal.role(), Some(gpui_kit::Role::Button));
+        assert!(terminal.visible());
+
+        window.click("composer-cli-handoff", cx);
+        assert_eq!(
+            view.read(cx).cli_handoff.as_ref().map(|handoff| handoff.command.as_str()),
+            Some("vtcode --fork-session sess-1")
+        );
+        window.click("cli-handoff-copy", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode --fork-session sess-1"));
+    })
+    .unwrap();
+}

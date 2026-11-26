@@ -329,6 +329,17 @@ impl DesktopView {
                     .child(self.composer_trigger_pill(ComposerPill::Attach, self.render_attach_button(cx), cx))
                     .child(self.composer_trigger_pill(ComposerPill::Policy, self.render_policy_button(cx), cx))
                     .child(self.composer_trigger_pill(ComposerPill::Mode, self.render_mode_button(cx), cx))
+                    .when(self.cli_handoff_available(), |options| {
+                        let label = rust_i18n::t!(i18n::SETTINGS_CONNECTIONS_TERMINAL).to_string();
+                        options.child(
+                            desktop_ghost_button("composer-cli-handoff")
+                                .icon(IconName::Terminal)
+                                .xsmall()
+                                .accessibility_label(label.clone())
+                                .tooltip_with_action(label, &OpenCliHandoff, Some(key_context::DESKTOP))
+                                .dispatches_desktop_action(OpenCliHandoff, self.focus_handle.clone()),
+                        )
+                    })
                     .child(
                         desktop_ghost_button("composer-expand")
                             .icon(if self.composer_expanded {

@@ -43,6 +43,13 @@ pub(super) struct CliHandoff {
 impl DesktopView {
     /// Open the handoff card for the selected thread. Idempotent: reopening
     /// refreshes the command when the selection changed.
+    /// Whether a composer handoff CTA can act: a thread is selected and the
+    /// service/workspace are ready. A running turn still allows handoff; the
+    /// card discloses that the fork carries only completed turns.
+    pub(super) fn cli_handoff_available(&self) -> bool {
+        self.selected_session_id.is_some() && self.submit_allowed()
+    }
+
     pub(super) fn open_cli_handoff(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.selected_session_id.clone() else {
             self.cli_handoff = None;
