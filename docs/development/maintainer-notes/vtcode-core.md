@@ -43,3 +43,7 @@ Detailed contracts and gotchas for `crates/codegen/vtcode-core/`, moved verbatim
 
 - Request-only tool-result clearing invalidates Responses `reasoning_details` at or after the first edited message through `invalidate_reasoning_details_after_request_edits` in both interactive and headless request projections; durable session history and `ThreadEvent`s keep their items.
 - Bundled system skills install only when `skills::bundled_skills_install_permitted_for_workspace` allows (explicit grant, or unasked with a pre-consent cache); both discovery walks skip dot-directories so the managed `.system` cache never leaks in as user skills, and `with_codex_home` overrides change the location only, never the permission.
+
+## Verification failure signal
+
+Failure payloads and continuation prompts append the content-free shape from `vtcode-commons::verification_signal`; raw output stays in the bounded tail only. This keeps harness events and model-facing prompts localized without leaking command text.

@@ -78,6 +78,11 @@ pub(super) struct ContinuationController {
     context_reset_stall_threshold: u32,
     transition_thread_id: Option<String>,
     transition_turn_id: Option<String>,
+    /// Fingerprint of the last verification failure shape, used to detect
+    /// consecutive repeats of the same bug within this run.
+    last_failure_fingerprint: Option<String>,
+    /// Consecutive `after_verification` failures sharing one fingerprint.
+    fingerprint_streak: u8,
 }
 
 impl ContinuationController {
@@ -106,6 +111,8 @@ impl ContinuationController {
             context_reset_stall_threshold,
             transition_thread_id: None,
             transition_turn_id: None,
+            last_failure_fingerprint: None,
+            fingerprint_streak: 0,
         }
     }
 
@@ -280,6 +287,8 @@ impl ContinuationController {
 
     pub(super) async fn after_verification(&mut self, results: &[VerificationResult]) -> Result<CompletionAssessment> {
         if results.is_empty() {
+            // No verdict observed: leave the streak untouched rather than
+            // treating a harness anomaly as a pass or a new shape.
             return Ok(CompletionAssessment::Continue {
                 reason: "Unverified: no verification results were observed.".to_string(),
                 prompt: "Run a verifier and observe its terminal exit before completing changed code.".to_string(),
@@ -288,6 +297,7 @@ impl ContinuationController {
         let first_failure = results.iter().find(|result| !result.success || result.exit_code != Some(0));
         if let Some(failure) = first_failure {
             let summary = build_verification_failure_summary(failure);
+            let streak = self.note_failure_shape(&failure.output);
             if self.manages_internal_scaffold {
                 self.update_internal_step(2, "in_progress", None, None, None).await?;
                 self.update_internal_step(
@@ -301,10 +311,9 @@ impl ContinuationController {
             }
 
             self.note_progress_stall().await;
-            return Ok(CompletionAssessment::Continue {
-                reason: summary,
-                prompt: build_verification_failure_prompt(failure),
-            });
+            let mut prompt = build_verification_failure_prompt(failure);
+            prompt.push_str(&vtcode_commons::verification_signal::repeated_shape_note(streak));
+            return Ok(CompletionAssessment::Continue { reason: summary, prompt });
         }
 
         if self.manages_internal_scaffold {
@@ -312,8 +321,30 @@ impl ContinuationController {
             self.update_internal_step(3, "completed", None, Some(summary), None).await?;
         }
 
+        self.last_failure_fingerprint = None;
+        self.fingerprint_streak = 0;
         self.note_progress_advance();
         Ok(CompletionAssessment::Accept)
+    }
+
+    /// Record one failure shape and return its consecutive-repeat streak.
+    /// Unrecognized shapes carry no fingerprint, so they start a fresh
+    /// streak of 1 instead of extending the previous one.
+    fn note_failure_shape(&mut self, output: &str) -> u8 {
+        let shape = vtcode_commons::verification_signal::extract_verification_failure_shape(output);
+        let same_shape = self
+            .last_failure_fingerprint
+            .as_deref()
+            .zip(shape.fingerprint.as_deref())
+            .is_some_and(|(previous, current)| previous == current);
+        let streak = if same_shape {
+            self.fingerprint_streak.saturating_add(1)
+        } else {
+            1
+        };
+        self.last_failure_fingerprint = shape.fingerprint;
+        self.fingerprint_streak = streak;
+        streak
     }
 
     fn continuation_enabled(&self) -> bool {
@@ -564,13 +595,20 @@ fn build_verification_failure_summary(failure: &VerificationResult) -> String {
     }
 }
 
+/// Content-free localization appended to failure payloads and prompts.
+fn verification_failure_shape_note(failure: &VerificationResult) -> String {
+    let shape = vtcode_commons::verification_signal::extract_verification_failure_shape(&failure.output);
+    format!(" Failure shape: {}.", shape.describe())
+}
+
 /// Compose the harness event payload for a failed verification command.
 ///
-/// Reuses [`build_verification_failure_summary`] for the headline and appends the
-/// trimmed command output when present, matching the layout expected by the
-/// `VerificationFailed` event.
+/// Reuses [`build_verification_failure_summary`] for the headline, appends a
+/// content-free failure shape, then the trimmed command output when present,
+/// matching the layout expected by the `VerificationFailed` event.
 pub(super) fn build_verification_failure_payload(failure: &VerificationResult) -> String {
     let mut payload = build_verification_failure_summary(failure);
+    payload.push_str(&verification_failure_shape_note(failure));
     if !failure.output.trim().is_empty() {
         payload.push('\n');
         payload.push_str(failure.output.trim());
@@ -580,6 +618,7 @@ pub(super) fn build_verification_failure_payload(failure: &VerificationResult) -
 
 fn build_verification_failure_prompt(failure: &VerificationResult) -> String {
     let mut prompt = build_verification_failure_summary(failure);
+    prompt.push_str(&verification_failure_shape_note(failure));
     if !failure.output.trim().is_empty() {
         prompt.push_str(" Fix the failure and run verification again. Command output:\n");
         prompt.push_str(failure.output.trim());

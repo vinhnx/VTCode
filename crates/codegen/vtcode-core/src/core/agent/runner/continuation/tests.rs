@@ -272,3 +272,101 @@ async fn empty_or_missing_terminal_verification_results_cannot_be_accepted() {
         ));
     }
 }
+
+#[test]
+fn verification_failure_signal_localizes_without_copying_output() {
+    let failure = VerificationResult {
+        command: "cargo nextest run".into(),
+        success: false,
+        exit_code: Some(101),
+        output: "test auth::expired_token ... FAILED\nleftover SECRET_USER_TOKEN_XYZ".into(),
+    };
+
+    let payload = build_verification_failure_payload(&failure);
+    let prompt = build_verification_failure_prompt(&failure);
+
+    for text in [&payload, &prompt] {
+        assert!(text.contains("Verification failed: cargo nextest run (exit code 101)."));
+        assert!(text.contains("Failure shape: test at auth::expired_token (fingerprint "), "{text}");
+    }
+    assert!(payload.contains("leftover SECRET_USER_TOKEN_XYZ"), "payload keeps the bounded raw tail");
+    let shape_only = vtcode_commons::verification_signal::extract_verification_failure_shape(&failure.output);
+    assert!(!shape_only.describe().contains("SECRET_USER_TOKEN_XYZ"));
+}
+
+fn failed_results(output: &str) -> Vec<VerificationResult> {
+    vec![VerificationResult {
+        command: "cargo nextest run".into(),
+        success: false,
+        exit_code: Some(101),
+        output: output.into(),
+    }]
+}
+
+fn continue_prompt(assessment: CompletionAssessment) -> String {
+    match assessment {
+        CompletionAssessment::Continue { prompt, .. } => prompt,
+        other => panic!("expected a Continue assessment, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn repeated_failure_shape_adds_anti_thrash_nudge() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut controller = make_controller(&temp, ContinuationPolicy::ExecOnly, false);
+    controller.prepare(&sample_task()).await.expect("prepare");
+
+    // Same test, different assertion text: one bug, one fingerprint.
+    let first = controller
+        .after_verification(&failed_results("test auth::expired ... FAILED\nleft differs"))
+        .await
+        .expect("first failure");
+    assert_eq!(controller.fingerprint_streak, 1);
+    assert!(!continue_prompt(first).contains("change your approach"));
+
+    let second = controller
+        .after_verification(&failed_results("test auth::expired ... FAILED\nright differs"))
+        .await
+        .expect("second failure");
+    assert_eq!(controller.fingerprint_streak, 2);
+    let prompt = continue_prompt(second);
+    assert!(prompt.contains("2 times consecutively"), "{prompt}");
+    assert!(prompt.contains("change your approach"), "{prompt}");
+}
+
+#[tokio::test]
+async fn new_shape_and_success_reset_the_streak() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut controller = make_controller(&temp, ContinuationPolicy::ExecOnly, false);
+    controller.prepare(&sample_task()).await.expect("prepare");
+
+    controller
+        .after_verification(&failed_results("test auth::expired ... FAILED"))
+        .await
+        .expect("first failure");
+    let moved = controller
+        .after_verification(&failed_results("test cache::other ... FAILED"))
+        .await
+        .expect("different shape");
+    assert_eq!(controller.fingerprint_streak, 1, "a new shape starts a fresh streak");
+    assert!(!continue_prompt(moved).contains("change your approach"));
+
+    let passed = controller
+        .after_verification(&[VerificationResult {
+            command: "cargo nextest run".into(),
+            success: true,
+            exit_code: Some(0),
+            output: "test result: ok".into(),
+        }])
+        .await
+        .expect("pass");
+    assert!(matches!(passed, CompletionAssessment::Accept));
+    assert_eq!(controller.fingerprint_streak, 0, "a pass clears the streak");
+
+    let relapsed = controller
+        .after_verification(&failed_results("test auth::expired ... FAILED"))
+        .await
+        .expect("relapse");
+    assert_eq!(controller.fingerprint_streak, 1);
+    assert!(!continue_prompt(relapsed).contains("change your approach"));
+}
