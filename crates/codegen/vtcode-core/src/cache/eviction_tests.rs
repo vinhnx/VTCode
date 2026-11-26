@@ -178,6 +178,25 @@ fn expiration_retains_live_entries_and_accounting_without_cloning_keys() {
 }
 
 #[test]
+fn replacing_an_existing_entry_does_not_sweep_unrelated_expired_entries() {
+    let fixture = EvictionFixture::new(EvictionPolicy::Lru);
+    {
+        let mut inner = fixture.cache.inner.write().unwrap();
+        inner.entries.get_mut(&fixture.key("a")).unwrap().created_at = SystemTime::UNIX_EPOCH;
+    }
+
+    // `b` is already present: this is a replacement, not a new insertion.
+    fixture.cache.insert(fixture.key("b"), "b replacement", 30);
+
+    // The expired `a` is untouched — a replacement cannot create capacity
+    // pressure, so it must not pay for a full-table expiry sweep. It also
+    // remains invisible to readers through `get`.
+    fixture.assert_remaining(&["a", "b", "c", "d"], 119, 0);
+    assert_eq!(*fixture.cache.get(&fixture.key("b")).unwrap(), "b replacement");
+    assert!(fixture.cache.get(&fixture.key("a")).is_none());
+}
+
+#[test]
 fn capacity_eviction_clones_only_the_victim_for_each_policy() {
     for policy in [
         EvictionPolicy::Lru,

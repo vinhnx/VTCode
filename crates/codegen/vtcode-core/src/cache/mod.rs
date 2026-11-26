@@ -69,15 +69,30 @@ impl<V> CacheEntry<V> {
     }
 
     pub fn mark_accessed(&mut self) {
-        self.last_accessed = SystemTime::now();
+        self.mark_accessed_at(SystemTime::now());
+    }
+
+    /// Record an access using an instant the caller already observed.
+    ///
+    /// A lookup needs the time both to check expiry and to stamp LRU metadata;
+    /// taking it once avoids a second clock syscall on every cache hit.
+    pub fn mark_accessed_at(&mut self, now: SystemTime) {
+        self.last_accessed = now;
         self.access_count += 1;
     }
 
     pub fn is_expired(&self, ttl: Duration) -> bool {
-        SystemTime::now()
-            .duration_since(self.created_at)
-            .map(|age| age > ttl)
-            .unwrap_or(true)
+        self.is_expired_at(ttl, SystemTime::now())
+    }
+
+    /// Expiry check against an already-observed instant.
+    ///
+    /// Bulk operations (eviction, pressure cleanup) evaluate many entries in
+    /// one pass; reading the clock per entry would turn one O(n) walk into n
+    /// clock syscalls. Callers take a single `SystemTime::now()` and thread it
+    /// through instead.
+    pub fn is_expired_at(&self, ttl: Duration, now: SystemTime) -> bool {
+        now.duration_since(self.created_at).map(|age| age > ttl).unwrap_or(true)
     }
 }
 
@@ -137,7 +152,7 @@ where
     /// for best-effort metadata/stat updates.
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
         enum LookupState<T> {
-            Hit(Arc<T>),
+            Hit(Arc<T>, SystemTime),
             Expired,
             Miss,
         }
@@ -145,19 +160,24 @@ where
         let state = {
             let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
             let ttl = inner.ttl;
+            let now = SystemTime::now();
 
             match inner.entries.get(key) {
-                Some(entry) if !entry.is_expired(ttl) => LookupState::Hit(Arc::clone(&entry.value)),
+                Some(entry) if !entry.is_expired_at(ttl, now) => LookupState::Hit(Arc::clone(&entry.value), now),
                 Some(_) => LookupState::Expired,
                 None => LookupState::Miss,
             }
         };
 
         match state {
-            LookupState::Hit(value) => {
+            LookupState::Hit(value, now) => {
                 if let Ok(mut inner) = self.inner.try_write() {
                     if let Some(entry) = inner.entries.get_mut(key) {
-                        entry.mark_accessed();
+                        // Re-stamping with the same observed instant keeps this
+                        // hit to one clock read. The entry may have been
+                        // replaced between the two locks; that is fine because
+                        // only recency metadata is updated here.
+                        entry.mark_accessed_at(now);
                     }
                     inner.stats.hits += 1;
                 }
@@ -203,9 +223,6 @@ where
             return;
         };
 
-        // Remove expired entries first
-        Self::remove_expired_entries_inner(&mut inner);
-
         // A zero-capacity cache must remain bounded and reject all inserts.
         if inner.max_size == 0 {
             return;
@@ -214,7 +231,10 @@ where
         let size_bytes = entry.size_bytes;
 
         // Replacements do not consume another capacity slot, so they must not
-        // evict an unrelated entry when the cache is full.
+        // evict an unrelated entry when the cache is full. Resolve this before
+        // the expired-entry sweep below: a replacement cannot create capacity
+        // pressure, so scanning and pruning the whole table here would be a
+        // full O(n) pass (with a clock read per entry) for no benefit.
         if let Some(current) = inner.entries.get_mut(&key) {
             let previous = std::mem::replace(current, entry);
             inner.stats.total_memory_bytes = inner.stats.total_memory_bytes.saturating_sub(previous.size_bytes);
@@ -222,6 +242,12 @@ where
             inner.stats.total_memory_bytes = inner.stats.total_memory_bytes.saturating_add(size_bytes);
             return;
         }
+
+        // New entries need room, so prune expired ones before checking
+        // capacity. One clock read is shared by the whole pass instead of one
+        // per entry — repeated inserts would otherwise pay an n × n syscall
+        // factor as the cache fills.
+        Self::remove_expired_entries_inner(&mut inner);
 
         // Batch evict if over capacity: remove 10% of entries at once
         // to avoid repeated O(n) scans on consecutive inserts
@@ -235,10 +261,11 @@ where
         inner.stats.total_memory_bytes = inner.stats.total_memory_bytes.saturating_add(size_bytes);
     }
 
-    /// Remove expired entries based on TTL
+    /// Remove expired entries based on TTL, taking the clock once for the pass.
     fn remove_expired_entries_inner(inner: &mut UnifiedCacheInner<K, V>) {
         let ttl = inner.ttl;
-        Self::remove_entries_where_inner(inner, |_, entry| entry.is_expired(ttl));
+        let now = SystemTime::now();
+        Self::remove_entries_where_inner(inner, |_, entry| entry.is_expired_at(ttl, now));
     }
 
     /// Remove matching entries in place without cloning keys or retaining values.
@@ -670,6 +697,34 @@ mod tests {
         assert_eq!(cache.len(), 0);
         assert_eq!(cache.total_memory_bytes(), 0);
         assert_eq!(cache.stats().evictions, 0);
+    }
+
+    #[test]
+    fn expiry_against_explicit_instant_is_boundary_safe_and_fails_closed_on_clock_skew() {
+        let entry = CacheEntry::new("value".to_string(), 5);
+        let ttl = Duration::from_secs(5);
+        let created = entry.created_at;
+
+        assert!(!entry.is_expired_at(ttl, created + Duration::from_secs(4)));
+        assert!(!entry.is_expired_at(ttl, created + Duration::from_secs(5)));
+        assert!(entry.is_expired_at(ttl, created + Duration::from_secs(6)));
+        // A now earlier than creation (skew) must not extend the entry's life.
+        assert!(entry.is_expired_at(ttl, created - Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn mark_accessed_at_uses_the_supplied_instant_and_increments_the_count() {
+        let mut entry = CacheEntry::new("value".to_string(), 5);
+        let observed = entry.created_at + Duration::from_secs(7);
+        entry.last_accessed = entry.created_at;
+
+        entry.mark_accessed_at(observed);
+        assert_eq!(entry.last_accessed, observed);
+        assert_eq!(entry.access_count, 2);
+
+        entry.mark_accessed_at(observed + Duration::from_secs(1));
+        assert_eq!(entry.last_accessed, observed + Duration::from_secs(1));
+        assert_eq!(entry.access_count, 3);
     }
 
     #[test]
