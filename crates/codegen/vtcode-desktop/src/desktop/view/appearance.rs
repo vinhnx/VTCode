@@ -517,6 +517,10 @@ impl DesktopView {
             theme.mono_font_family = code_family.into();
             theme.font_size = px(f32::from(ui));
             theme.mono_font_size = px(f32::from(code));
+            // Kit derives the window rem from `font_size`; the shared radius
+            // tokens must be rebuilt here too or Kit surfaces keep the old
+            // pixel radii while every named `.rounded_*()` helper zooms.
+            themes::apply_desktop_radii(theme);
         });
         self.transcript.remeasure();
         cx.notify();

@@ -171,9 +171,37 @@ fn every_theme_shares_the_round_radius_baseline(cx: &mut gpui_kit::TestAppContex
         {
             let _mode = apply_by_id(id, None, cx);
             let theme = cx.theme();
-            assert_eq!(theme.radius, px(8.), "{id}: base md radius");
-            assert_eq!(theme.radius_lg, px(12.), "{id}: large tier radius");
-            assert_eq!(theme.radius * 2., px(16.), "{id}: Large button capsule");
+            assert_eq!(theme.radius, rems(0.5).to_pixels(theme.font_size), "{id}: base md radius");
+            assert_eq!(theme.radius_lg, rems(0.75).to_pixels(theme.font_size), "{id}: large tier radius");
+            assert_eq!(theme.radius * 2., rems(1.).to_pixels(theme.font_size), "{id}: Large button capsule");
+        }
+    });
+}
+
+/// The radius tiers must be derived from the same rem that Kit uses for the
+/// window (`RootPlugin::prepare` sets it from `theme.font_size`), otherwise a
+/// theme switch or a theme whose font size differs leaves Kit surfaces at a
+/// fixed radius while every named `.rounded_*()` helper zooms.
+#[gpui_kit::test]
+fn desktop_radius_tiers_follow_the_ui_font_size(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        for font_size in [px(14.), px(16.), px(24.)] {
+            Theme::update(cx, |theme| {
+                theme.font_size = font_size;
+                apply_desktop_radii(theme);
+            });
+            let theme = cx.theme();
+            let tokens = theme.radius_tokens();
+            assert_eq!(theme.font_size, font_size);
+            assert_eq!(theme.radius, rems(0.5).to_pixels(font_size), "base radius at {font_size:?}");
+            assert_eq!(theme.radius_lg, rems(0.75).to_pixels(font_size), "large radius at {font_size:?}");
+            // Kit token tiers line up with the app's named rem helpers, so a
+            // Kit popover and the app surface behind it stay concentric.
+            assert_eq!(tokens.sm, rems(0.25).to_pixels(font_size), "sm tier at {font_size:?}");
+            assert_eq!(tokens.md, theme.radius, "md tier at {font_size:?}");
+            assert_eq!(tokens.lg, theme.radius_lg, "lg tier at {font_size:?}");
+            assert_eq!(tokens.xl, rems(1.).to_pixels(font_size), "xl tier at {font_size:?}");
         }
     });
 }

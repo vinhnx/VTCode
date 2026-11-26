@@ -473,3 +473,25 @@ fn settings_container_and_sections_keep_horizontal_air(cx: &mut TestAppContext) 
         .unwrap();
     }
 }
+
+/// A UI font-size change rescales the window rem, so the Kit surface radius
+/// tokens must be rebuilt in the same `Theme::update` that sets the font size.
+/// Otherwise Kit popovers keep the old pixel radii while the app surfaces
+/// around them zoom, breaking the concentric tier contract at 14px and 24px.
+#[gpui_kit::test]
+fn typography_changes_rescale_kit_radius_tokens(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop_sized(cx, 1200., 800.);
+    for size in [14_u8, 16, 24] {
+        view.update(cx, |view, cx| {
+            view.preferences.ui_font_size = Some(size);
+            view.apply_typography(cx);
+        });
+        cx.update(|cx| {
+            let theme = cx.theme();
+            let rem = px(f32::from(size));
+            assert_eq!(theme.font_size, rem, "font size at {size}px");
+            assert_eq!(theme.radius, gpui_kit::rems(0.5).to_pixels(rem), "base radius at {size}px");
+            assert_eq!(theme.radius_lg, gpui_kit::rems(0.75).to_pixels(rem), "large radius at {size}px");
+        });
+    }
+}

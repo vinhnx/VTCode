@@ -13,7 +13,7 @@ use fills::{
     apply_filled_surfaces, apply_unified_hover_surface, filled_surface, hover_surface, primary_state_surface,
 };
 use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
-use gpui_kit::{App, Hsla, Window, px, rgb};
+use gpui_kit::{App, Hsla, Window, px, rems, rgb};
 use std::collections::HashMap;
 use vtcode_ui::theme::{self, UiThemeColors};
 
@@ -391,10 +391,22 @@ pub(super) fn apply_selection_with_contrast(
     mode
 }
 
-/// Shared radius baseline (`md` 8px, `lg` 12px): Large buttons capsule at 16px, tiers stay concentric.
-fn apply_desktop_radii(kit_theme: &mut Theme) {
-    kit_theme.radius = px(8.);
-    kit_theme.radius_lg = px(12.);
+/// Shared radius baseline, derived from the UI font size rather than fixed pixels.
+///
+/// Kit's `RootPlugin::prepare` sets the window rem from `theme.font_size`, so
+/// every named `.rounded_*()` helper zooms with the UI font-size preference.
+/// The Kit surface tokens must use the same rem or a dialog's corners drift
+/// away from the app surfaces around it (8/12px at the default 16px rem, but
+/// 12/18px at a 24px rem). Keeping the tiers rem-based also preserves the
+/// concentric relationships: Kit `sm`/`md`/`lg`/`xl` line up with the app's
+/// `.rounded_sm()`/`.rounded_lg()`/`.rounded_xl()`/`.rounded_2xl()`.
+///
+/// Call again after any `theme.font_size` change (`apply_typography`), since
+/// a palette change alone does not observe that preference.
+pub(super) fn apply_desktop_radii(kit_theme: &mut Theme) {
+    let rem = kit_theme.font_size;
+    kit_theme.radius = rems(0.5).to_pixels(rem);
+    kit_theme.radius_lg = rems(0.75).to_pixels(rem);
 }
 
 fn apply_palette(seeds: PaletteSeeds, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {

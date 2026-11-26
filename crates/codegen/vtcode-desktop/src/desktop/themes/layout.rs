@@ -9,9 +9,11 @@
 //! each file carried its own copy of the same arithmetic. The tokens here name
 //! the relationship instead, and are `Rems` so they zoom with the base font.
 //!
-//! Corner radius is deliberately absent: it is a theme token set once in
+//! Corner radius is deliberately absent: it is a theme token owned by
 //! [`super::apply_desktop_radii`] and read via
-//! `cx.theme().radius` / `cx.theme().radius_lg`. Margins are not used between
+//! `cx.theme().radius` / `cx.theme().radius_lg`. Those tiers are derived from
+//! the UI font size (the window rem), so Kit surfaces and named `.rounded_*()`
+//! helpers zoom together. Margins are not used between
 //! transcript rows — the scroller owns row spacing and padding owns insets —
 //! so there is no margin token to scatter. Font weights come from the Kit
 //! helpers (`font_semibold` for a title, plain for a body); only the size steps
