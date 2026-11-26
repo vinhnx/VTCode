@@ -252,6 +252,7 @@ fn terminal_header_shows_program_status_while_a_record_is_live(cx: &mut TestAppC
             break;
         }
         assert!(Instant::now() < deadline, "live report never reached the header store");
+        std::thread::sleep(Duration::from_millis(10));
     }
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
@@ -279,6 +280,7 @@ fn terminal_header_shows_program_status_while_a_record_is_live(cx: &mut TestAppC
             break;
         }
         assert!(Instant::now() < deadline, "clear never retired the header pill");
+        std::thread::sleep(Duration::from_millis(10));
     }
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);

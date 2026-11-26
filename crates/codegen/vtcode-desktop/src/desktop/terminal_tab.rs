@@ -505,9 +505,7 @@ mod tests {
         // survive a real terminal parser with every field intact, so emitter
         // and consumer cannot drift apart unnoticed.
         use rio_vt::event::{BlockedKind, ProgramState, ProgramStatusEvent};
-        use vtcode_commons::program_status::{
-            InteractionKind, ProgramState as EmitState, encode_clear, encode_report,
-        };
+        use vtcode_commons::program_status::{InteractionKind, ProgramState as EmitState, encode_clear, encode_report};
 
         let mut screen = TerminalScreen::new(80, 24, 10);
         screen.enable_program_status();
@@ -597,6 +595,76 @@ mod tests {
             assert!(Instant::now() < deadline, "clear never retired the record");
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn terminal_monitor_drops_program_status_bytes_without_records() {
+        let size = PtySize { rows: 4, cols: 80, pixel_width: 0, pixel_height: 0 };
+        let mut tab = TerminalTab::monitor(size, List::from(&Colors::default()));
+        let drain = tab.feed_output("\x1b]7501;state=working:app=demo:msg=V29ya2luZw==\x07done");
+        assert!(
+            !drain.events.iter().any(|event| matches!(event, RioEvent::ProgramStatus(_))),
+            "monitors never surface status events: {:?}",
+            drain.events
+        );
+        assert_eq!(tab.program_status_summary(), None);
+        let rendered = tab
+            .display_rows()
+            .iter()
+            .map(|row| row.iter().map(|run| run.text.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("done"), "surrounding text survives: {rendered:?}");
+        assert!(!rendered.contains("7501"), "no escape residue leaks: {rendered:?}");
+    }
+
+    #[test]
+    fn terminal_tab_drain_retires_transient_records_on_prompt_and_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let size = PtySize { rows: 4, cols: 80, pixel_width: 0, pixel_height: 0 };
+        let mut tab =
+            TerminalTab::spawn(dir.path(), Path::new("/bin/sh"), size, List::from(&Colors::default())).unwrap();
+        fn drain_until(tab: &mut TerminalTab, what: &str, mut done: impl FnMut(&TerminalTab) -> bool) {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let _drained = tab.drain();
+                if done(tab) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "{what} never landed");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+
+        // A working record lands, then a shell prompt retires it.
+        tab.input(b"printf '\\033]7501;state=working:msg=V29ya2luZw==\\007'\n".to_vec())
+            .unwrap();
+        drain_until(&mut tab, "working record", |tab| tab.program_status_summary().is_some());
+        tab.input(b"printf '\\033]133;A\\007'\n".to_vec()).unwrap();
+        drain_until(&mut tab, "prompt retirement", |tab| tab.program_status_summary().is_none());
+
+        // Exit drops the transient child but keeps the settled root outcome.
+        tab.input(b"printf '\\033]7501;state=working:id=job:msg=V29ya2luZw==\\007'\n".to_vec())
+            .unwrap();
+        drain_until(&mut tab, "child record", |tab| {
+            tab.program_status_summary().is_some_and(|summary| summary.detail == "Working")
+        });
+        tab.input(b"printf '\\033]7501;state=done:msg=RG9uZQ==\\007'\n".to_vec())
+            .unwrap();
+        drain_until(&mut tab, "done record", |tab| {
+            tab.program_status_summary()
+                .is_some_and(|summary| summary.state == rio_vt::event::ProgramState::Working)
+        });
+        tab.input(b"exit 0\n".to_vec()).unwrap();
+        drain_until(&mut tab, "shell exit", |tab| {
+            tab.exit_status.is_some()
+                && tab.program_status_summary().is_some_and(|summary| {
+                    summary.state == rio_vt::event::ProgramState::Done && summary.detail == "Done"
+                })
+        });
+        let summary = tab.program_status_summary().expect("done must survive the exit");
+        assert_eq!(summary.state, rio_vt::event::ProgramState::Done);
+        assert_eq!(summary.detail, "Done");
     }
 
     #[test]

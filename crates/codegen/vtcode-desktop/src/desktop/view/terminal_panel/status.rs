@@ -31,21 +31,23 @@ pub(super) fn terminal_status_tone(
     }
 }
 
-/// Header status text: the record's own sanitized detail plus its progress
-/// percent, or a localized state label when the record carries no text.
+/// Header status text: the record's sanitized detail, or a localized state
+/// label when it carries no text, with a progress suffix when reported.
 pub(super) fn terminal_status_label(summary: &TerminalProgramStatusSummary) -> String {
-    if summary.detail.is_empty() {
+    let base = if summary.detail.is_empty() {
         let key = match summary.state {
             ProgramState::Working => "app.navigation.terminal_status_working",
             ProgramState::Blocked => "app.navigation.terminal_status_blocked",
             ProgramState::Done => "app.navigation.terminal_status_done",
             ProgramState::Error | ProgramState::Idle | ProgramState::Clear => "app.navigation.terminal_status_error",
         };
-        return rust_i18n::t!(key).to_string();
-    }
+        rust_i18n::t!(key).to_string()
+    } else {
+        summary.detail.clone()
+    };
     match summary.progress {
-        Some(percent) => format!("{} · {percent}%", summary.detail),
-        None => summary.detail.clone(),
+        Some(percent) => format!("{base} · {percent}%"),
+        None => base,
     }
 }
 
@@ -80,7 +82,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_status_label_prefers_detail_then_progress_then_localized_state() {
+    fn terminal_status_label_uses_detail_or_state_and_keeps_progress() {
         let summary = |state, detail: &str, progress| TerminalProgramStatusSummary {
             state,
             detail: detail.to_string(),
@@ -92,6 +94,7 @@ mod tests {
         );
         assert_eq!(terminal_status_label(&summary(ProgramState::Blocked, "Approve deploy?", None)), "Approve deploy?");
         assert_eq!(terminal_status_label(&summary(ProgramState::Working, "", None)), "Working");
+        assert_eq!(terminal_status_label(&summary(ProgramState::Working, "", Some(40))), "Working · 40%");
         assert_eq!(terminal_status_label(&summary(ProgramState::Blocked, "", None)), "Needs input");
         assert_eq!(terminal_status_label(&summary(ProgramState::Done, "", None)), "Done");
         assert_eq!(terminal_status_label(&summary(ProgramState::Error, "", None)), "Failed");
