@@ -26,18 +26,18 @@
 ## Overview
 
 VT Code is an open-source coding agent: one shared runloop powers the terminal TUI and the
-native macOS app. It is open source under **MIT OR Apache-2.0** (see [License](#license)).
+native macOS app, under **MIT OR Apache-2.0** (see [License](#license)).
 Start with [Quick start](#quick-start); the full map is in [Documentation](#documentation).
 
 <!-- markdownlint-disable MD060 -- compact table; keep pipes unpadded -->
 
-| At a glance   | What you get                                                                                                                                                               |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Plan**      | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md).                                                         |
-| **Safety**    | Sandboxed, [auditable command policy](./docs/security/security_model.md).                                                                                                  |
-| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md) with [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md).                 |
+| At a glance   | What you get |
+| ------------- | ------------ |
+| **Plan**      | Read-only [planning](./docs/guides/planning-workflow.md); review [turn diffs](./docs/development/diff-preview.md). |
+| **Safety**    | Sandboxed, [auditable command policy](./docs/security/security_model.md). |
+| **Long runs** | Resumable [headless exec](./docs/user-guide/exec-mode.md) with [snapshots](./docs/user-guide/commands.md) and [subagents](./docs/user-guide/subagents.md). |
 | **Extend**    | [MCP](./docs/guides/mcp-integration.md) ([interop](./docs/guides/mcp-interop.md)), [skills](./docs/skills/skills_guide.md), and [plugins](./docs/guides/agent-plugins.md). |
-| **Models**    | Per-task [hosted or local providers](./docs/providers/provider_guides.md).                                                                                                 |
+| **Models**    | Per-task [hosted or local providers](./docs/providers/provider_guides.md). |
 
 <!-- markdownlint-enable MD060 -->
 
@@ -54,8 +54,8 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 vtcode --version
 ```
 
-Alternatives in the [installation guide](./docs/installation/README.md): `brew install vinhnx/tap/vtcode`,
-`cargo install vtcode`, [Desktop app](#desktop-app), or the Windows `install.ps1` script.
+Alternatives: `brew install vinhnx/tap/vtcode`, `cargo install vtcode`, [Desktop app](#desktop-app),
+or the Windows `install.ps1` script. See the [installation guide](./docs/installation/README.md).
 
 ### 2. Configure your project
 
@@ -67,19 +67,16 @@ cd path/to/your/project
 vtcode init
 ```
 
-Choose an authentication method for your provider:
+Authenticate your provider, then see [getting started](./docs/user-guide/getting-started.md) and
+[provider guides](./docs/providers/provider_guides.md):
 
 - **API key:** `vtcode secret add openai` (replace `openai` with your provider). Keys stay in secure storage
   (OS keyring or encrypted file); environment variables or a workspace `.env` also work where supported.
 - **ChatGPT subscription:** `vtcode login openai` — no API key needed.
 - **Reuse an existing Codex login:** `vtcode login openai --from-codex` (requires an authenticated Codex CLI).
-
-See [getting started](./docs/user-guide/getting-started.md) and
-[provider guides](./docs/providers/provider_guides.md) for details. Copilot uses the official `copilot` CLI — see
-[OAuth authentication](./docs/guides/oauth-authentication.md).
+Copilot uses the official `copilot` CLI — see [OAuth authentication](./docs/guides/oauth-authentication.md).
 
 > **Caution:** Keep API keys out of Git and `vtcode.toml`, and never commit a workspace `.env` file.
-> Run `vtcode secret add` or `vtcode login` before your first task.
 
 ### 3. Run your first task
 
@@ -87,9 +84,8 @@ See [getting started](./docs/user-guide/getting-started.md) and
 vtcode # opens the interactive TUI
 ```
 
-Ask one focused question, review the proposed changes and test results, then commit.
-If `vtcode` is not found, reopen your shell so `PATH` picks up the install, then rerun `vtcode --version`.
-See [Usage](#usage) for automation commands.
+Ask one focused question, review the proposed changes and test results, then commit. If `vtcode` is not
+found, reopen your shell so `PATH` picks up the install, then rerun `vtcode --version`.
 
 ## Usage
 
@@ -124,21 +120,20 @@ config, and credentials. Configure a provider first ([Quick start](#quick-start)
 brew install --cask vinhnx/tap/vtcode-desktop
 ```
 
-Update cask installs with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. Without Homebrew, download the
+Update with `brew upgrade --cask vinhnx/tap/vtcode-desktop`. Without Homebrew, download the
 [latest release](https://github.com/vinhnx/vtcode/releases/latest) or run `vtcode desktop --install`,
 then launch with `vtcode desktop` or from Finder. The cask ships Apple Silicon builds; Intel Macs install
-from source with `vtcode desktop --install`. Full options are in the [installation guide](./docs/installation/README.md).
+from source with `vtcode desktop --install`. See the [installation guide](./docs/installation/README.md).
 
 > [!WARNING]
 > **First launch needs one-time approval** for ad hoc-signed builds (Homebrew cask included): open the app
-> once from Applications, click **Open Anyway** in **System Settings › Privacy & Security**, then reopen
-> it. The button expires about an hour after a blocked launch; reopen the app to bring it back.
-> Notarized releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
+> once from Applications, click **Open Anyway** in **System Settings › Privacy & Security**, then reopen it.
+> The button expires about an hour after a blocked launch; reopen the app to bring it back. Notarized
+> releases skip this. See [desktop workspace](./docs/development/desktop-workspace.md).
 
 ## Documentation
 
 Start from the canonical [documentation index](./docs/index.md) or [Wiki](https://github.com/vinhnx/vtcode/wiki).
-This section keeps one link per task.
 
 ### Start
 
@@ -173,7 +168,7 @@ This section keeps one link per task.
 
 ## Development
 
-27-crate workspace at version 0.185.0 (full list in the [architecture guide](./docs/architecture.md)).
+27-crate workspace at version 0.185.2 (full list in the [architecture guide](./docs/architecture.md)).
 The default build covers the root binary plus `vtcode-core`, `vtcode-skills`, `vtcode-tui-runtime`,
 and `vtcode-ui`. The sketch below shows the core harness path, not every crate:
 
@@ -189,7 +184,7 @@ graph LR
     CORE --> UI["vtcode-ui"]
 ```
 
-Build with Rust 1.100.0+ (edition 2024; workspace version 0.185.0):
+Build with Rust 1.100.0+ (edition 2024):
 
 ```bash
 git clone https://github.com/vinhnx/vtcode.git
@@ -201,7 +196,6 @@ cargo nextest run          # tests via nextest (see testing guide)
 
 CI uses `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
 `RUSTFLAGS="-D warnings" cargo check --locked`. See [development](./docs/development/README.md) and [testing](./docs/development/testing.md).
-
 Release binaries and notes live on [GitHub releases](https://github.com/vinhnx/vtcode/releases).
 
 ## Contributing
@@ -210,8 +204,7 @@ VT Code is open source and community-driven. Code, docs, [evals](./docs/guides/e
 welcome — include `vtcode trajectory` output in bug reports where possible. Before a PR, read
 [contributing](./docs/CONTRIBUTING.md) and pick a
 [good first issue](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) or
-[help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item. Forks: keep license and
-third-party notices intact (see [License](#license)).
+[help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) item.
 
 ## Security
 
@@ -232,8 +225,6 @@ The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review constructive.
 Contact: `vinhnguyen2308 [at] gmail [dot] com`.
 
 ## Thanks to our contributors
-
-Thank you to everyone below. You are the reason this project keeps moving.
 
 <details open> <!-- NOTE: keep open by default. DO NOT CLOSE this -->
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (31)</summary><!-- CONTRIBUTORS-COUNT:END -->
@@ -306,19 +297,18 @@ Thank you to everyone below. You are the reason this project keeps moving.
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnx?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
-If you like VT Code, please star the repo and share it — starring helps discovery and brings in new users,
-contributors, and sponsors. Thank you for growing the community.
+If you like VT Code, please star the repo and share it. Thank you for growing the community.
 
 ## Star History
 
 <a href="https://star-history.com/#vinhnx/vtcode&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)"
-     srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)"
-     srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
- </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vinhnx/vtcode&type=Date" />
+  </picture>
 </a>
 
 </div>
@@ -326,7 +316,5 @@ contributors, and sponsors. Thank you for growing the community.
 ## License
 
 First-party code is **MIT OR Apache-2.0**, available under either [LICENSE-MIT](LICENSE-MIT) or
-[LICENSE](LICENSE) (Apache-2.0). You are welcome to fork, use, copy, modify, merge, publish, distribute,
-sublicense, and sell copies of the code, for personal or commercial use, under either license. Keep the
-license and copyright notices when you distribute copies. Third-party code keeps its original licenses,
-listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
+[LICENSE](LICENSE) (Apache-2.0). Keep the license and copyright notices when you distribute copies.
+Third-party code keeps its original licenses, listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
