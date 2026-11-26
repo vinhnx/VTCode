@@ -110,6 +110,17 @@ impl DesktopView {
         }
     }
 
+    /// Physical mouse back/forward buttons act on the workspace surface only.
+    /// A palette, config editor/page, or file preview owns the input while it
+    /// is open, so a button must not switch the thread underneath it.
+    pub(super) fn mouse_navigation_allowed(&self) -> bool {
+        self.current_route() == Route::Workspace
+            && self.palette.is_none()
+            && !self.config_page_open
+            && self.config_editor.is_none()
+            && self.file_preview.is_none()
+    }
+
     /// History navigation deliberately stays on the idle-only gate: routing it
     /// through the running-switch modal would entangle `pending_navigation`
     /// with the armed wait, so mid-turn history stays parked (pre-existing

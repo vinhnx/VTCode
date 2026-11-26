@@ -561,14 +561,13 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
     assert_eq!(params, json!({ "sessionId": "current-session" }));
 }
 
-#[gpui_kit::test]
-fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContext) {
-    use gpui_kit::NavigationDirection;
-    use gpui_kit::test::ClickOptions;
-
+fn mouse_history_fixture(
+    cx: &mut TestAppContext,
+) -> (AnyWindowHandle, Entity<DesktopView>, tokio::sync::mpsc::Receiver<BackendCommand>) {
     let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    let (commands, requests) = tokio::sync::mpsc::channel(2);
     let workspace = std::env::temp_dir();
+    std::fs::write(workspace.join("vtcode-mouse-preview.png"), TINY_PNG).expect("fixture image");
     let previous = vtcode_desktop_protocol::SessionSummary {
         session_id: "mouse-previous".into(),
         title: Some("Previous".into()),
@@ -599,19 +598,25 @@ fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContex
             });
         }
     });
+    (window, view, requests)
+}
 
-    let press = |direction, cx: &mut TestAppContext| {
-        cx.update_window(window, |_, window, cx| {
-            window.render_frame(cx);
-            window.click_with_options(
-                "pane-root",
-                ClickOptions::new().with_button(MouseButton::Navigate(direction)),
-                cx,
-            );
-        })
-        .unwrap();
-    };
-    press(NavigationDirection::Back, cx);
+fn press_mouse_navigation(window: AnyWindowHandle, direction: gpui_kit::NavigationDirection, cx: &mut TestAppContext) {
+    use gpui_kit::test::ClickOptions;
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click_with_options("pane-root", ClickOptions::new().with_button(MouseButton::Navigate(direction)), cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContext) {
+    use gpui_kit::NavigationDirection;
+
+    let (window, view, mut requests) = mouse_history_fixture(cx);
+    press_mouse_navigation(window, NavigationDirection::Back, cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("mouse back button should load the previous thread");
     };
@@ -623,7 +628,15 @@ fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContex
             BackendEvent::Response {
                 method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
                 result: Some(json!({
-                    "session": previous,
+                    "session": vtcode_desktop_protocol::SessionSummary {
+                        session_id: "mouse-previous".into(),
+                        title: Some("Previous".into()),
+                        workspace: std::env::temp_dir().display().to_string(),
+                        completed: true,
+                        resumable: true,
+                        size_bytes: 0,
+                        updated_at: None,
+                    },
                     "messages": [{ "role": "assistant", "text": "Previous" }],
                 })),
                 error: None,
@@ -632,12 +645,39 @@ fn mouse_navigation_buttons_still_traverse_thread_history(cx: &mut TestAppContex
         );
     });
     cx.run_until_parked();
-    press(NavigationDirection::Forward, cx);
+    press_mouse_navigation(window, NavigationDirection::Forward, cx);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("mouse forward button should load the next thread");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "mouse-current" }));
+}
+
+#[gpui_kit::test]
+fn mouse_navigation_over_palette_or_preview_does_not_switch_threads(cx: &mut TestAppContext) {
+    use gpui_kit::NavigationDirection;
+
+    let (window, view, mut requests) = mouse_history_fixture(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    press_mouse_navigation(window, NavigationDirection::Back, cx);
+    assert!(requests.try_recv().is_err(), "mouse Back must not navigate behind an open palette");
+    assert!(cx.update(|cx| view.read(cx).palette.is_some()), "the palette stays open");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.palette = None);
+        view.update(cx, |view, cx| view.open_file_preview("vtcode-mouse-preview.png".into(), window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(cx.update(|cx| view.read(cx).file_preview.is_some()), "fixture preview must open");
+    press_mouse_navigation(window, NavigationDirection::Back, cx);
+    assert!(requests.try_recv().is_err(), "mouse Back must not navigate behind a file preview");
+    assert!(cx.update(|cx| view.read(cx).file_preview.is_some()), "the preview stays open");
 }
 
 #[gpui_kit::test]

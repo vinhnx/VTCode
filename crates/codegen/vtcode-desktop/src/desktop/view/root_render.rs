@@ -365,14 +365,22 @@ impl Render for DesktopView {
                 }
             }))
             // Physical mouse back/forward buttons share the keyboard's route-
-            // first navigation; only the trackpad gesture was removed.
+            // first navigation, but only while the workspace owns the input.
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
-                cx.listener(|_, _, window, cx| window.dispatch_action(Box::new(NavigateBack), cx)),
+                cx.listener(|view, _, window, cx| {
+                    if view.mouse_navigation_allowed() {
+                        window.dispatch_action(Box::new(NavigateBack), cx);
+                    }
+                }),
             )
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Forward),
-                cx.listener(|_, _, window, cx| window.dispatch_action(Box::new(NavigateForward), cx)),
+                cx.listener(|view, _, window, cx| {
+                    if view.mouse_navigation_allowed() {
+                        window.dispatch_action(Box::new(NavigateForward), cx);
+                    }
+                }),
             )
             .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
