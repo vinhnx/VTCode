@@ -329,3 +329,35 @@ fn welcome_context_labels_resolve_in_every_language() {
     assert_eq!(rust_i18n::t!("app.composer.context_webmcp", locale = "en").to_string(), "WebMCP");
     assert_eq!(rust_i18n::t!("app.composer.context_cli", locale = "en").to_string(), "VT Code CLI");
 }
+
+#[test]
+fn onboarding_copy_resolves_in_every_language() {
+    // English literals by design until full translations ship: this pins
+    // resolution (no assert_ne).
+    for language in UiLanguage::ALL {
+        let locale = language.locale();
+        for key in [
+            "app.welcome.onboarding_title",
+            "app.welcome.onboarding_permissions_label",
+            "app.welcome.onboarding_permissions_detail",
+            "app.welcome.onboarding_agent_label",
+            "app.welcome.onboarding_agent_detail",
+            "app.welcome.onboarding_auth_setup_prefix",
+            "app.welcome.onboarding_trust_note",
+        ] {
+            let text = rust_i18n::t!(key, locale = locale).to_string();
+            assert!(!text.is_empty(), "{locale}/{key}");
+            assert_ne!(text, key, "{locale}/{key} echoed the key instead of resolving");
+        }
+        let ready = rust_i18n::t!(
+            "app.welcome.onboarding_auth_ready",
+            locale = locale,
+            provider = "openai",
+            model = "gpt-6.2-astra"
+        )
+        .to_string();
+        assert!(ready.contains("openai"), "{locale} dropped the provider");
+        assert!(ready.contains("gpt-6.2-astra"), "{locale} dropped the model");
+    }
+    assert_eq!(rust_i18n::t!("app.welcome.onboarding_title", locale = "en").to_string(), "Set up this workspace");
+}

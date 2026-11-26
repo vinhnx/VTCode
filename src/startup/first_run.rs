@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
@@ -17,11 +18,13 @@ use vtcode_core::{initialize_dot_folder, update_model_preference};
 use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::first_run_prompts::{
-    default_model_for_provider, prompt_api_key_interactive, prompt_bundled_skills_consent, prompt_lightweight_model,
-    prompt_model, prompt_persistent_memory, prompt_provider, prompt_reasoning_effort, prompt_trust,
-    resolve_bundled_skills_answer, resolve_initial_persistent_memory_enabled, resolve_initial_provider,
+    default_model_for_provider, prompt_agent_mode, prompt_api_key_interactive, prompt_bundled_skills_consent,
+    prompt_lightweight_model, prompt_model, prompt_permission_mode, prompt_persistent_memory, prompt_provider,
+    prompt_reasoning_effort, prompt_trust, resolve_bundled_skills_answer, resolve_initial_persistent_memory_enabled,
+    resolve_initial_provider,
 };
 use vtcode_config::consent::BUNDLED_SKILLS_SETTING_PATH;
+use vtcode_config::core::permissions::DefaultPermissionMode;
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
 pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, config: &mut VTCodeConfig) -> Result<bool> {
@@ -33,9 +36,21 @@ pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, conf
         return Ok(false);
     }
 
-    // If the effective config already has a provider/model, do not run first-run
-    // setup even if the workspace lacks vtcode.toml.
-    if !config.agent.provider.is_empty() || !config.agent.default_model.is_empty() {
+    // If the user has a configuration file, they are configured: do not run
+    // first-run setup even if this workspace lacks vtcode.toml. (Checking the
+    // effective provider/model fields cannot work here — struct defaults fill
+    // them on every fresh install, which previously made this wizard
+    // unreachable.)
+    if user_config_exists() {
+        return Ok(false);
+    }
+
+    // Automatic setup requires an interactive terminal: without a TTY the
+    // wizard could only accept silent defaults while writing configuration
+    // files as a side effect of an unrelated invocation (including test
+    // harnesses). Explicit `vtcode setup` always runs; its text fallbacks
+    // handle piped stdin.
+    if !std::io::stdin().is_terminal() {
         return Ok(false);
     }
 
@@ -49,7 +64,10 @@ pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, conf
     let full_auto_requested = args.full_auto.is_some();
     let non_interactive = args.skip_confirmations || full_auto_requested;
     let mode = if non_interactive {
-        SetupMode::NonInteractive { full_auto: full_auto_requested }
+        SetupMode::NonInteractive {
+            full_auto: full_auto_requested,
+            skip_confirmations: args.skip_confirmations,
+        }
     } else {
         SetupMode::Interactive
     };
@@ -60,7 +78,29 @@ pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, conf
 
 enum SetupMode {
     Interactive,
-    NonInteractive { full_auto: bool },
+    NonInteractive { full_auto: bool, skip_confirmations: bool },
+}
+
+/// Interactive wizard steps, in prompt order. The consent step keeps its
+/// number even when a prior answer short-circuits it, so progress stays
+/// truthful across reruns.
+const TOTAL_SETUP_STEPS: u8 = 10;
+
+fn step_header(current: u8, title: &str) -> String {
+    format!("Step {current} of {TOTAL_SETUP_STEPS} — {title}")
+}
+
+/// Whether the user layer has a configuration file. Absent on a truly fresh
+/// install; present once the user has configured anything (including a prior
+/// wizard run, which records the chosen provider/model there).
+fn user_config_exists() -> bool {
+    match vtcode_commons::VtCodePaths::resolve() {
+        Ok(paths) => paths.config_file().exists(),
+        Err(error) => {
+            tracing::warn!(%error, "Could not resolve user config path; skipping first-run setup");
+            true
+        }
+    }
 }
 
 fn is_fresh_workspace(workspace: &Path) -> bool {
@@ -103,104 +143,170 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
     // Ask-first consent is recorded once in the user layer; later workspaces reuse it.
     let prior_consent = resolve_bundled_skills_answer(workspace);
 
-    let (provider, model, lightweight_model, reasoning, persistent_memory, trust, consent) = match mode {
-        SetupMode::Interactive => {
-            renderer.line(
+    // Same primary-agent catalog the desktop mode picker offers.
+    let workspace_for_modes = workspace.to_path_buf();
+    let agent_specs = tokio::task::spawn_blocking(move || {
+        vtcode_config::discover_subagents(&vtcode_config::SubagentDiscoveryInput::new(workspace_for_modes))
+            .map(|discovered| {
+                discovered
+                    .effective
+                    .into_iter()
+                    .filter(vtcode_config::SubagentSpec::is_primary)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
+
+    let (provider, model, lightweight_model, reasoning, persistent_memory, trust, permission_mode, agent_name, consent) =
+        match mode {
+            SetupMode::Interactive => {
+                renderer.line(
                     MessageStyle::Status,
-                    "Let's configure your default provider, model, lightweight model route, reasoning effort, persistent memory, and workspace trust.",
+                    "Let's configure your default provider, model, lightweight model route, reasoning effort, persistent memory, workspace trust, permission mode, and agent mode.",
                 )?;
-            renderer.line(MessageStyle::Status, "Press Enter to accept the suggested value in brackets.")?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, "Press Enter to accept the suggested value in brackets.")?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let provider = resolve_initial_provider(config, &discovered);
-            let provider = prompt_provider(&mut renderer, provider, &discovered, &config.providers_whitelist)?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(1, "Provider"))?;
+                let provider = resolve_initial_provider(config, &discovered);
+                let provider = prompt_provider(&mut renderer, provider, &discovered, &config.providers_whitelist)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            // Interactive API key entry — skips the paste prompt when the key is
-            // already in the environment or OS keyring; stores pasted keys in
-            // the OS keyring (not workspace .env).
-            prompt_api_key_interactive(&mut renderer, provider, storage_mode)?;
-            renderer.line(MessageStyle::Info, "")?;
+                // Interactive API key entry — skips the paste prompt when the key is
+                // already in the environment or OS keyring; stores pasted keys in
+                // the OS keyring (not workspace .env).
+                renderer.line(MessageStyle::Status, &step_header(2, "API key"))?;
+                prompt_api_key_interactive(&mut renderer, provider, storage_mode)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let default_model = default_model_for_provider(provider);
-            let model = prompt_model(&mut renderer, provider, default_model)?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(3, "Model"))?;
+                let default_model = default_model_for_provider(provider);
+                let model = prompt_model(&mut renderer, provider, default_model)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let lightweight_model = prompt_lightweight_model(&mut renderer, provider, &model)?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(4, "Lightweight model"))?;
+                let lightweight_model = prompt_lightweight_model(&mut renderer, provider, &model)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(5, "Reasoning effort"))?;
+                let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let persistent_memory =
-                prompt_persistent_memory(&mut renderer, resolve_initial_persistent_memory_enabled(config))?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(6, "Persistent memory"))?;
+                let persistent_memory =
+                    prompt_persistent_memory(&mut renderer, resolve_initial_persistent_memory_enabled(config))?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
-            renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Status, &step_header(7, "Workspace trust"))?;
+                let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let consent = match prior_consent {
-                Some(allowed) => {
-                    renderer.line(
+                renderer.line(MessageStyle::Status, &step_header(8, "Permission mode"))?;
+                let permission_mode = prompt_permission_mode(&mut renderer, config.permissions.default_mode)?;
+                renderer.line(MessageStyle::Info, "")?;
+
+                renderer.line(MessageStyle::Status, &step_header(9, "Agent mode"))?;
+                let agent_name = prompt_agent_mode(&mut renderer, &agent_specs, &config.default_primary_agent)?;
+                renderer.line(MessageStyle::Info, "")?;
+
+                renderer.line(MessageStyle::Status, &step_header(10, "Bundled skills"))?;
+                let consent = match prior_consent {
+                    Some(allowed) => {
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("Bundled skills: already {}.", if allowed { "allowed" } else { "declined" }),
+                        )?;
+                        renderer.line(MessageStyle::Info, "")?;
+                        allowed
+                    }
+                    None => {
+                        let allowed = prompt_bundled_skills_consent(&mut renderer)?;
+                        renderer.line(MessageStyle::Info, "")?;
+                        allowed
+                    }
+                };
+
+                (
+                    provider,
+                    model,
+                    lightweight_model,
+                    reasoning,
+                    persistent_memory,
+                    trust,
+                    permission_mode,
+                    agent_name,
+                    Some(consent),
+                )
+            }
+            SetupMode::NonInteractive { full_auto, skip_confirmations } => {
+                renderer.line(
+                    MessageStyle::Status,
+                    "Non-interactive setup flags detected. Applying defaults without prompts.",
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
+
+                let provider = resolve_initial_provider(config, &discovered);
+                let default_model = default_model_for_provider(provider);
+                let model = default_model.to_owned();
+                let lightweight_model = String::new();
+                let reasoning = config.agent.reasoning_effort;
+                let persistent_memory = resolve_initial_persistent_memory_enabled(config);
+                let trust = if full_auto {
+                    WorkspaceTrustLevel::FullAuto
+                } else {
+                    WorkspaceTrustLevel::ToolsPolicy
+                };
+                // Honor the flags that selected non-interactive setup so the
+                // persisted default matches this run's behavior.
+                let permission_mode = if full_auto || skip_confirmations {
+                    DefaultPermissionMode::AutoApprove
+                } else {
+                    DefaultPermissionMode::Ask
+                };
+                let agent_name = config.default_primary_agent.clone();
+
+                renderer.line(MessageStyle::Info, &format!("Provider: {}", provider.label()))?;
+                renderer.line(MessageStyle::Info, &format!("Model: {model}"))?;
+                renderer.line(MessageStyle::Info, "Lightweight model: Automatic (same-provider lightweight route)")?;
+                renderer.line(MessageStyle::Info, &format!("Reasoning effort: {}", reasoning.as_str()))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Persistent memory: {}", persistent_memory_label(persistent_memory)),
+                )?;
+                renderer.line(MessageStyle::Info, &api_key_hint(provider, storage_mode))?;
+                renderer.line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Permission mode: {}", permission_mode_label(permission_mode)),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("Agent mode: {agent_name}"))?;
+                match prior_consent {
+                    Some(allowed) => renderer.line(
                         MessageStyle::Info,
                         &format!("Bundled skills: already {}.", if allowed { "allowed" } else { "declined" }),
-                    )?;
-                    renderer.line(MessageStyle::Info, "")?;
-                    allowed
+                    )?,
+                    None => renderer.line(
+                        MessageStyle::Info,
+                        "Bundled skills: not asked (non-interactive) — staying uninstalled until you allow them.",
+                    )?,
                 }
-                None => {
-                    let allowed = prompt_bundled_skills_consent(&mut renderer)?;
-                    renderer.line(MessageStyle::Info, "")?;
-                    allowed
-                }
-            };
+                renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, lightweight_model, reasoning, persistent_memory, trust, Some(consent))
-        }
-        SetupMode::NonInteractive { full_auto } => {
-            renderer.line(
-                MessageStyle::Status,
-                "Non-interactive setup flags detected. Applying defaults without prompts.",
-            )?;
-            renderer.line(MessageStyle::Info, "")?;
-
-            let provider = resolve_initial_provider(config, &discovered);
-            let default_model = default_model_for_provider(provider);
-            let model = default_model.to_owned();
-            let lightweight_model = String::new();
-            let reasoning = config.agent.reasoning_effort;
-            let persistent_memory = resolve_initial_persistent_memory_enabled(config);
-            let trust = if full_auto {
-                WorkspaceTrustLevel::FullAuto
-            } else {
-                WorkspaceTrustLevel::ToolsPolicy
-            };
-
-            renderer.line(MessageStyle::Info, &format!("Provider: {}", provider.label()))?;
-            renderer.line(MessageStyle::Info, &format!("Model: {model}"))?;
-            renderer.line(MessageStyle::Info, "Lightweight model: Automatic (same-provider lightweight route)")?;
-            renderer.line(MessageStyle::Info, &format!("Reasoning effort: {}", reasoning.as_str()))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Persistent memory: {}", persistent_memory_label(persistent_memory)),
-            )?;
-            renderer.line(MessageStyle::Info, &api_key_hint(provider, storage_mode))?;
-            renderer.line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
-            match prior_consent {
-                Some(allowed) => renderer.line(
-                    MessageStyle::Info,
-                    &format!("Bundled skills: already {}.", if allowed { "allowed" } else { "declined" }),
-                )?,
-                None => renderer.line(
-                    MessageStyle::Info,
-                    "Bundled skills: not asked (non-interactive) — staying uninstalled until you allow them.",
-                )?,
+                (
+                    provider,
+                    model,
+                    lightweight_model,
+                    reasoning,
+                    persistent_memory,
+                    trust,
+                    permission_mode,
+                    agent_name,
+                    prior_consent,
+                )
             }
-            renderer.line(MessageStyle::Info, "")?;
-
-            (provider, model, lightweight_model, reasoning, persistent_memory, trust, prior_consent)
-        }
-    };
+        };
 
     let selected_config_path = vtcode_config::loader::explicit_config_path();
     let is_explicit_config = selected_config_path.is_some();
@@ -211,7 +317,16 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
     let provider_key = provider.to_string();
     // Set API key environment name from provider defaults; do this once to avoid recomputing.
     config.agent.api_key_env = provider.default_api_key_env().to_owned();
-    apply_selection(config, &provider_key, &model, &lightweight_model, reasoning, persistent_memory);
+    apply_selection(
+        config,
+        &provider_key,
+        &model,
+        &lightweight_model,
+        reasoning,
+        persistent_memory,
+        permission_mode,
+        &agent_name,
+    );
 
     let save_result = if is_explicit_config {
         ConfigManager::save_config_to_path(&config_path, config)
@@ -221,6 +336,28 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
     save_result.with_context(|| format!("Failed to write initial configuration to {}", config_path.display()))?;
 
     update_model_preference(&provider_key, &model).await.ok();
+
+    // Provider/model/permission choices are home-scoped: record them in the
+    // user layer so later workspaces inherit them (and later fresh workspaces
+    // skip this wizard). An explicit `vtcode setup` rerun intentionally
+    // refreshes them.
+    let permission_value = toml::Value::try_from(permission_mode).context("Failed to serialize permission mode")?;
+    for (path, value) in [
+        ("agent.provider", toml::Value::String(provider_key.clone())),
+        ("agent.default_model", toml::Value::String(model.clone())),
+        ("agent.api_key_env", toml::Value::String(config.agent.api_key_env.clone())),
+        ("permissions.default_mode", permission_value),
+    ] {
+        ConfigService::write(ConfigWriteRequest {
+            workspace: workspace.to_path_buf(),
+            target: ConfigWriteTarget::User,
+            path: path.to_string(),
+            value,
+            strategy: ConfigWriteStrategy::Replace,
+            expected_layer_version: None,
+        })
+        .with_context(|| format!("Failed to persist {path} to the user configuration"))?;
+    }
 
     // Consent is home-scoped, so a fresh answer goes to the user layer (not
     // the workspace file). Pre-existing answers are never rewritten here.
@@ -243,20 +380,22 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
         .with_context(|| format!("Failed to persist workspace trust level for {}", workspace.display()))?;
 
     renderer.line(MessageStyle::Info, "")?;
-    render_setup_summary(
-        &mut renderer,
+    let summary = SetupSummary {
         provider,
-        &model,
-        &lightweight_model,
+        model: &model,
+        lightweight_model: &lightweight_model,
         reasoning,
-        persistent_memory,
+        persistent_memory_enabled: persistent_memory,
         trust,
+        permission_mode,
+        agent_name: &agent_name,
         storage_mode,
-        consent,
-    )?;
+        bundled_skills_consent: consent,
+    };
+    render_setup_summary(&mut renderer, &summary)?;
     renderer.line(
         MessageStyle::Status,
-        "Tip: run `/init` anytime to rerun this setup and refresh other workspace defaults.",
+        "Tip: run `vtcode setup` anytime to rerun this setup and refresh other workspace defaults.",
     )?;
     renderer.line(MessageStyle::Info, "")?;
 
@@ -270,12 +409,15 @@ fn apply_selection(
     lightweight_model: &str,
     reasoning: ReasoningEffortLevel,
     persistent_memory_enabled: bool,
+    permission_mode: DefaultPermissionMode,
+    agent_name: &str,
 ) {
     config.agent.provider = provider_key.to_owned();
     config.agent.default_model = model.to_owned();
     config.agent.small_model.model = lightweight_model.to_owned();
     config.agent.reasoning_effort = reasoning;
-    config.default_primary_agent = defaults::DEFAULT_PRIMARY_AGENT_NAME.to_owned();
+    config.default_primary_agent = agent_name.to_owned();
+    config.permissions.default_mode = permission_mode;
     config.features.memories = persistent_memory_enabled;
     config.agent.persistent_memory.enabled = persistent_memory_enabled;
     config.agent.theme = defaults::DEFAULT_THEME.to_owned();
@@ -283,69 +425,57 @@ fn apply_selection(
     config.agent.temperature = llm_generation::DEFAULT_TEMPERATURE;
 }
 
-fn render_setup_summary(
-    renderer: &mut AnsiRenderer,
+/// Inputs for the setup completion summary, bundled to keep the render
+/// helpers readable as wizard steps grow.
+struct SetupSummary<'a> {
     provider: Provider,
-    model: &str,
-    lightweight_model: &str,
+    model: &'a str,
+    lightweight_model: &'a str,
     reasoning: ReasoningEffortLevel,
     persistent_memory_enabled: bool,
     trust: WorkspaceTrustLevel,
+    permission_mode: DefaultPermissionMode,
+    agent_name: &'a str,
     storage_mode: AuthCredentialsStoreMode,
     bundled_skills_consent: Option<bool>,
-) -> Result<()> {
-    for (style, line) in setup_summary_lines(
-        provider,
-        model,
-        lightweight_model,
-        reasoning,
-        persistent_memory_enabled,
-        trust,
-        storage_mode,
-        bundled_skills_consent,
-    ) {
+}
+
+fn render_setup_summary(renderer: &mut AnsiRenderer, summary: &SetupSummary) -> Result<()> {
+    for (style, line) in setup_summary_lines(summary) {
         renderer.line(style, &line)?;
     }
     renderer.line(MessageStyle::Info, "")?;
     Ok(())
 }
 
-fn setup_summary_lines(
-    provider: Provider,
-    model: &str,
-    lightweight_model: &str,
-    reasoning: ReasoningEffortLevel,
-    persistent_memory_enabled: bool,
-    trust: WorkspaceTrustLevel,
-    storage_mode: AuthCredentialsStoreMode,
-    bundled_skills_consent: Option<bool>,
-) -> Vec<(MessageStyle, String)> {
+fn setup_summary_lines(summary: &SetupSummary) -> Vec<(MessageStyle, String)> {
     let mut lines = Vec::with_capacity(16);
     lines.push((
         MessageStyle::Status,
         format!(
             "Setup complete. Provider: {} • Model: {} • Lightweight: {} • Reasoning: {}",
-            provider.label(),
-            model,
-            lightweight_model_label(lightweight_model, model),
-            reasoning.as_str()
+            summary.provider.label(),
+            summary.model,
+            lightweight_model_label(summary.lightweight_model, summary.model),
+            summary.reasoning.as_str()
         ),
     ));
     lines.push((
         MessageStyle::Info,
         format!(
-            "Primary agent: {} • Persistent memory: {} • Trust: {}",
-            defaults::DEFAULT_PRIMARY_AGENT_NAME,
-            persistent_memory_label(persistent_memory_enabled),
-            trust_label(trust)
+            "Primary agent: {} • Persistent memory: {} • Trust: {} • Permissions: {}",
+            summary.agent_name,
+            persistent_memory_label(summary.persistent_memory_enabled),
+            trust_label(summary.trust),
+            permission_mode_label(summary.permission_mode),
         ),
     ));
-    lines.push((MessageStyle::Status, format!("Auth: {}", api_key_hint(provider, storage_mode))));
-    lines.push((MessageStyle::Info, format!("Bundled skills: {}", consent_label(bundled_skills_consent))));
+    lines.push((MessageStyle::Status, format!("Auth: {}", api_key_hint(summary.provider, summary.storage_mode))));
+    lines.push((MessageStyle::Info, format!("Bundled skills: {}", consent_label(summary.bundled_skills_consent))));
     lines.push((MessageStyle::Info, vtcode_config::consent::CONSENT_MCP_DISCLOSURE.to_string()));
     lines.push((MessageStyle::Status, "What's available now:".to_string()));
     lines.extend(
-        capability_highlight_lines(persistent_memory_enabled)
+        capability_highlight_lines(summary.persistent_memory_enabled)
             .into_iter()
             .map(|line| (MessageStyle::Info, line)),
     );
@@ -477,6 +607,18 @@ fn trust_label(level: WorkspaceTrustLevel) -> &'static str {
     }
 }
 
+fn permission_mode_label(mode: DefaultPermissionMode) -> &'static str {
+    match mode {
+        DefaultPermissionMode::Ask => "Ask",
+        DefaultPermissionMode::AutoApprove => "Auto-approve",
+    }
+}
+
+/// Explicit re-run entry for `vtcode setup`: same wizard, no freshness gate.
+pub(crate) async fn run_setup_wizard(workspace: &Path, config: &mut VTCodeConfig) -> Result<()> {
+    run_first_run_setup(workspace, config, SetupMode::Interactive).await
+}
+
 fn consent_label(consent: Option<bool>) -> &'static str {
     match consent {
         Some(true) => "allowed",
@@ -498,7 +640,16 @@ mod tests {
     fn edit_startup_mode_keeps_permissions_config_shape() {
         let mut config = base_config();
 
-        apply_selection(&mut config, "openai", "gpt-5.6-sol", "", ReasoningEffortLevel::None, false);
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            false,
+            DefaultPermissionMode::Ask,
+            "build",
+        );
 
         assert!(config.permissions.allow.is_empty());
         assert_eq!(config.default_primary_agent, "build");
@@ -508,18 +659,56 @@ mod tests {
     fn first_run_selection_does_not_write_old_mode_fields() {
         let mut config = base_config();
 
-        apply_selection(&mut config, "openai", "gpt-5.6-sol", "", ReasoningEffortLevel::None, false);
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            false,
+            DefaultPermissionMode::Ask,
+            "build",
+        );
 
         assert!(config.permissions.allow.is_empty());
         assert!(config.permissions.deny.is_empty());
         assert_eq!(config.default_primary_agent, "build");
+        assert_eq!(config.permissions.default_mode, DefaultPermissionMode::Ask);
+    }
+
+    #[test]
+    fn first_run_selection_persists_permission_and_agent_choice() {
+        let mut config = base_config();
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            false,
+            DefaultPermissionMode::AutoApprove,
+            "plan",
+        );
+
+        assert_eq!(config.permissions.default_mode, DefaultPermissionMode::AutoApprove);
+        assert_eq!(config.default_primary_agent, "plan");
     }
 
     #[test]
     fn persistent_memory_selection_persists_opt_in() {
         let mut config = base_config();
 
-        apply_selection(&mut config, "openai", "gpt-5.6-sol", "", ReasoningEffortLevel::None, true);
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            true,
+            DefaultPermissionMode::Ask,
+            "build",
+        );
 
         assert!(config.features.memories);
         assert!(config.agent.persistent_memory.enabled);
@@ -531,29 +720,49 @@ mod tests {
         config.features.memories = true;
         config.agent.persistent_memory.enabled = true;
 
-        apply_selection(&mut config, "openai", "gpt-5.6-sol", "", ReasoningEffortLevel::None, false);
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.6-sol",
+            "",
+            ReasoningEffortLevel::None,
+            false,
+            DefaultPermissionMode::Ask,
+            "build",
+        );
 
         assert!(!config.features.memories);
         assert!(!config.agent.persistent_memory.enabled);
     }
 
+    fn test_summary(agent_name: &str, permission_mode: DefaultPermissionMode, consent: Option<bool>) -> String {
+        let summary = SetupSummary {
+            provider: Provider::OpenAI,
+            model: "gpt-5.6-sol",
+            lightweight_model: "",
+            reasoning: ReasoningEffortLevel::None,
+            persistent_memory_enabled: false,
+            trust: WorkspaceTrustLevel::ToolsPolicy,
+            permission_mode,
+            agent_name,
+            storage_mode: AuthCredentialsStoreMode::default(),
+            bundled_skills_consent: consent,
+        };
+        setup_summary_lines(&summary)
+            .into_iter()
+            .map(|(_style, line)| line)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     #[test]
     fn setup_summary_mentions_new_capabilities() {
-        let lines = setup_summary_lines(
-            Provider::OpenAI,
-            "gpt-5.6-sol",
-            "",
-            ReasoningEffortLevel::None,
-            false,
-            WorkspaceTrustLevel::ToolsPolicy,
-            AuthCredentialsStoreMode::default(),
-            Some(true),
-        );
-        let rendered = lines.into_iter().map(|(_style, line)| line).collect::<Vec<_>>().join("\n");
+        let rendered = test_summary("build", DefaultPermissionMode::Ask, Some(true));
 
         assert!(rendered.contains("`--full-auto` is separate"));
         assert!(rendered.contains("Persistent repository memory"));
         assert!(rendered.contains("Primary agent: build"));
+        assert!(rendered.contains("Permissions: Ask"));
         assert!(rendered.contains("Subagents"));
         assert!(rendered.contains("Skills"));
         assert!(rendered.contains("lightweight model route"));
@@ -562,21 +771,16 @@ mod tests {
         assert!(!rendered.contains("permission mode"));
     }
 
+    #[test]
+    fn setup_summary_reports_agent_and_permission_choices() {
+        let rendered = test_summary("plan", DefaultPermissionMode::AutoApprove, Some(true));
+
+        assert!(rendered.contains("Primary agent: plan"), "summary: {rendered}");
+        assert!(rendered.contains("Permissions: Auto-approve"), "summary: {rendered}");
+    }
+
     fn summary_with_consent(consent: Option<bool>) -> String {
-        setup_summary_lines(
-            Provider::OpenAI,
-            "gpt-5.6-sol",
-            "",
-            ReasoningEffortLevel::None,
-            false,
-            WorkspaceTrustLevel::ToolsPolicy,
-            AuthCredentialsStoreMode::default(),
-            consent,
-        )
-        .into_iter()
-        .map(|(_style, line)| line)
-        .collect::<Vec<_>>()
-        .join("\n")
+        test_summary("build", DefaultPermissionMode::Ask, consent)
     }
 
     #[test]
@@ -592,5 +796,12 @@ mod tests {
         let unasked = summary_with_consent(None);
         assert!(unasked.contains("Bundled skills: not asked"), "summary: {unasked}");
         assert!(unasked.contains("staying uninstalled"), "summary: {unasked}");
+    }
+
+    #[test]
+    fn step_headers_number_all_interactive_prompts() {
+        assert_eq!(step_header(1, "Provider"), "Step 1 of 10 — Provider");
+        assert_eq!(step_header(10, "Bundled skills"), "Step 10 of 10 — Bundled skills");
+        assert_eq!(TOTAL_SETUP_STEPS, 10);
     }
 }

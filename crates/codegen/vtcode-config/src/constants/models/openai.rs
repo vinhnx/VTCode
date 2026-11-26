@@ -1,4 +1,4 @@
-pub const DEFAULT_MODEL: &str = "gpt-5.6-sol";
+pub const DEFAULT_MODEL: &str = "gpt-6.2-astra";
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT,
     GPT_6_2_ASTRA,

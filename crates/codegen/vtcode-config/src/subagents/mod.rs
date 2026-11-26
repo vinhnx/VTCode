@@ -175,7 +175,10 @@ pub struct SubagentSpec {
     pub warnings: Vec<String>,
     /// Per-tool policy overrides applied when this agent becomes active.
     /// Keys are tool names, values are the policy to enforce.
-    /// Applied on top of (and overriding) the global `[tools.policies]` from vtcode.toml.
+    /// Applied on top of (and overriding) the global `[tools.policies]` from vtcode.toml,
+    /// as a session-scoped in-memory overlay: overrides never persist to disk,
+    /// are replaced on every agent (re)selection (including session setup), and
+    /// can never lift an explicit persisted Deny.
     #[serde(default)]
     pub tool_policy_overrides: BTreeMap<String, ToolPolicy>,
 }

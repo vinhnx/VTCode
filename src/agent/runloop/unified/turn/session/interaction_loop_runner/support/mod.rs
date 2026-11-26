@@ -30,7 +30,8 @@ use crate::agent::runloop::unified::external_editor::run_blocking_with_event_loo
 use crate::agent::runloop::unified::inline_events::InlineLoopAction;
 use crate::agent::runloop::unified::interactive_features::{PromptSuggestionSource, generate_inline_prompt_suggestion};
 use crate::agent::runloop::unified::turn::primary_agent_runtime::{
-    PrimaryAgentRuntimeSyncContext, load_primary_agent_specs as load_primary_agent_specs_for_runtime,
+    PrimaryAgentRuntimeSyncContext, apply_primary_agent_tool_policy_overrides,
+    load_primary_agent_specs as load_primary_agent_specs_for_runtime,
     sync_primary_agent_runtime as sync_primary_agent_runtime_context,
 };
 use crate::startup::{auto_grant_tui_full_auto_workspace_trust, ensure_full_auto_workspace_trust};
@@ -715,18 +716,17 @@ pub(crate) async fn handle_select_primary_agent(
         Ok(active) => {
             let display_name = active.display_name.clone();
             let is_plan_agent = active.identity.name.eq_ignore_ascii_case("plan");
-            let policy_overrides = active.tool_policy_overrides.clone();
+            // Apply per-agent tool policy overrides before refreshing the tool snapshot.
+            // The overlay is infallible and memory-only, so it runs ahead of the
+            // fallible planning-gate close below: a gate failure then leaves the
+            // newly selected agent with its own overrides, never the previous
+            // agent's.
+            apply_primary_agent_tool_policy_overrides(ctx.tool_registry, active).await;
             // Resolve and close the planning gate before any runtime
             // reconfiguration can fail, so switching away cannot leave a
             // dangling approval request.
             if !is_plan_agent {
                 leave_planning_for_execution(ctx).await?;
-            }
-            // Apply per-agent tool policy overrides before refreshing the tool snapshot
-            for (tool_name, policy) in &policy_overrides {
-                if let Err(err) = ctx.tool_registry.set_tool_policy(tool_name, policy.clone()).await {
-                    tracing::warn!("Failed to apply tool policy override for '{}' on agent switch: {}", tool_name, err);
-                }
             }
             sync_primary_agent_runtime(ctx, state).await?;
             set_primary_agent_display(ctx, display_name);

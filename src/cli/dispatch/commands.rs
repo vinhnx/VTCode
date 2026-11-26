@@ -19,7 +19,7 @@ use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
 use crate::cli::{
     analyze, benchmark, config, create_project, desktop, exec, init, init_project, man, notify, revert, review,
-    schedule, schema, secret, skills, snapshots, trajectory, update,
+    schedule, schema, secret, setup, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
@@ -199,6 +199,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         }
         Commands::CleanupSnapshots { max } => {
             snapshots::handle_cleanup_snapshots_command(core_cfg, Some(max)).await?;
+        }
+        Commands::Setup => {
+            setup::handle_setup_command(&startup.workspace, &startup.config).await?;
         }
         Commands::Init { force } => {
             init::handle_init_command(&startup.workspace, force, false).await?;

@@ -112,3 +112,58 @@ fn shared_gpt_oss_20b_id_resolves_to_openai() {
     assert_eq!(models::openai::GPT_OSS_20B, models::llamacpp::GPT_OSS_20B);
     assert_eq!(ModelId::from_str(models::llamacpp::GPT_OSS_20B).unwrap(), ModelId::OpenAIGptOss20b);
 }
+
+#[test]
+fn latest_flagship_selects_newest_top_tier_first_in_catalog() {
+    // Pinned values document intent; when a newer generation ships, update
+    // these alongside the DEFAULT_MODEL constants below (deliberate review).
+    assert_eq!(
+        ModelId::latest_flagship(Provider::OpenAI).map(|model| model.as_str().into_owned()),
+        Some(models::openai::GPT_6_2_ASTRA.to_string())
+    );
+    assert_eq!(
+        ModelId::latest_flagship(Provider::Anthropic).map(|model| model.as_str().into_owned()),
+        Some(models::anthropic::CLAUDE_SONNET_5_5.to_string())
+    );
+    for provider in [Provider::OpenAI, Provider::Anthropic] {
+        let flagship = ModelId::latest_flagship(provider).expect("flagship exists");
+        assert!(flagship.is_top_tier());
+        assert_eq!(flagship.provider(), provider);
+        for model in ModelId::all_models() {
+            if model.provider() == provider && model.is_top_tier() {
+                assert!(
+                    model.generation_sort_key() >= flagship.generation_sort_key(),
+                    "{provider:?} flagship {} is not the newest generation",
+                    flagship.as_str()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn provider_default_models_track_latest_flagship() {
+    // Anti-rot: curated defaults must equal the dynamic flagship. A catalog
+    // advance turns this red until a human reviews cost/behavior impact and
+    // bumps the constants deliberately.
+    assert_eq!(
+        models::openai::DEFAULT_MODEL.to_string(),
+        ModelId::latest_flagship(Provider::OpenAI)
+            .expect("openai flagship")
+            .as_str()
+            .into_owned()
+    );
+    assert_eq!(
+        models::anthropic::DEFAULT_MODEL.to_string(),
+        ModelId::latest_flagship(Provider::Anthropic)
+            .expect("anthropic flagship")
+            .as_str()
+            .into_owned()
+    );
+}
+
+#[test]
+fn local_providers_have_no_flagship_fallback() {
+    assert_eq!(ModelId::latest_flagship(Provider::Ollama), None);
+    assert_eq!(ModelId::latest_flagship(Provider::LmStudio), None);
+}

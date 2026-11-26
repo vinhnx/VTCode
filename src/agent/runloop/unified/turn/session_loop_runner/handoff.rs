@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::Path;
 use vtcode_core::core::agent::runtime::AgentRuntime;
-use vtcode_core::primary_agent::{ActivePrimaryAgent, ActivePrimaryAgentState};
+use vtcode_core::primary_agent::ActivePrimaryAgentState;
 use vtcode_core::tools::registry::ToolRegistry;
 
 use crate::agent::runloop::unified::planning_workflow::PlanExecutionContext;
@@ -41,21 +41,6 @@ pub(super) fn build_approved_plan_execution_prompt(
         prompt.push_str(seed);
     }
     prompt
-}
-
-pub(super) async fn apply_primary_agent_tool_policy_overrides(
-    tool_registry: &ToolRegistry,
-    active_agent: &ActivePrimaryAgent,
-) {
-    for (tool_name, policy) in &active_agent.tool_policy_overrides {
-        if let Err(err) = tool_registry.set_tool_policy(tool_name, policy.clone()).await {
-            tracing::warn!(
-                tool = %tool_name,
-                error = %err,
-                "Failed to apply restored primary-agent tool policy"
-            );
-        }
-    }
 }
 
 /// Shared failure report for approved-plan agent selection. Keeps the

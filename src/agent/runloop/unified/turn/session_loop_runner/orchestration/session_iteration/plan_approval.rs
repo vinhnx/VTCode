@@ -24,8 +24,8 @@ use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use super::super::super::handoff::{
-    append_approved_plan_execution_input, apply_primary_agent_tool_policy_overrides,
-    build_approved_plan_execution_prompt, report_plan_approval_selection_failure, select_approved_plan_execution_agent,
+    append_approved_plan_execution_input, build_approved_plan_execution_prompt, report_plan_approval_selection_failure,
+    select_approved_plan_execution_agent,
 };
 use super::super::super::plan_seed::load_active_plan_seed;
 use super::super::super::support::force_reload_workspace_config_for_execution;
@@ -42,6 +42,7 @@ use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use crate::agent::runloop::unified::turn::primary_agent_runtime::apply_primary_agent_tool_policy_overrides;
 use crate::agent::runloop::unified::turn::primary_agent_runtime::{
     PrimaryAgentRuntimeSyncContext, sync_primary_agent_permissions, sync_primary_agent_runtime,
 };

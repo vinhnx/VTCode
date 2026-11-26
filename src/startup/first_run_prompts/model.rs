@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use hashbrown::HashSet;
 
 use anyhow::Result;
@@ -33,11 +35,20 @@ pub(crate) fn prompt_model(
     }
 }
 
+/// Newest top-tier model id for providers with a curated flagship ladder,
+/// falling back to the pinned constant (identical by anti-rot test).
+fn flagship_or(provider: Provider, fallback: &'static str) -> &'static str {
+    match ModelId::latest_flagship(provider).map(|model| model.as_str()) {
+        Some(Cow::Borrowed(id)) => id,
+        _ => fallback,
+    }
+}
+
 pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
     match provider {
         Provider::Gemini => models::google::DEFAULT_MODEL,
-        Provider::OpenAI => models::openai::DEFAULT_MODEL,
-        Provider::Anthropic => models::anthropic::DEFAULT_MODEL,
+        Provider::OpenAI => flagship_or(Provider::OpenAI, models::openai::DEFAULT_MODEL),
+        Provider::Anthropic => flagship_or(Provider::Anthropic, models::anthropic::DEFAULT_MODEL),
         Provider::Copilot => models::copilot::DEFAULT_MODEL,
         Provider::DeepSeek => models::deepseek::DEFAULT_MODEL,
         Provider::Meta => models::meta::DEFAULT_MODEL,

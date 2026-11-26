@@ -90,6 +90,10 @@ impl DesktopView {
                 )
             },
         );
+        // First-workspace onboarding sits below the steady heading row so it
+        // never shifts the greeting or brand mark.
+        let prelude =
+            prelude.when(self.should_show_onboarding(), |prelude| prelude.child(self.render_onboarding_panel(cx)));
 
         div()
             .id(group_id)

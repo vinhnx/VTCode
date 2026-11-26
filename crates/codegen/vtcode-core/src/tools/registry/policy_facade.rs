@@ -1,5 +1,7 @@
 //! Tool policy evaluation helpers attached to ToolRegistry.
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use hashbrown::HashSet;
 use indexmap::IndexMap;
@@ -183,6 +185,23 @@ impl ToolRegistry {
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let normalized_name = self.resolve_runtime_policy_name(tool_name);
         self.policy_gateway.set_tool_policy(&normalized_name, policy).await
+    }
+
+    /// Replace the session-scoped policy overlay with one agent's overrides.
+    ///
+    /// Infallible and disk-free, unlike [`Self::set_tool_policy`]: entries
+    /// adjust evaluation for this registry only. Always clears first so a
+    /// previous mode's Allow cannot survive an agent (re)selection. Every
+    /// agent (re)selection — session setup, mode switch, plan entry/exit —
+    /// must call this with the newly selected agent's overrides.
+    pub async fn apply_runtime_tool_policy_overrides(&self, overrides: &BTreeMap<String, ToolPolicy>) {
+        self.policy_gateway.clear_runtime_tool_policies().await;
+        for (tool_name, policy) in overrides {
+            let normalized_name = self.resolve_runtime_policy_name(tool_name);
+            self.policy_gateway
+                .set_runtime_tool_policy(&normalized_name, policy.clone())
+                .await;
+        }
     }
 
     pub async fn persist_approval_cache_key(&self, approval_key: &str) -> Result<()> {
@@ -411,5 +430,156 @@ impl ToolRegistry {
         };
 
         self.policy_gateway.persist_mcp_tool_policy(&provider, &tool_name, policy).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::tools;
+    use tempfile::TempDir;
+
+    /// Persist `policy` for `tool` through one registry lifetime, then rebuild
+    /// the registry on the same workspace so the suite exercises the real
+    /// production load path (`<workspace>/.vtcode/tool-policy.json`).
+    async fn registry_with_persisted_policy(tool: &str, policy: ToolPolicy) -> (TempDir, ToolRegistry) {
+        let temp = TempDir::new().expect("workspace");
+        let seed = ToolRegistry::new(temp.path().to_path_buf()).await;
+        seed.set_tool_policy(tool, policy).await.expect("persist seed policy");
+        drop(seed);
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        assert!(registry.has_policy_manager().await, "hydrated registry owns a policy manager");
+        (temp, registry)
+    }
+
+    fn overlay(tool: &str, policy: ToolPolicy) -> BTreeMap<String, ToolPolicy> {
+        BTreeMap::from([(tool.to_string(), policy)])
+    }
+
+    #[tokio::test]
+    async fn persisted_exec_allow_is_honored_by_evaluation() {
+        // Production shape of the reporter's workspace: exec_command persisted
+        // as Allow must evaluate Allow (name resolution must match the key).
+        let (_temp, registry) = registry_with_persisted_policy(tools::EXEC_COMMAND, ToolPolicy::Allow).await;
+        assert_eq!(registry.get_tool_policy(tools::EXEC_COMMAND).await, ToolPolicy::Allow);
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::EXEC_COMMAND).await.expect("evaluate"),
+            ToolPermissionDecision::Allow,
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_overlay_allow_upgrades_prompt_without_persisting() {
+        // web_search never auto-seeds (Medium network risk), so it holds a
+        // stable Prompt baseline, unlike exec_command which self-promotes to
+        // Allow on first read.
+        let temp = TempDir::new().expect("workspace");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("baseline"),
+            ToolPermissionDecision::Prompt,
+        );
+
+        registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::WEB_SEARCH, ToolPolicy::Allow))
+            .await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("overlay"),
+            ToolPermissionDecision::Allow,
+        );
+        // The overlay is memory-only: the persisted manager still says Prompt.
+        assert_eq!(registry.get_tool_policy(tools::WEB_SEARCH).await, ToolPolicy::Prompt);
+
+        // A fresh registry on the same workspace sees no trace of the overlay.
+        drop(registry);
+        let reloaded = ToolRegistry::new(temp.path().to_path_buf()).await;
+        assert_eq!(
+            reloaded.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("reloaded"),
+            ToolPermissionDecision::Prompt,
+        );
+    }
+
+    #[tokio::test]
+    async fn persisted_deny_beats_runtime_allow_but_prompt_does_not() {
+        // Asymmetric pair on the real agent-override tool: overlay Allow lifts
+        // Prompt but never an explicit persisted Deny.
+        let (_prompt_temp, prompt_registry) =
+            registry_with_persisted_policy(tools::EXEC_COMMAND, ToolPolicy::Prompt).await;
+        prompt_registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::EXEC_COMMAND, ToolPolicy::Allow))
+            .await;
+        assert_eq!(
+            prompt_registry
+                .evaluate_tool_policy(tools::EXEC_COMMAND)
+                .await
+                .expect("prompt+allow"),
+            ToolPermissionDecision::Allow,
+        );
+
+        let (_deny_temp, deny_registry) = registry_with_persisted_policy(tools::EXEC_COMMAND, ToolPolicy::Deny).await;
+        deny_registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::EXEC_COMMAND, ToolPolicy::Allow))
+            .await;
+        assert_eq!(
+            deny_registry
+                .evaluate_tool_policy(tools::EXEC_COMMAND)
+                .await
+                .expect("deny+allow"),
+            ToolPermissionDecision::Deny,
+            "an explicit persisted Deny must survive an agent Allow overlay",
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_deny_beats_persisted_allow() {
+        let (_temp, registry) = registry_with_persisted_policy(tools::EXEC_COMMAND, ToolPolicy::Allow).await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::EXEC_COMMAND).await.expect("baseline"),
+            ToolPermissionDecision::Allow,
+        );
+        registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::EXEC_COMMAND, ToolPolicy::Deny))
+            .await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::EXEC_COMMAND).await.expect("overlay"),
+            ToolPermissionDecision::Deny,
+        );
+    }
+
+    #[tokio::test]
+    async fn replacing_overrides_clears_the_previous_agent() {
+        let temp = TempDir::new().expect("workspace");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::WEB_SEARCH, ToolPolicy::Allow))
+            .await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("overlay"),
+            ToolPermissionDecision::Allow,
+        );
+        // Selecting an agent with no overrides (e.g. plan) must drop the
+        // previous agent's Allow instead of merging it forward.
+        registry.apply_runtime_tool_policy_overrides(&BTreeMap::new()).await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("cleared"),
+            ToolPermissionDecision::Prompt,
+        );
+        drop(temp);
+    }
+
+    #[tokio::test]
+    async fn safe_mode_still_forces_prompt_despite_overlay_allow() {
+        // Security boundary pin: an untrusted workspace forces Prompt for
+        // safe-mode tools even when the agent overlay (or persisted policy)
+        // says Allow.
+        let (_temp, registry) = registry_with_persisted_policy(tools::EXEC_COMMAND, ToolPolicy::Allow).await;
+        registry.set_enforce_safe_mode_prompts(true).await;
+        registry
+            .apply_runtime_tool_policy_overrides(&overlay(tools::EXEC_COMMAND, ToolPolicy::Allow))
+            .await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::EXEC_COMMAND).await.expect("safe mode"),
+            ToolPermissionDecision::Prompt,
+        );
     }
 }

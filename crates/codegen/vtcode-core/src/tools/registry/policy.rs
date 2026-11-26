@@ -105,6 +105,12 @@ pub(super) struct ToolPolicyGateway {
     // the same tool. Keep one token per approval so one call cannot consume the
     // approval granted to another call.
     preapproved_tools: Arc<Mutex<FxHashMap<String, usize>>>,
+    // Session-scoped policy overlay for the active primary agent's
+    // `tool_policy_overrides` (e.g. build/auto allow `exec_command`). Held in
+    // memory only: unlike `set_tool_policy` it never touches
+    // tool-policy.json, so a mode switch cannot leak an Allow into other
+    // agents or sessions, and cannot clobber an explicit persisted Deny.
+    runtime_overrides: Arc<Mutex<FxHashMap<String, ToolPolicy>>>,
     full_auto_allowlist: Arc<Mutex<Option<FxHashSet<String>>>>,
     full_auto_catalogue_config: Arc<Mutex<Option<SessionToolsConfig>>>,
     full_auto_catalogue_lifecycle: Arc<Mutex<()>>,
@@ -119,6 +125,7 @@ impl Clone for ToolPolicyGateway {
         Self {
             tool_policy: Arc::clone(&self.tool_policy),
             preapproved_tools: Arc::clone(&self.preapproved_tools),
+            runtime_overrides: Arc::clone(&self.runtime_overrides),
             full_auto_allowlist: self.full_auto_allowlist.clone(),
             full_auto_catalogue_config: self.full_auto_catalogue_config.clone(),
             full_auto_catalogue_lifecycle: Arc::clone(&self.full_auto_catalogue_lifecycle),
@@ -138,6 +145,7 @@ impl ToolPolicyGateway {
         Self {
             tool_policy: Arc::new(Mutex::new(tool_policy)),
             preapproved_tools: Arc::new(Mutex::new(FxHashMap::default())),
+            runtime_overrides: Arc::new(Mutex::new(FxHashMap::default())),
             full_auto_allowlist: Arc::new(Mutex::new(None)),
             full_auto_catalogue_config: Arc::new(Mutex::new(None)),
             full_auto_catalogue_lifecycle: Arc::new(Mutex::new(())),
@@ -290,6 +298,55 @@ impl ToolPolicyGateway {
             self.revoke_preapprovals(canonical).await;
         }
         result
+    }
+
+    /// Set a session-scoped policy override without touching disk.
+    ///
+    /// Agent mode switches use this for `tool_policy_overrides`: the overlay
+    /// adjusts evaluation only, so an agent Allow can neither leak into other
+    /// sessions nor clobber an explicit persisted policy.
+    pub async fn set_runtime_tool_policy(&self, tool_name: &str, policy: ToolPolicy) {
+        self.revision.fetch_add(1, Ordering::AcqRel);
+        let canonical = canonical_tool_name(tool_name);
+        self.runtime_overrides.lock().await.insert(canonical.to_owned(), policy.clone());
+        if matches!(policy, ToolPolicy::Deny | ToolPolicy::Prompt) {
+            self.revoke_preapprovals(canonical).await;
+        }
+    }
+
+    /// Drop every session-scoped override, restoring persisted evaluation.
+    ///
+    /// Agent (re)selection always clears before applying the newly selected
+    /// agent's overrides, so a previous mode's Allow cannot survive the
+    /// switch. Clearing changes the effective policy source, so pending
+    /// one-shot approvals are revoked like a policy-manager replacement.
+    pub async fn clear_runtime_tool_policies(&self) {
+        self.revision.fetch_add(1, Ordering::AcqRel);
+        self.runtime_overrides.lock().await.clear();
+        self.revoke_all_preapprovals().await;
+    }
+
+    /// Resolve the overlay decision for a canonical tool name, if any.
+    ///
+    /// An explicit persisted Deny always wins, even over an overlay Allow:
+    /// the user reviewed that risk, and a mode switch must not silently lift
+    /// it. Otherwise the overlay decides on its own terms.
+    async fn runtime_overlay_decision(&self, normalized: &str) -> Option<ToolPermissionDecision> {
+        let overlay = self.runtime_overrides.lock().await.get(normalized).cloned()?;
+        let persisted_deny = self
+            .tool_policy
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|manager| manager.get_policy(normalized) == ToolPolicy::Deny);
+        if persisted_deny {
+            return Some(ToolPermissionDecision::Deny);
+        }
+        Some(match overlay {
+            ToolPolicy::Allow => ToolPermissionDecision::Allow,
+            ToolPolicy::Deny => ToolPermissionDecision::Deny,
+            ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
+        })
     }
 
     pub async fn add_approval_cache_key(&self, approval_key: &str) -> Result<()> {
@@ -469,6 +526,13 @@ impl ToolPolicyGateway {
             return Ok(ToolPermissionDecision::Deny);
         }
         drop(allowlist);
+
+        // Session agent overlay: safe mode and the full-auto membership gate
+        // above stay authoritative; an explicit persisted Deny still wins
+        // inside the overlay decision itself.
+        if let Some(decision) = self.runtime_overlay_decision(normalized).await {
+            return Ok(decision);
+        }
 
         if has_allowlist {
             if let Some(policy_manager) = self.tool_policy.lock().await.as_mut() {

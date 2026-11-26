@@ -1,4 +1,5 @@
 use crate::constants::{defaults, execution, llm_generation, prompt_budget, tool_limits};
+use crate::models::{ModelId, Provider};
 use crate::types::{
     ReasoningEffortLevel, ShellPromptProfile, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
     VerbosityLevel,
@@ -541,9 +542,13 @@ fn default_api_key_env() -> String {
     defaults::DEFAULT_API_KEY_ENV.into()
 }
 
-#[inline]
 fn default_model() -> String {
-    defaults::DEFAULT_MODEL.into()
+    // Resolve the SOTA flagship at runtime so struct defaults never go stale;
+    // the curated constant remains as the fallback (and the anti-rot tripwire
+    // in `model_id::table::tests` keeps the two in lockstep).
+    ModelId::latest_flagship(Provider::Anthropic)
+        .map(|model| model.as_str().into_owned())
+        .unwrap_or_else(|| defaults::DEFAULT_MODEL.into())
 }
 
 #[inline]

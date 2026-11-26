@@ -1,5 +1,5 @@
 // Claude 5.x series - Latest Anthropic models
-pub const DEFAULT_MODEL: &str = "claude-sonnet-5";
+pub const DEFAULT_MODEL: &str = "claude-sonnet-5-5";
 pub const SUPPORTED_MODELS: &[&str] = &[
     "claude-sonnet-5-5", // Latest Sonnet: best speed/intelligence balance, 1M context, between_tools is the lowest thinking setting
     "claude-sonnet-5",   // Previous Sonnet generation with adaptive thinking on by default

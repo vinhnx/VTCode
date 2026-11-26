@@ -30,7 +30,7 @@ impl DesktopView {
         }
     }
 
-    fn permission_workspace_key(&self) -> Option<String> {
+    pub(super) fn permission_workspace_key(&self) -> Option<String> {
         self.service_info
             .as_ref()
             .map(|info| info.workspace.clone())

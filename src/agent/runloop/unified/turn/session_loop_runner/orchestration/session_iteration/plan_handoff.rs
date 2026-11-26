@@ -23,10 +23,7 @@ use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_tui_runtime::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
-use super::super::super::handoff::{
-    apply_primary_agent_tool_policy_overrides, report_plan_approval_selection_failure,
-    select_approved_plan_execution_agent,
-};
+use super::super::super::handoff::{report_plan_approval_selection_failure, select_approved_plan_execution_agent};
 use super::super::super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
 use super::super::session_bootstrap::persist_primary_agent;
 use super::finalize_harness_on_err;
@@ -36,6 +33,7 @@ use crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget;
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use crate::agent::runloop::unified::turn::primary_agent_runtime::apply_primary_agent_tool_policy_overrides;
 use crate::agent::runloop::unified::turn::primary_agent_runtime::{
     PrimaryAgentRuntimeSyncContext, sync_primary_agent_permissions, sync_primary_agent_runtime,
 };

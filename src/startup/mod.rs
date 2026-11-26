@@ -15,6 +15,7 @@ mod workspace_trust;
 
 use config_loading::load_startup_config;
 pub(crate) use desktop_notice::{DesktopSuggestNotice, take_desktop_suggest_notice};
+pub(crate) use first_run::run_setup_wizard;
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 pub(crate) use validation::validate_runtime_provider;
@@ -103,7 +104,7 @@ pub(crate) enum StartupCommandKind {
 /// prompt provided". A real `--print` prompt (inline or piped) still requires
 /// credentials.
 fn allow_missing_provider_auth_for(print: Option<&str>, empty_print_on_tty: bool, command: Option<&Commands>) -> bool {
-    if matches!(command, Some(Commands::DesktopServer)) {
+    if matches!(command, Some(Commands::DesktopServer | Commands::Setup)) {
         return true;
     }
     let no_command = command.is_none() || matches!(command, Some(Commands::AgentClientProtocol { .. }));
@@ -127,7 +128,7 @@ impl StartupPolicy {
         // `--print` is global, but it must not downgrade a tool-capable
         // subcommand to the tool-free Ask path. Doing so would skip the
         // runtime security initialization required by exec/review.
-        let kind = if is_config_reset_command(args) {
+        let kind = if is_config_reset_command(args) || matches!(args.command, Some(Commands::Setup)) {
             StartupCommandKind::CommandOwned
         } else if matches!(args.command, Some(Commands::Exec { .. } | Commands::Review(_))) {
             StartupCommandKind::ToolCapable
@@ -487,7 +488,12 @@ impl StartupContext {
             build_runtime_agent_config(args, &config, loaded.workspace.clone(), selection, api_key, theme_selection);
         agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
-        let skip_confirmations = args.full_access || args.dangerously_skip_permissions || args.skip_confirmations;
+        // Explicit flags win; otherwise the persisted first-run permission
+        // default applies so the wizard's choice survives restarts.
+        let skip_confirmations = args.full_access
+            || args.dangerously_skip_permissions
+            || args.skip_confirmations
+            || config.permissions.default_mode.skips_confirmations();
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")

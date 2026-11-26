@@ -18,6 +18,7 @@ The table below maps the primary subcommands to their purpose; detailed sections
 | `vtcode continue`                                                      | Resume the most recent conversation; `--session-id` forks it        |
 | `vtcode init`                                                          | Scaffold `vtcode.toml` and `AGENTS.md` in the workspace             |
 | `vtcode init-project`                                                  | Register a project entry in the user state directory                |
+| `vtcode setup`                                                         | Run the first-time setup wizard (provider, model, permissions)      |
 | `vtcode config`                                                        | Generate or reset `vtcode.toml` configuration layers                |
 | `vtcode login <provider>` / `vtcode logout <provider>` / `vtcode auth` | OAuth or API-key login, logout, and status                          |
 | `vtcode secret`                                                        | Store provider API keys in the OS keyring                           |

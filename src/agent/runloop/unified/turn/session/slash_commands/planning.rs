@@ -8,7 +8,9 @@ use crate::agent::runloop::unified::planning_workflow_state::{
     PLAN_PRIMARY_AGENT_NAME, apply_agent_header, apply_plan_agent_header,
 };
 use crate::agent::runloop::unified::state::should_enforce_safe_mode_prompts;
-use crate::agent::runloop::unified::turn::primary_agent_runtime::load_primary_agent_specs;
+use crate::agent::runloop::unified::turn::primary_agent_runtime::{
+    apply_primary_agent_tool_policy_overrides, load_primary_agent_specs,
+};
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -148,12 +150,7 @@ async fn select_plan_primary_agent(ctx: &mut SlashCommandContext<'_>) -> Result<
         Ok(active) => {
             let display_name = active.display_name.clone();
             let color = active.color.clone().filter(|c| !c.trim().is_empty());
-            let policy_overrides = active.tool_policy_overrides.clone();
-            for (tool_name, policy) in policy_overrides {
-                if let Err(err) = ctx.tool_registry.set_tool_policy(&tool_name, policy).await {
-                    tracing::warn!("Failed to apply tool policy override for '{tool_name}' on plan entry: {err}");
-                }
-            }
+            apply_primary_agent_tool_policy_overrides(ctx.tool_registry, active).await;
             ctx.header_context.primary_agent = Some(display_name.clone());
             ctx.header_context.primary_agent_color = color.clone();
             apply_agent_header(ctx.handle, &display_name, color);
@@ -191,12 +188,7 @@ async fn restore_execution_primary_agent(ctx: &mut SlashCommandContext<'_>, name
         Ok(active) => {
             let display_name = active.display_name.clone();
             let color = active.color.clone().filter(|c| !c.trim().is_empty());
-            let policy_overrides = active.tool_policy_overrides.clone();
-            for (tool_name, policy) in policy_overrides {
-                if let Err(err) = ctx.tool_registry.set_tool_policy(&tool_name, policy).await {
-                    tracing::warn!("Failed to apply tool policy override for '{tool_name}' on plan exit: {err}");
-                }
-            }
+            apply_primary_agent_tool_policy_overrides(ctx.tool_registry, active).await;
             ctx.header_context.primary_agent = Some(display_name.clone());
             ctx.header_context.primary_agent_color = color.clone();
             apply_agent_header(ctx.handle, &display_name, color);

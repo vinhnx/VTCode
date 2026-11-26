@@ -83,6 +83,13 @@ fn parses_init_force_flag() {
 }
 
 #[test]
+fn parses_setup_command() {
+    let cli = Cli::parse_from(["vtcode", "setup"]);
+
+    assert!(matches!(cli.command, Some(Commands::Setup)));
+}
+
+#[test]
 fn parses_codex_login_device_code_flag() {
     let cli = Cli::parse_from(["vtcode", "login", "codex", "--device-code"]);
 

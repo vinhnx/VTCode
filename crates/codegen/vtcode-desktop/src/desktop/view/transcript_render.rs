@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod onboarding;
 mod rows;
 mod welcome;
 

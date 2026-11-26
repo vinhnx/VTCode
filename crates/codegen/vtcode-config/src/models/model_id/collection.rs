@@ -287,4 +287,22 @@ impl ModelId {
         }
         None
     }
+
+    /// Newest top-tier model for a provider, resolved from the compiled catalog.
+    ///
+    /// Candidates sort by [`ModelId::generation_sort_key`] (newest first) with
+    /// a stable sort, so ties keep catalog order — and the catalog lists
+    /// flagship lines first. This keeps runtime defaults on SOTA without
+    /// pinned per-generation constants: adding a newer top-tier model moves
+    /// the default automatically. Providers without a top-tier entry (local
+    /// engines, niche vendors) return `None` so callers fall back to their
+    /// curated `DEFAULT_MODEL`.
+    pub fn latest_flagship(provider: Provider) -> Option<Self> {
+        let mut candidates: Vec<Self> = Self::all_models()
+            .into_iter()
+            .filter(|model| model.provider() == provider && model.is_top_tier())
+            .collect();
+        candidates.sort_by_key(Self::generation_sort_key);
+        candidates.into_iter().next()
+    }
 }

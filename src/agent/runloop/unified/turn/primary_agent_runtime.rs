@@ -52,6 +52,23 @@ pub(crate) fn sync_primary_agent_permissions(
     }
 }
 
+/// Replace the session tool-policy overlay with the selected agent's overrides.
+///
+/// Session setup, mode switches, and plan entry/exit all funnel through here
+/// so every agent (re)selection applies uniformly. The overlay is memory-only
+/// and always clears first: selecting an agent never writes
+/// `tool-policy.json`/`vtcode.toml`, a previous mode's Allow cannot survive
+/// the switch, and an explicit persisted Deny still wins over an agent Allow
+/// (see `ToolRegistry::apply_runtime_tool_policy_overrides`).
+pub(crate) async fn apply_primary_agent_tool_policy_overrides(
+    tool_registry: &ToolRegistry,
+    active_agent: &ActivePrimaryAgent,
+) {
+    tool_registry
+        .apply_runtime_tool_policy_overrides(&active_agent.tool_policy_overrides)
+        .await;
+}
+
 pub(crate) async fn sync_primary_agent_runtime(ctx: &mut PrimaryAgentRuntimeSyncContext<'_>) -> Result<()> {
     ctx.tool_registry
         .set_matrix_coordinator(ctx.active_primary_agent.name() == "coordinator");
@@ -186,11 +203,17 @@ pub(crate) fn resolve_approved_plan_execution_agent(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_approved_plan_execution_agent, sync_primary_agent_permissions};
+    use super::{
+        apply_primary_agent_tool_policy_overrides, resolve_approved_plan_execution_agent,
+        sync_primary_agent_permissions,
+    };
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent};
+    use vtcode_core::config::constants::tools;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::primary_agent::ActivePrimaryAgent;
+    use vtcode_core::tool_policy::ToolPolicy;
+    use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 
     #[test]
     fn read_only_requested_agent_falls_back_to_build() {
@@ -250,5 +273,36 @@ mod tests {
             vt_cfg.expect("runtime config should remain present").runtime_agent_permissions,
             Some(build.permissions)
         );
+    }
+
+    #[tokio::test]
+    async fn agent_reselection_replaces_tool_policy_overrides_without_persisting() {
+        // web_search holds a stable Prompt baseline (network risk never
+        // auto-seeds), so it discriminates replace-vs-merge where exec_command
+        // cannot (registration/default/seed layers all resolve it to Allow).
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut allowing_spec = builtin_primary_build_agent();
+        allowing_spec.tool_policy_overrides =
+            std::collections::BTreeMap::from([(tools::WEB_SEARCH.to_string(), ToolPolicy::Allow)]);
+        let allowing = ActivePrimaryAgent::from_spec(&allowing_spec);
+        let duck = ActivePrimaryAgent::from_spec(&builtin_primary_duck_agent());
+        assert!(duck.tool_policy_overrides.is_empty(), "duck must carry no overrides");
+
+        apply_primary_agent_tool_policy_overrides(&registry, &allowing).await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("evaluate"),
+            ToolPermissionDecision::Allow,
+        );
+        assert_eq!(registry.get_tool_policy(tools::WEB_SEARCH).await, ToolPolicy::Prompt);
+
+        // Selecting the override-less agent must clear, not merge: the old
+        // persisting helper left the previous Allow behind across switches.
+        apply_primary_agent_tool_policy_overrides(&registry, &duck).await;
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::WEB_SEARCH).await.expect("evaluate"),
+            ToolPermissionDecision::Prompt,
+        );
+        assert_eq!(registry.get_tool_policy(tools::WEB_SEARCH).await, ToolPolicy::Prompt);
     }
 }

@@ -46,6 +46,7 @@ use vtcode_core::{
     init_global_notification_manager,
 };
 
+use crate::agent::runloop::unified::turn::primary_agent_runtime::apply_primary_agent_tool_policy_overrides;
 use crate::startup::take_desktop_suggest_notice;
 use crate::updater::{Updater, append_notice_highlight};
 use vtcode_config::MiMoAuthMethod;
@@ -359,6 +360,10 @@ pub(crate) async fn complete_session_registry(
         resumed_primary_agent.clone(),
     )?;
     tool_registry.set_matrix_coordinator(active_primary_agent.active().name() == "coordinator");
+    // The initial agent's overrides must apply here, not just on later
+    // switches, so the first turn evaluates the selected agent's contract
+    // (and a later switch replaces it instead of merging into leftovers).
+    apply_primary_agent_tool_policy_overrides(&tool_registry, active_primary_agent.active()).await;
 
     let tools = session_state.tools.clone();
     tool_registry.attach_session_model_tools(tools.clone());
@@ -641,6 +646,10 @@ pub(crate) async fn hydrate_session_runtime(
 
     if let Some(registry) = session_state.tool_registry.as_ref() {
         registry.set_matrix_coordinator(session_state.active_primary_agent.active().name() == "coordinator");
+        // Controller specs can re-resolve the active agent above; re-apply so
+        // the overlay always matches the final selection (clear-first, so a
+        // previous selection's Allow cannot survive).
+        apply_primary_agent_tool_policy_overrides(registry, session_state.active_primary_agent.active()).await;
     }
     if let (Some(manager), Some(cfg)) = (session_state.async_mcp_manager.as_ref(), vt_cfg) {
         let mcp_config =

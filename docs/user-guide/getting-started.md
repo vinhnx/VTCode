@@ -98,7 +98,7 @@ Choose one of the supported LLM providers:
 - **Vercel AI Gateway**: `export AI_GATEWAY_API_KEY=your_key_here`
   - Create a key in the [Vercel dashboard](https://vercel.com/dashboard) under AI Gateway, then configure
     `provider = "vercel"`.
-  - Default model: `anthropic/claude-sonnet-5`; see the
+  - Default model: `anthropic/claude-sonnet-5-5`; see the
     [Vercel AI Gateway provider guide](../providers/vercel-ai-gateway.md)
 
 For more providers, see the [Provider Guides](../providers/provider_guides.md).
@@ -301,7 +301,7 @@ defaults.
 # Agent settings
 [agent]
 provider = "openai"  # or anthropic, google, deepseek, etc.
-default_model = "gpt-5.6-sol"  # Your preferred model
+default_model = "gpt-6.2-astra"  # Your preferred model
 max_conversation_turns = 150
 
 # Security settings

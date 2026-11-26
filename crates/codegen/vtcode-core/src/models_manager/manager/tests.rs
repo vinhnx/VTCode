@@ -348,8 +348,5 @@ fn test_supported_providers() {
 #[test]
 fn moonshot_default_model_uses_curated_default() {
     let manager = ModelsManager::new();
-    assert_eq!(
-        manager.get_default_model_for_provider(Provider::Moonshot),
-        crate::config::constants::models::moonshot::DEFAULT_MODEL
-    );
+    assert_eq!(manager.get_default_model_for_provider(Provider::Moonshot), models::moonshot::DEFAULT_MODEL);
 }

@@ -538,6 +538,16 @@ pub enum Commands {
         max: usize,
     },
 
+    /// Run the first-time setup wizard (provider, model, permissions, agent mode)
+    ///
+    /// Re-runs interactive setup for this workspace: provider and model,
+    /// reasoning effort, workspace trust, permission mode, and default agent.
+    /// Safe to rerun; answers overwrite the previous setup choices.
+    ///
+    /// Examples:
+    ///   vtcode setup
+    Setup,
+
     /// Initialize project guidance and workspace scaffolding
     ///
     /// Bootstrap a workspace for use with VT Code. Creates vtcode.toml,

@@ -40,7 +40,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.credential_storage_mode` | `string` | no | `"file"` | Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service), with encrypted-file fallback when unavailable. - `file`: Use AES-256-GCM encrypted file with machine-derived key - `auto`: Try keyring first, fall back to file if unavailable |
 | `agent.custom_api_keys` | `object` | no | `-` | Provider/key identities captured from interactive configuration flows Note: Actual API keys are stored securely in the configured credential backend (OS keyring when available, otherwise encrypted file storage). Keys use `<provider>/<environment-variable>` identity keys and this field only tracks which identities have keys stored (for UI/migration purposes). The keys themselves are NOT serialized to the config file for security. |
 | `agent.custom_api_keys.*` | `string` | no | `-` | - |
-| `agent.default_model` | `string` | no | `"claude-sonnet-5"` | Default model for new conversations. |
+| `agent.default_model` | `string` | no | `"claude-sonnet-5-5"` | Default model for new conversations. |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: exec_command, code_search, apply_patch, and retained internal helpers Default: true (opt-out for compatibility), recommended for production use |
 | `agent.harness.async_approval.auto_approve_below_usd` | `number` | no | `0.1` | Auto-approve tool calls whose estimated cost is below this threshold (USD). Set to 0.0 to require approval for everything. |
@@ -504,7 +504,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.185.0"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.185.2"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -599,6 +599,7 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe. Direct OpenAI API-key TUI or full-auto sessions at the standard endpoint only; billed to your OpenAI API account. Inconclusive requests fall back to the generation probe within its deadline. Manual approvals and tool permissions remain unchanged; no full-auto acknowledgement is needed in TUI. |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
+| `permissions.default_mode` | `string` | no | `"ask"` | Default permission mode applied at startup when no approval flags are passed. Chosen during first-run setup; Full access is intentionally not expressible here (see [`DefaultPermissionMode`]). |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls. |
 | `permissions.deny[]` | `string` | no | `-` | - |
 | `permissions.enabled` | `boolean` | no | `true` | Enable the enhanced permission system (resolver + audit logger + cache) |

@@ -30,6 +30,7 @@ pub(crate) mod sandbox_debug;
 pub(crate) mod sandbox_exec;
 mod session_store;
 mod sessions;
+mod setup;
 pub(crate) mod skills_index;
 mod snapshots;
 mod trajectory;

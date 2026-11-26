@@ -205,7 +205,7 @@ pub(super) async fn apply_startup_plan_agent_selection(
 ) {
     use crate::agent::runloop::unified::planning_workflow_state::{PLAN_PRIMARY_AGENT_NAME, apply_plan_agent_header};
     use crate::agent::runloop::unified::turn::primary_agent_runtime::{
-        builtin_primary_agent_specs, load_primary_agent_specs,
+        apply_primary_agent_tool_policy_overrides, builtin_primary_agent_specs, load_primary_agent_specs,
     };
 
     if active_primary_agent
@@ -225,6 +225,9 @@ pub(super) async fn apply_startup_plan_agent_selection(
         Ok(active) => {
             let display = active.display_name.clone();
             let color = active.color.clone().filter(|c| !c.trim().is_empty());
+            // Session setup already applied the previous agent's overrides;
+            // re-apply so plan mode clears them (plan carries no overrides).
+            apply_primary_agent_tool_policy_overrides(tool_registry, active).await;
             handle.set_primary_agent(Some(display), color);
             tracing::info!(
                 target: "vtcode.planning_workflow",

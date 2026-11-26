@@ -812,6 +812,7 @@ mod nav_track;
 mod notice_callouts;
 mod notifications;
 mod notifications_install;
+mod onboarding;
 mod option_popups;
 mod options_misc;
 mod output_load;

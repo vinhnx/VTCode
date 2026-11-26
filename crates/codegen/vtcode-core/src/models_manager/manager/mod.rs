@@ -21,13 +21,13 @@ use super::model_family::{ModelFamily, find_family_for_model};
 use super::model_presets::{
     ModelInfo, ModelPreset, ReasoningEffortPreset, builtin_model_presets, presets_for_provider,
 };
-use crate::config::models::Provider;
+use crate::config::models::{ModelId, Provider};
 use crate::llm::providers::{
     MergeCatalogAvailability, MergeCatalogFilters, MergeCatalogModel, MergeGatewayCatalogClient,
     llamacpp::fetch_llamacpp_models,
 };
 use vtcode_commons::VtCodePaths;
-use vtcode_config::constants::{env_vars, urls};
+use vtcode_config::constants::{env_vars, models, urls};
 
 /// Legacy cache file name retained for one-time compatible reads.
 const LEGACY_MODEL_CACHE_FILE: &str = "models_cache.json";
@@ -38,11 +38,13 @@ const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(120);
 /// Default model for Gemini provider
 const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 
-/// Default model for OpenAI provider
-const OPENAI_DEFAULT_MODEL: &str = "gpt-5.6-sol";
-
-/// Default model for Anthropic provider
-const ANTHROPIC_DEFAULT_MODEL: &str = "claude-sonnet-5";
+/// Default model id for a provider: newest top-tier flagship at runtime,
+/// falling back to the pinned constant (identical by anti-rot test).
+fn flagship_or(provider: Provider, fallback: &str) -> String {
+    ModelId::latest_flagship(provider)
+        .map(|model| model.as_str().into_owned())
+        .unwrap_or_else(|| fallback.to_owned())
+}
 
 /// Coordinates remote model discovery plus cached metadata on disk.
 #[derive(Debug)]
@@ -471,32 +473,32 @@ impl ModelsManager {
         // Fall back to hardcoded defaults
         match provider {
             Provider::Gemini => GEMINI_DEFAULT_MODEL.to_string(),
-            Provider::OpenAI => OPENAI_DEFAULT_MODEL.to_string(),
-            Provider::Anthropic => ANTHROPIC_DEFAULT_MODEL.to_string(),
-            Provider::Copilot => crate::config::constants::models::copilot::DEFAULT_MODEL.to_string(),
+            Provider::OpenAI => flagship_or(Provider::OpenAI, models::openai::DEFAULT_MODEL),
+            Provider::Anthropic => flagship_or(Provider::Anthropic, models::anthropic::DEFAULT_MODEL),
+            Provider::Copilot => models::copilot::DEFAULT_MODEL.to_string(),
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
-            Provider::Meta => crate::config::constants::models::meta::DEFAULT_MODEL.to_string(),
+            Provider::Meta => models::meta::DEFAULT_MODEL.to_string(),
             Provider::ZAI => "glm-5.3".to_string(),
-            Provider::Minimax => crate::config::constants::models::minimax::DEFAULT_MODEL.to_string(),
-            Provider::Mistral => crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string(),
+            Provider::Minimax => models::minimax::DEFAULT_MODEL.to_string(),
+            Provider::Mistral => models::mistral::MISTRAL_LARGE_3.to_string(),
             Provider::OpenRouter => "xiaomi/mimo-v2.6-pro".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
-            Provider::OllamaCloud => crate::config::constants::models::ollama::DEFAULT_CLOUD_MODEL.to_string(),
-            Provider::LmStudio => crate::config::constants::models::lmstudio::DEFAULT_MODEL.to_string(),
-            Provider::LlamaCpp => crate::config::constants::models::llamacpp::DEFAULT_MODEL.to_string(),
-            Provider::Moonshot => crate::config::constants::models::moonshot::DEFAULT_MODEL.to_string(),
+            Provider::OllamaCloud => models::ollama::DEFAULT_CLOUD_MODEL.to_string(),
+            Provider::LmStudio => models::lmstudio::DEFAULT_MODEL.to_string(),
+            Provider::LlamaCpp => models::llamacpp::DEFAULT_MODEL.to_string(),
+            Provider::Moonshot => models::moonshot::DEFAULT_MODEL.to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
-            Provider::OpenCodeZen => crate::config::constants::models::opencode_zen::DEFAULT_MODEL.to_string(),
-            Provider::OpenCodeGo => crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string(),
-            Provider::MiMo => crate::config::constants::models::mimo::DEFAULT_MODEL.to_string(),
-            Provider::Qwen => crate::config::constants::models::qwen::DEFAULT_MODEL.to_string(),
-            Provider::StepFun => crate::config::constants::models::stepfun::DEFAULT_MODEL.to_string(),
-            Provider::Evolink => crate::config::constants::models::evolink::DEFAULT_MODEL.to_string(),
-            Provider::Poolside => crate::config::constants::models::poolside::DEFAULT_MODEL.to_string(),
-            Provider::XAI => crate::config::constants::models::xai::DEFAULT_MODEL.to_string(),
-            Provider::NVIDIA => crate::config::constants::models::nvidia::DEFAULT_MODEL.to_string(),
-            Provider::MergeGateway => crate::config::constants::models::merge_gateway::DEFAULT_MODEL.to_string(),
-            Provider::Vercel => crate::config::constants::models::vercel::DEFAULT_MODEL.to_string(),
+            Provider::OpenCodeZen => models::opencode_zen::DEFAULT_MODEL.to_string(),
+            Provider::OpenCodeGo => models::opencode_go::DEFAULT_MODEL.to_string(),
+            Provider::MiMo => models::mimo::DEFAULT_MODEL.to_string(),
+            Provider::Qwen => models::qwen::DEFAULT_MODEL.to_string(),
+            Provider::StepFun => models::stepfun::DEFAULT_MODEL.to_string(),
+            Provider::Evolink => models::evolink::DEFAULT_MODEL.to_string(),
+            Provider::Poolside => models::poolside::DEFAULT_MODEL.to_string(),
+            Provider::XAI => models::xai::DEFAULT_MODEL.to_string(),
+            Provider::NVIDIA => models::nvidia::DEFAULT_MODEL.to_string(),
+            Provider::MergeGateway => models::merge_gateway::DEFAULT_MODEL.to_string(),
+            Provider::Vercel => models::vercel::DEFAULT_MODEL.to_string(),
         }
     }
 

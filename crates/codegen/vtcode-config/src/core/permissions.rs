@@ -17,6 +17,30 @@ pub enum PermissionDefault {
     Deny,
 }
 
+/// Persisted default permission mode, chosen during first-run setup.
+///
+/// Mirrors the desktop permission picker minus Full access: Full access stays
+/// a per-invocation grant (`--full-access` / `--yolo`) and is never persisted,
+/// matching the desktop behavior of resetting it on session create.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DefaultPermissionMode {
+    /// Prompt before protected actions.
+    #[default]
+    Ask,
+    /// Skip confirmations; sandbox and explicit denies still apply.
+    AutoApprove,
+}
+
+impl DefaultPermissionMode {
+    /// Whether this persisted default skips confirmations at startup.
+    #[must_use]
+    pub fn skips_confirmations(self) -> bool {
+        matches!(self, Self::AutoApprove)
+    }
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AgentPermissionsConfig {
@@ -289,6 +313,12 @@ pub struct PermissionsConfig {
     /// Default: 300 seconds (5 minutes)
     #[serde(default = "default_cache_ttl_seconds")]
     pub cache_ttl_seconds: u64,
+
+    /// Default permission mode applied at startup when no approval flags are
+    /// passed. Chosen during first-run setup; Full access is intentionally not
+    /// expressible here (see [`DefaultPermissionMode`]).
+    #[serde(default)]
+    pub default_mode: DefaultPermissionMode,
 }
 
 impl PermissionsConfig {
@@ -502,6 +532,7 @@ impl Default for PermissionsConfig {
             log_permission_prompts: default_log_permission_prompts(),
             cache_enabled: default_cache_enabled(),
             cache_ttl_seconds: default_cache_ttl_seconds(),
+            default_mode: DefaultPermissionMode::default(),
         }
     }
 }
