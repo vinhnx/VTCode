@@ -5,6 +5,115 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.185.3 - 2026-11-27
+
+### Highlights
+
+#### Bug Fixes
+
+- Add allow reasons in vtcode-macros tests, refresh logging allowlist line (bc344ebf) (@vinhnx)
+- Fail closed on unbounded SSE tails in remaining streams (8e32ec85)
+- Notify login/slash mutations and simplify GPUI context use (e29a1bc6)
+- Key MCP preview elements by URI, not list slot (c37287eb)
+- Let terminal-focused control chords reach the shell (d4d02c42)
+- Keep outline tag foregrounds AA on raised surfaces (9f17cb27)
+- Name the vendored GPUI snapshot accurately in notices (136940a2)
+- Anchor COMPOSER context for lost-focus restore (b19563fb)
+- Clean cfg(test) service-management dependency warning (1f3acde9)
+- Guard duplicate backend notifications from repainting (bbd0489e)
+- Keep late turn-ack drain invalidation (2d5a767f)
+- Name status text for screen readers (2a3a6309)
+- Drop redundant refresh on system theme apply (dd18439c)
+- Localize swipe navigation tooltips as whole messages (75ac387e)
+- Animate image previews and surface decode failures (9b226190)
+- Reserve composer-context chords for their shortcut commands (91000612)
+- Deliver CLI handoffs directly to the resolved window (96094ef6)
+- Key wizard choice radios by choice id (9c51fa90)
+- Fail closed when release archives cannot be verified (117d0540)
+- Derive radius tokens from the UI font size (d6b64c2d)
+- Stop concurrent preview decodes cancelling each other (b3ba66ea)
+- Import px only where it is used (276463bf)
+- Yield transcript row clicks to text selection (fe490ad9)
+- Keep one system banner per handed-off thread (11904987)
+- Make tool registration identity race-safe (a3954aa6)
+- Keep cache LRU recency monotonic under concurrent hits (30d3cfc9)
+- Neutralize Arabic Letter Mark in terminal text (e8045bee)
+- Keep terminal progress without detail text (813e20e4)
+- Gate mouse history buttons behind workspace overlays (3ac7e0e2)
+- Keep saved shortcuts when new defaults collide (fe7ea48a)
+- Preserve Markdown in folded goal notices (bc552153)
+
+#### Documentation
+
+- Record pinned font-supply review verdicts (d85498d7)
+- Record paint guide review and pin degenerate underline bounds (b5d9b088)
+- Correct RenderOnce review claim counts and ElementId shape (05f55609)
+- Record Render guide review and wizard choice identity (1f92b0bc)
+- Scope native-title test claim to the pure guard (47115f69)
+- Record native extension boundary review (79c81325)
+- Correct native extension review citations (df223b49)
+- Record WebView boundary review (127b616c)
+- Tighten entry point and fix workspace version (05eec567)
+- Document expanded output and composer controls (9880c4cf)
+- Describe Zen New thread and composer handoff CTA (aeb3c83c)
+
+#### Features
+
+- Add project tag filter to desktop (555d7b92)
+- Add collapsible sidebar Tags section (12700bd4)
+- Setup wizard fixes, SOTA defaults, permission overlay (71dd01f8)
+- Add inline copy action to user transcript messages (f1df3e33)
+- Add shape-only verification failure signal (3fb2d615)
+- Surface verification failure shape with anti-thrash streak (6ed1c2fd)
+- Localize verification failures via shape and fingerprint streak (ab08564b)
+- Report session resume via OSC 7577 (ab9ce922)
+- Add navigation shortcuts, zen controls, and terminal status (a7ade2ba)
+- Expand clipped tool output into a scrollable code view (b2063e77)
+- Add tall composer edit mode for long prompts (7243d19c)
+- Add New thread to Zen floating chrome (6932200c)
+- Render goal objectives as Markdown (0fbc4549)
+- Add CLI handoff CTA to the composer (f25082c6)
+
+### Other Changes
+
+#### CI
+
+- Pin install-action tool versions and fail closed on unpinned tools (85a51372)
+
+#### Other
+
+- Render project tags with Kit Tag chips (1b61f820)
+- Format terminal control-key tests (445bddaa)
+
+#### Performance
+
+- Single-pass head/tail excerpt with O(window) memory (90938411)
+- Single-pass tails for subagent and diff previews (316f52e0)
+- Count fence lines once for capacity estimates (abe949fd)
+- Prepaint one dashed path for filename underlines (03d1d469)
+- Optimize GPUI framework crates in dev profile (672a1338)
+- Share retained UI text instead of rebuilding it per render (121dd9ff)
+- Apply native window title only on change (8cea65bb)
+- Skip redundant expiry sweeps and clock reads in UnifiedCache (13818343)
+- Parse saved shortcut chords once per resolution (33607b88)
+- Adapt terminal pump cadence and memoize grid rows (34425214)
+
+#### Refactors
+
+- Unify line-block containment in line_blocks module (cb8501e9)
+- Let Kit own transcript bubble corner radius (f5abc2f4)
+- Key folded notice and inline task rows by domain id (1468ed62)
+- Clarify effort slider read boundary and record Entity guide review (deb16d27)
+- Mutation-driven drain notify and explicit geometry spaces (2b536907)
+- Derive select option ids from namespace and domain key (e63f7519)
+
+#### Tests
+
+- Render both states in preview id regression test (4d35cced)
+- Pin contrast slider persistence for drag and discrete changes (a26888d8)
+- Apply GPUI Kit Testing guide contracts (bd3c1314)
+- Cover mouse history buttons and correct shortcut count (171e9ec1)
+
 ## 0.185.2 - 2026-11-24
 
 ### Highlights
