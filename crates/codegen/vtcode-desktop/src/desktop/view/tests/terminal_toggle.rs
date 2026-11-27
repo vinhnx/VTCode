@@ -200,7 +200,9 @@ fn terminal_pump_loop_ticks_without_manual_pumps(cx: &mut TestAppContext) {
     // Retention pin: dropping the GPUI task cancels the loop, which froze
     // the real panel while every manual-pump test stayed green.
     cx.update(|cx| {
-        assert!(view.read(cx).terminal_pump_task.is_some(), "show must retain the pump loop");
+        let view = view.read(cx);
+        assert!(view.terminal_pump_task.is_some(), "show must retain the pump loop");
+        assert!(view.terminal_pump_wake.is_some(), "each tick must arm a waker for the next sleep");
     });
     assert!(!grid_text_settled(&view, cx).trim().is_empty(), "spawned loop must drain shell output");
     toggle_terminal(window, cx);
@@ -235,8 +237,8 @@ fn grid_text(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> String {
         .as_ref()
         .unwrap()
         .display_rows()
-        .into_iter()
+        .iter()
         .flatten()
-        .map(|run| run.text)
+        .map(|run| run.text.clone())
         .collect()
 }

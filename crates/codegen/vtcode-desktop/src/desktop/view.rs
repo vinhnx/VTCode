@@ -421,6 +421,10 @@ struct DesktopView {
     terminal_monitor_row: Option<String>,
     terminal_focus: FocusHandle,
     terminal_pump_generation: u64,
+    /// Quiet pump ticks; frame-rate while bytes flow, backed off when idle.
+    terminal_pump_idle_ticks: u8,
+    /// Waker for the pump's current sleep; input interrupts the idle timer.
+    terminal_pump_wake: Option<futures::channel::oneshot::Sender<()>>,
     /// Retained drain-pump loop. Dropping a GPUI `Task` cancels it, so a
     /// fire-and-forget spawn would never tick (blank frozen panel).
     terminal_pump_task: Option<Task<()>>,
@@ -435,6 +439,8 @@ struct DesktopView {
     /// element (GPUI exposes no element-bounds lookup for mouse mapping
     /// and column sync).
     terminal_grid_bounds: Rc<Cell<Option<gpui_kit::Bounds<Pixels>>>>,
+    /// Last synced grid bounds + mono size; skips font work and PTY resizes.
+    terminal_grid_sync_key: Option<(gpui_kit::Bounds<Pixels>, Pixels)>,
     /// Active mouse-drag selection, if the left button went down on a cell.
     terminal_select_drag: Option<terminal_panel::TerminalSelectDrag>,
     /// Selection anchor cell for shift-click extend. Rio keeps its own

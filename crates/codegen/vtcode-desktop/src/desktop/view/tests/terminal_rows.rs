@@ -1,4 +1,73 @@
+use super::super::terminal_panel::{TERMINAL_PUMP_IDLE_BACKOFF_TICKS, terminal_pump_interval};
 use super::*;
+
+#[gpui_kit::test]
+fn terminal_pump_backs_off_when_quiet_and_wakes_on_activity(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        // A monitor has no shell to emit output, so the pump sees a quiet pane.
+        let palette = super::super::super::terminal_tab::palette_for_theme(&cx.theme().colors, true);
+        let size = portable_pty::PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+        view.terminal_monitor = Some(super::super::super::terminal_tab::TerminalTab::monitor(size, palette));
+        view.terminal_monitor_row = Some("monitor-row".into());
+        view.terminal_visible = true;
+        view.terminal_pump_idle_ticks = 0;
+
+        assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
+        assert_eq!(view.terminal_pump_idle_ticks, 1);
+        for expected in 2..=TERMINAL_PUMP_IDLE_BACKOFF_TICKS {
+            assert!(view.pump_terminal_once(view.terminal_pump_generation, cx));
+            assert_eq!(view.terminal_pump_idle_ticks, expected);
+        }
+        assert_eq!(terminal_pump_interval(view.terminal_pump_idle_ticks), Duration::from_millis(100));
+
+        view.note_terminal_activity();
+        assert_eq!(view.terminal_pump_idle_ticks, 0);
+        assert_eq!(terminal_pump_interval(view.terminal_pump_idle_ticks), Duration::from_millis(16));
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_activity_fires_the_pending_pump_waker(cx: &mut TestAppContext) {
+    use futures::FutureExt;
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        let (wake, sleep) = futures::channel::oneshot::channel();
+        view.terminal_pump_wake = Some(wake);
+        view.note_terminal_activity();
+        assert!(view.terminal_pump_wake.is_none(), "a fired waker is consumed once");
+        assert!(matches!(sleep.now_or_never(), Some(Ok(()))), "activity must interrupt an idle sleep");
+        // No pending waker: still idempotent for repeated activity.
+        view.note_terminal_activity();
+        assert_eq!(view.terminal_pump_idle_ticks, 0);
+    });
+}
+
+#[gpui_kit::test]
+fn terminal_wake_interrupts_an_idle_pump_sleep(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    // A monitor has no shell output, so the spawned loop reaches backoff
+    // deterministically and the only way to tick early is the waker.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_terminal_monitor("wake-row".into(), window, cx));
+    })
+    .unwrap();
+    let background = cx.update(|cx| cx.background_executor().clone());
+    background.advance_clock(Duration::from_millis(100));
+    cx.run_until_parked();
+    let idled = cx.update(|cx| view.read(cx).terminal_pump_idle_ticks);
+    assert!(idled >= TERMINAL_PUMP_IDLE_BACKOFF_TICKS, "pump must be sleeping at idle cadence: {idled}");
+
+    view.update(cx, |view, _| view.note_terminal_activity());
+    // Far short of the 100 ms idle interval: only the waker can end this sleep.
+    background.advance_clock(Duration::from_millis(1));
+    cx.run_until_parked();
+    assert_eq!(
+        cx.update(|cx| view.read(cx).terminal_pump_idle_ticks),
+        1,
+        "activity must wake the pump before the idle timer expires"
+    );
+}
 
 #[gpui_kit::test]
 fn terminal_pump_renders_drained_output_rows(cx: &mut TestAppContext) {

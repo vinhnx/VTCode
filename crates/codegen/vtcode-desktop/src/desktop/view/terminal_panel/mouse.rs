@@ -34,6 +34,7 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) {
         self.terminal_focus.focus(window, cx);
+        self.note_terminal_activity();
         let char_width =
             terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
         let Some(anchor) = self.terminal_cell_at(event.position, char_width, cx) else {
@@ -120,6 +121,7 @@ impl DesktopView {
     }
 
     pub(super) fn handle_terminal_scroll(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
+        self.note_terminal_activity();
         let row_height = terminal_row_height(cx.theme().mono_font_size);
         let (lines, remainder) = wheel_line_delta(&event.delta, row_height, self.terminal_wheel_remainder);
         self.terminal_wheel_remainder = remainder;

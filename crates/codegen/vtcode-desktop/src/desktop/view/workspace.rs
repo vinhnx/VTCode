@@ -474,6 +474,7 @@ impl DesktopView {
             self.terminal_visible = false;
             self.terminal_monitor_row = None;
             self.terminal_pump_task = None;
+            self.terminal_pump_wake = None;
         }
         self.reset_webmcp_state(None);
         let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));

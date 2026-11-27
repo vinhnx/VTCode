@@ -199,11 +199,11 @@ impl DesktopView {
                     // Mirror this exact chunk into the read-only bottom-pane
                     // monitor. The command runs once in the agent's PTY; the
                     // monitor never starts a second shell process.
-                    if accepted
-                        && monitor_row.as_deref() == Some(row_id.as_str())
-                        && let Some(tab) = self.terminal_monitor.as_mut()
-                    {
-                        let _drain = tab.feed_output(&output.output);
+                    if accepted && monitor_row.as_deref() == Some(row_id.as_str()) && self.terminal_monitor.is_some() {
+                        if let Some(tab) = self.terminal_monitor.as_mut() {
+                            let _drain = tab.feed_output(&output.output);
+                        }
+                        self.note_terminal_activity();
                     }
                     let row = self
                         .transcript

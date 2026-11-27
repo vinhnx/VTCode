@@ -36,6 +36,10 @@ pub(super) struct TerminalScreen {
     terminal: Crosswords<TerminalEvents>,
     parser: Processor,
     events: TerminalEvents,
+    /// Monotonic projection revision. Every mutation of visible grid state
+    /// bumps it so the row projection can be memoized across unrelated
+    /// repaints instead of reflattening the whole viewport each frame.
+    revision: u64,
 }
 
 /// Test-only grid probes (see the module docs for why they address cells
@@ -48,7 +52,22 @@ impl TerminalScreen {
         let events = TerminalEvents::default();
         let terminal =
             Crosswords::new(size(columns, rows), CursorShape::Block, events.clone(), WindowId::from(0), 0, scrollback);
-        Self { terminal, parser: Processor::default(), events }
+        Self {
+            terminal,
+            parser: Processor::default(),
+            events,
+            revision: 0,
+        }
+    }
+
+    /// Current projection revision. Read-only callers compare it to decide
+    /// whether a cached `display_rows` projection is still valid.
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// Opt in to OSC 7501 program status: Rio answers support queries and
@@ -60,11 +79,13 @@ impl TerminalScreen {
 
     pub(super) fn process(&mut self, bytes: &[u8]) -> Vec<RioEvent> {
         self.parser.advance(&mut self.terminal, bytes);
+        self.bump_revision();
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
     pub(super) fn resize(&mut self, columns: u16, rows: u16) -> Vec<RioEvent> {
         self.terminal.resize(size(columns, rows));
+        self.bump_revision();
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
@@ -76,6 +97,7 @@ impl TerminalScreen {
     #[cfg(test)]
     pub(super) fn scroll(&mut self, lines: i32) -> Vec<RioEvent> {
         self.terminal.scroll_display(Scroll::Delta(lines));
+        self.bump_revision();
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
@@ -133,6 +155,7 @@ impl TerminalScreen {
         self.terminal.selection = self
             .viewport_position(row, column)
             .map(|position| Selection::new(ty, position, side));
+        self.bump_revision();
     }
 
     /// Extend the current selection to a visible grid cell.
@@ -141,11 +164,13 @@ impl TerminalScreen {
             && let Some(selection) = self.terminal.selection.as_mut()
         {
             selection.update(position, side);
+            self.bump_revision();
         }
     }
 
     pub(super) fn clear_selection(&mut self) {
         self.terminal.selection = None;
+        self.bump_revision();
     }
 
     /// Select the whole visible viewport (not older scrollback).
@@ -161,6 +186,7 @@ impl TerminalScreen {
     /// Scroll the viewport by a Rio target (page, top, bottom).
     pub(super) fn scroll_to(&mut self, target: Scroll) -> Vec<RioEvent> {
         self.terminal.scroll_display(target);
+        self.bump_revision();
         std::mem::take(&mut *self.events.0.borrow_mut())
     }
 
@@ -190,7 +216,7 @@ fn size(columns: u16, rows: u16) -> CrosswordsSize {
 /// One styled text run for the panel renderer: the logical row model shared
 /// by the grid projection and its tests. v1a honors bold and inverse; dim,
 /// italic, and underline render plain.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct TerminalRowRun {
     pub(super) text: String,
     pub(super) fg: Rgba,
@@ -342,6 +368,26 @@ mod tests {
 
     fn text(screen: &TerminalScreen) -> String {
         screen.grid().display_iter().map(|cell| cell.square.c()).collect()
+    }
+
+    #[test]
+    fn terminal_screen_revision_tracks_grid_mutations_only() {
+        let mut screen = TerminalScreen::new(8, 2, 10);
+        let palette = List::from(&Colors::default());
+        let initial = screen.revision();
+        let _events = screen.process(b"a");
+        assert_ne!(screen.revision(), initial, "output invalidates the row projection");
+        let after_output = screen.revision();
+        let _rows = screen.display_rows(&palette);
+        assert_eq!(screen.revision(), after_output, "reading the grid must not invalidate it");
+        let _events = screen.resize(10, 3);
+        assert_ne!(screen.revision(), after_output, "resize invalidates the projection");
+        let after_resize = screen.revision();
+        screen.start_selection(0, 0, Side::Left, SelectionType::Simple);
+        assert_ne!(screen.revision(), after_resize, "selection invalidates the projection");
+        let after_selection = screen.revision();
+        screen.clear_selection();
+        assert_ne!(screen.revision(), after_selection, "clearing selection invalidates the projection");
     }
 
     #[test]

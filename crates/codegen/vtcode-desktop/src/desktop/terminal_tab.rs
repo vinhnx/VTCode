@@ -1,5 +1,6 @@
 //! Retained state for one user-controlled terminal tab.
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::sync::mpsc::TryRecvError;
 
@@ -30,11 +31,14 @@ const SCROLLBACK_LINES: usize = 10_000;
 
 pub(super) struct TerminalDrain {
     pub(super) changed: bool,
-    /// Raw view events for this drain. Production routes them through the
-    /// pump's coalescer, so only tests read the vector directly.
+    /// Raw view events for this drain. The pump drops them today (bells,
+    /// titles, and cwd have no view surface yet); tests inspect the routing.
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "raw event list is consumed by the pump; tests inspect it")
+        expect(
+            dead_code,
+            reason = "view events have no production surface yet; tests inspect the routing"
+        )
     )]
     pub(super) events: Vec<RioEvent>,
 }
@@ -95,12 +99,17 @@ fn apply_chrome_slots(palette: &mut List, colors: &ThemeColor) {
     palette[NamedColor::Cursor] = rgba(colors.caret);
 }
 
+mod display;
+use display::RowCache;
+
 pub(super) struct TerminalTab {
     /// `None` for a read-only monitor that renders an external command's
     /// output in the grid without owning a shell (no second process).
     process: Option<TerminalProcess>,
     size: PtySize,
     palette: List,
+    palette_revision: u64,
+    display_cache: RefCell<RowCache>,
     pub(super) screen: TerminalScreen,
     program_status: TerminalProgramStatus,
     pub(super) exit_status: Option<String>,
@@ -125,6 +134,8 @@ impl TerminalTab {
             process: Some(process),
             size,
             palette,
+            palette_revision: 0,
+            display_cache: RefCell::new(RowCache::new()),
             screen,
             program_status: TerminalProgramStatus::default(),
             exit_status: None,
@@ -141,6 +152,8 @@ impl TerminalTab {
             process: None,
             size,
             palette,
+            palette_revision: 0,
+            display_cache: RefCell::new(RowCache::new()),
             screen: TerminalScreen::new(size.cols, size.rows, SCROLLBACK_LINES),
             program_status: TerminalProgramStatus::default(),
             exit_status: None,
@@ -165,16 +178,13 @@ impl TerminalTab {
 
     pub(super) fn set_palette(&mut self, palette: List) {
         self.palette = palette;
+        self.palette_revision = self.palette_revision.wrapping_add(1);
     }
 
     /// Test-only: whether this tab owns a shell process (false for a monitor).
     #[cfg(test)]
     pub(super) fn has_process(&self) -> bool {
         self.process.is_some()
-    }
-
-    pub(super) fn display_rows(&self) -> Vec<Vec<super::terminal_screen::TerminalRowRun>> {
-        self.screen.display_rows(&self.palette)
     }
 
     /// Visible cell of the cursor in the live session. Test-only: a
@@ -361,6 +371,26 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(rendered.contains("live output from the agent PTY"), "{rendered}");
+    }
+
+    #[test]
+    fn display_rows_are_memoized_until_grid_or_palette_changes() {
+        let size = PtySize { rows: 4, cols: 40, pixel_width: 0, pixel_height: 0 };
+        let mut tab = TerminalTab::monitor(size, List::from(&Colors::default()));
+        let rows = tab.display_rows();
+        assert_eq!(rows.len(), 4);
+        drop(rows);
+        assert!(tab.display_rows_are_cached(), "first projection is cached");
+        let snapshot = tab.display_rows().clone();
+        assert_eq!(snapshot, *tab.display_rows(), "an unchanged grid reuses the projection");
+
+        let _drain = tab.feed_output("hello\r\n");
+        assert!(!tab.display_rows_are_cached(), "output invalidates the projection");
+        let _ = tab.display_rows();
+        assert!(tab.display_rows_are_cached(), "the new revision is cached");
+
+        tab.set_palette(List::from(&Colors::default()));
+        assert!(!tab.display_rows_are_cached(), "palette changes invalidate the projection");
     }
 
     #[test]

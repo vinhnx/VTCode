@@ -523,6 +523,9 @@ impl DesktopView {
             themes::apply_desktop_radii(theme);
         });
         self.transcript.remeasure();
+        // Mono size/family feed the terminal grid's column math; force the
+        // next pump tick to resize the PTY instead of reusing stale geometry.
+        self.terminal_grid_sync_key = None;
         cx.notify();
     }
 

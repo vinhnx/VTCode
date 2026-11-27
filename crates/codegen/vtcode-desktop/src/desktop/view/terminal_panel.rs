@@ -13,8 +13,26 @@ mod status;
 use input::*;
 use status::*;
 
-/// Drain cadence: bounded redraws without a busy loop on floods.
-const TERMINAL_PUMP_INTERVAL: Duration = Duration::from_millis(16);
+/// Drain cadence while output is flowing: one bounded batch per display
+/// frame keeps typing and streamed output interactive.
+const TERMINAL_PUMP_INTERVAL_ACTIVE: Duration = Duration::from_millis(16);
+/// Drain cadence once the pane has been quiet for a few ticks. The grid
+/// cannot change without PTY bytes or explicit input, so an idle terminal
+/// stops waking the whole window ~62 times a second.
+const TERMINAL_PUMP_INTERVAL_IDLE: Duration = Duration::from_millis(100);
+/// Ticks of quiet before backing off; keeps short pauses inside a command
+/// (prompt -> next keystroke) at full rate.
+pub(super) const TERMINAL_PUMP_IDLE_BACKOFF_TICKS: u8 = 4;
+
+/// Pick the drain cadence from consecutive idle ticks. Pure so the contract
+/// is testable without a running pump.
+pub(super) fn terminal_pump_interval(idle_ticks: u8) -> Duration {
+    if idle_ticks >= TERMINAL_PUMP_IDLE_BACKOFF_TICKS {
+        TERMINAL_PUMP_INTERVAL_IDLE
+    } else {
+        TERMINAL_PUMP_INTERVAL_ACTIVE
+    }
+}
 /// Fallback grid rows when unmeasurable (xterm standard).
 const DEFAULT_TERMINAL_ROWS: u16 = 24;
 /// Header strip height in px. Fixed pixels, not rem: grid math must match
@@ -52,17 +70,34 @@ impl DesktopView {
     /// Retained pump: dropping the task cancels it before the first tick and
     /// freezes the panel. Shared by the shell and monitor modes.
     fn start_terminal_pump(&mut self, cx: &mut Context<Self>) {
+        // Drop any waker left behind by the previous task; the new loop will
+        // install its own on the first tick.
+        self.terminal_pump_wake = None;
         self.terminal_pump_generation = self.terminal_pump_generation.wrapping_add(1);
         let generation = self.terminal_pump_generation;
         self.terminal_pump_task = Some(cx.spawn(async move |view, cx| {
             loop {
-                let keep_going = view
-                    .update(cx, |view, cx| view.pump_terminal_once(generation, cx))
-                    .unwrap_or(false);
+                // The pump pays for itself only while bytes are arriving.
+                // Install a fresh one-shot waker in the same update that
+                // drained the PTY: input during an idle sleep must cut the
+                // sleep short instead of waiting out the full interval.
+                let tick = view
+                    .update(cx, |view, cx| {
+                        let keep_going = view.pump_terminal_once(generation, cx);
+                        let (wake, sleep) = futures::channel::oneshot::channel();
+                        view.terminal_pump_wake = Some(wake);
+                        (keep_going, terminal_pump_interval(view.terminal_pump_idle_ticks), sleep)
+                    })
+                    .ok();
+                let Some((keep_going, interval, sleep)) = tick else {
+                    break;
+                };
                 if !keep_going {
                     break;
                 }
-                cx.background_executor().timer(TERMINAL_PUMP_INTERVAL).await;
+                let timer = cx.background_executor().timer(interval);
+                futures::pin_mut!(timer);
+                let _ = futures::future::select(timer, sleep).await;
             }
         }));
     }
@@ -76,6 +111,9 @@ impl DesktopView {
         self.terminal_monitor = None;
         self.terminal_monitor_row = None;
         self.terminal_visible = true;
+        // A newly spawned tab may not be sized to the measured grid yet.
+        self.terminal_grid_sync_key = None;
+        self.note_terminal_activity();
         self.terminal_focus.focus(window, cx);
         self.start_terminal_pump(cx);
         cx.notify();
@@ -90,6 +128,10 @@ impl DesktopView {
         self.terminal_monitor = Some(super::super::terminal_tab::TerminalTab::monitor(size, palette));
         self.terminal_monitor_row = Some(row_id);
         self.terminal_visible = true;
+        // The monitor is a fresh grid; re-measure it even if the dock bounds
+        // have not changed since the shell tab was last synced.
+        self.terminal_grid_sync_key = None;
+        self.note_terminal_activity();
         self.terminal_focus.focus(window, cx);
         self.start_terminal_pump(cx);
         cx.notify();
@@ -111,6 +153,7 @@ impl DesktopView {
             bytes.push(b'\r');
             let _sent = tab.input(bytes);
         }
+        self.note_terminal_activity();
         cx.notify();
     }
 
@@ -119,6 +162,7 @@ impl DesktopView {
         self.terminal_monitor = None;
         self.terminal_monitor_row = None;
         self.terminal_pump_task = None;
+        self.terminal_pump_wake = None;
         self.focus_handle.focus(window, cx);
         cx.notify();
     }
@@ -162,13 +206,24 @@ impl DesktopView {
         }
         // View events (bell/title) have no v1a surface yet. The monitor has no
         // shell to drain; its grid is fed directly from output deltas.
-        if let Some(tab) = self.terminal.as_mut()
-            && tab.drain().changed
-        {
+        if self.terminal.as_mut().is_some_and(|tab| tab.drain().changed) {
+            self.note_terminal_activity();
             cx.notify();
+        } else {
+            self.terminal_pump_idle_ticks = self.terminal_pump_idle_ticks.saturating_add(1);
         }
         self.sync_terminal_grid(cx);
         true
+    }
+
+    /// Reset the pump backoff after any user action or fresh output so the
+    /// next tick runs at frame rate instead of waiting out the idle interval.
+    /// Firing the pending waker also interrupts a sleep already in progress.
+    pub(super) fn note_terminal_activity(&mut self) {
+        self.terminal_pump_idle_ticks = 0;
+        if let Some(wake) = self.terminal_pump_wake.take() {
+            let _sent = wake.send(());
+        }
     }
 
     /// Recompute grid rows and columns from the laid-out grid bounds;
@@ -178,25 +233,35 @@ impl DesktopView {
         let Some(grid) = self.terminal_grid_bounds.get() else {
             return;
         };
-        let row_height = terminal_row_height(cx.theme().mono_font_size);
-        let char_width =
-            terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, cx.theme().mono_font_size);
+        let mono_size = cx.theme().mono_font_size;
+        let key = (grid, mono_size);
+        if self.terminal_grid_sync_key.as_ref() == Some(&key) {
+            return;
+        }
+        let row_height = terminal_row_height(mono_size);
+        let char_width = terminal_column_width(cx.text_system(), &cx.theme().mono_font_family, mono_size);
         let rows = terminal_rows_for_height(grid.size.height.as_f32(), row_height);
         let columns = terminal_cols_for_width(grid.size.width.as_f32(), char_width);
         let resize = |tab: &mut super::super::terminal_tab::TerminalTab| {
             let size = tab.grid_size();
             let rows = rows.unwrap_or(size.rows);
             let columns = columns.unwrap_or(size.cols);
-            if size.rows != rows || size.cols != columns {
-                let _resized = tab.resize(portable_pty::PtySize { rows, cols: columns, ..size });
+            if size.rows == rows && size.cols == columns {
+                return true;
             }
+            tab.resize(portable_pty::PtySize { rows, cols: columns, ..size }).is_ok()
         };
+        let mut applied = true;
         if let Some(tab) = self.terminal.as_mut() {
-            resize(tab);
+            applied &= resize(tab);
         }
         if let Some(tab) = self.terminal_monitor.as_mut() {
-            resize(tab);
+            applied &= resize(tab);
         }
+        // Cache only geometry that was actually applied. A transient PTY
+        // resize failure must be retried on the next pump tick instead of
+        // being hidden behind a stale key.
+        self.terminal_grid_sync_key = applied.then_some(key);
     }
 
     /// Rebuild the ANSI palette from the current theme and ANSI setting.
@@ -221,6 +286,9 @@ impl DesktopView {
     }
 
     fn handle_terminal_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        // A keystroke means the user is on this pane: wake a sleeping pump so
+        // the shell's echo is not delayed by an idle backoff.
+        self.note_terminal_activity();
         let Some(tab) = self.terminal.as_mut() else {
             return;
         };
@@ -782,6 +850,15 @@ mod tests {
         assert_eq!(terminal_rows_for_height(240.0, 0.0), None);
         assert_eq!(terminal_rows_for_height(f32::NAN, 18.0), None);
         assert_eq!(terminal_rows_for_height(240.0, f32::NAN), None);
+    }
+
+    #[test]
+    fn terminal_pump_interval_backs_off_only_when_idle() {
+        for ticks in 0..TERMINAL_PUMP_IDLE_BACKOFF_TICKS {
+            assert_eq!(terminal_pump_interval(ticks), Duration::from_millis(16), "tick {ticks}");
+        }
+        assert_eq!(terminal_pump_interval(TERMINAL_PUMP_IDLE_BACKOFF_TICKS), Duration::from_millis(100));
+        assert_eq!(terminal_pump_interval(u8::MAX), Duration::from_millis(100));
     }
 
     #[test]

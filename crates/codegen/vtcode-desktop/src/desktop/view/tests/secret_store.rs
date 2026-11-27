@@ -402,9 +402,9 @@ fn credential_grid_text(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Strin
         .as_ref()
         .unwrap()
         .display_rows()
-        .into_iter()
+        .iter()
         .flatten()
-        .map(|run| run.text)
+        .map(|run| run.text.clone())
         .collect()
 }
 
